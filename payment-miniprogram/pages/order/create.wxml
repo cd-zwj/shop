@@ -1,0 +1,64 @@
+<!--pages/order/create.wxml-->
+<view class="container">
+  <!-- 商品信息 -->
+  <view class="product-info card">
+    <view class="product-item">
+      <image class="product-image" src="{{product.imageUrl}}" mode="aspectFill"></image>
+      <view class="product-detail">
+        <text class="product-name">{{product.name}}</text>
+        <view class="product-footer">
+          <text class="product-price">¥{{product.price}}</text>
+          <view class="quantity-box">
+            <image class="quantity-btn" src="/images/minus.png" bindtap="decreaseQuantity"></image>
+            <text class="quantity">{{quantity}}</text>
+            <image class="quantity-btn" src="/images/plus.png" bindtap="increaseQuantity"></image>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 支付方式 -->
+  <view class="payment-method card">
+    <view class="section-title">支付方式</view>
+    <view class="method-item" bindtap="selectPayMethod" data-method="wechat">
+      <view class="method-left">
+        <image class="method-icon" src="/images/wechat-pay.png"></image>
+        <text class="method-name">微信支付</text>
+      </view>
+      <image class="check-icon" src="/images/{{payMethod === 'wechat' ? 'checked' : 'unchecked'}}.png"></image>
+    </view>
+    <view class="method-item" bindtap="selectPayMethod" data-method="balance" wx:if="{{balance > 0}}">
+      <view class="method-left">
+        <image class="method-icon" src="/images/balance.png"></image>
+        <text class="method-name">余额支付（余额：¥{{balance}}）</text>
+      </view>
+      <image class="check-icon" src="/images/{{payMethod === 'balance' ? 'checked' : 'unchecked'}}.png"></image>
+    </view>
+  </view>
+
+  <!-- 订单金额 -->
+  <view class="order-amount card">
+    <view class="amount-item">
+      <text class="label">商品金额</text>
+      <text class="value">¥{{totalAmount}}</text>
+    </view>
+    <view class="amount-item" wx:if="{{useBalance && balance > 0}}">
+      <text class="label">余额抵扣</text>
+      <text class="value text-success">-¥{{balanceDeduction}}</text>
+    </view>
+    <view class="amount-item total">
+      <text class="label">实付金额</text>
+      <text class="value price">¥{{actualAmount}}</text>
+    </view>
+  </view>
+
+  <!-- 底部操作栏 -->
+  <view class="footer-bar">
+    <view class="footer-left">
+      <text class="total-label">合计：</text>
+      <text class="total-price">¥{{actualAmount}}</text>
+    </view>
+    <button class="submit-btn" bindtap="submitOrder">提交订单</button>
+  </view>
+</view>

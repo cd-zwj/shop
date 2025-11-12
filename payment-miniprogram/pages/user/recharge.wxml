@@ -1,0 +1,40 @@
+<!--pages/user/recharge.wxml-->
+<view class="container">
+  <!-- 当前余额 -->
+  <view class="balance-info card">
+    <text class="info-label">当前余额</text>
+    <text class="info-value">¥{{balance}}</text>
+  </view>
+
+  <!-- 充值规则 -->
+  <view class="recharge-rules card">
+    <view class="section-title">选择充值金额</view>
+    <view class="rule-list">
+      <view class="rule-item {{selectedRule === item.id ? 'active' : ''}}" wx:for="{{rules}}" wx:key="id" bindtap="selectRule" data-id="{{item.id}}">
+        <view class="rule-amount">¥{{item.rechargeAmount}}</view>
+        <view class="rule-bonus" wx:if="{{item.bonusAmount > 0}}">
+          <text>送¥{{item.bonusAmount}}</text>
+        </view>
+        <image class="check-icon" src="/images/{{selectedRule === item.id ? 'checked' : 'unchecked'}}.png"></image>
+      </view>
+    </view>
+  </view>
+
+  <!-- 充值说明 -->
+  <view class="recharge-tips card">
+    <view class="section-title">充值说明</view>
+    <view class="tips-content">
+      <text class="tip-item">1. 充值金额将直接充入您的账户余额</text>
+      <text class="tip-item">2. 余额可用于购买商品时抵扣</text>
+      <text class="tip-item">3. 充值金额不可提现，请谨慎充值</text>
+      <text class="tip-item">4. 如有疑问，请联系客服</text>
+    </view>
+  </view>
+
+  <!-- 充值按钮 -->
+  <view class="recharge-actions">
+    <button class="recharge-btn" bindtap="recharge" disabled="{{!selectedRule}}">
+      立即充值
+    </button>
+  </view>
+</view>

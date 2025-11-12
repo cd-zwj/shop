@@ -1,0 +1,50 @@
+<!--pages/product/list.wxml-->
+<view class="container">
+  <!-- 筛选栏 -->
+  <view class="filter-bar">
+    <view class="filter-item {{sortType === 'default' ? 'active' : ''}}" bindtap="changeSort" data-type="default">
+      <text>综合</text>
+    </view>
+    <view class="filter-item {{sortType === 'sales' ? 'active' : ''}}" bindtap="changeSort" data-type="sales">
+      <text>销量</text>
+    </view>
+    <view class="filter-item {{sortType === 'price' ? 'active' : ''}}" bindtap="changeSort" data-type="price">
+      <text>价格</text>
+      <image class="sort-icon" src="/images/sort-{{priceOrder}}.png"></image>
+    </view>
+  </view>
+
+  <!-- 商品列表 -->
+  <view class="product-list">
+    <view class="product-item" wx:for="{{products}}" wx:key="id" bindtap="goToDetail" data-id="{{item.id}}">
+      <image class="product-image" src="{{item.imageUrl}}" mode="aspectFill"></image>
+      <view class="product-info">
+        <text class="product-name">{{item.name}}</text>
+        <text class="product-desc">{{item.description}}</text>
+        <view class="product-footer">
+          <view class="price-box">
+            <text class="product-price">¥{{item.price}}</text>
+            <text class="product-sales">已售{{item.sales || 0}}</text>
+          </view>
+          <view class="stock-box" wx:if="{{item.stock <= 0}}">
+            <text class="out-of-stock">缺货</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty" wx:if="{{!loading && products.length === 0}}">
+    <image class="empty-image" src="/images/empty.png"></image>
+    <text class="empty-text">暂无商品</text>
+  </view>
+
+  <!-- 加载更多 -->
+  <view class="loading" wx:if="{{loading}}">
+    <text>加载中...</text>
+  </view>
+  <view class="no-more" wx:if="{{!hasMore && products.length > 0}}">
+    <text>没有更多了</text>
+  </view>
+</view>

@@ -1,0 +1,39 @@
+<!--pages/user/balance.wxml-->
+<view class="container">
+  <!-- 余额信息 -->
+  <view class="balance-header">
+    <text class="balance-label">我的余额</text>
+    <text class="balance-value">¥{{balance}}</text>
+    <button class="recharge-btn" bindtap="goToRecharge">充值</button>
+  </view>
+
+  <!-- 余额明细 -->
+  <view class="balance-logs">
+    <view class="section-title">余额明细</view>
+    <view class="log-list">
+      <view class="log-item" wx:for="{{logs}}" wx:key="id">
+        <view class="log-left">
+          <text class="log-reason">{{item.reason}}</text>
+          <text class="log-time">{{item.createTime}}</text>
+        </view>
+        <text class="log-amount {{item.amount > 0 ? 'positive' : 'negative'}}">
+          {{item.amount > 0 ? '+' : ''}}¥{{item.amount}}
+        </text>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:if="{{!loading && logs.length === 0}}">
+      <image class="empty-image" src="/images/empty.png"></image>
+      <text class="empty-text">暂无余额明细</text>
+    </view>
+
+    <!-- 加载更多 -->
+    <view class="loading" wx:if="{{loading}}">
+      <text>加载中...</text>
+    </view>
+    <view class="no-more" wx:if="{{!hasMore && logs.length > 0}}">
+      <text>没有更多了</text>
+    </view>
+  </view>
+</view>

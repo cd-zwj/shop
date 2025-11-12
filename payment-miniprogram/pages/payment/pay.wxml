@@ -1,0 +1,42 @@
+<!--pages/payment/pay.wxml-->
+<view class="container">
+  <!-- 支付金额 -->
+  <view class="payment-amount card">
+    <text class="amount-label">支付金额</text>
+    <text class="amount-value">¥{{order.paidAmount}}</text>
+  </view>
+
+  <!-- 订单信息 -->
+  <view class="order-info card">
+    <view class="info-item">
+      <text class="label">订单号</text>
+      <text class="value">{{order.orderNo}}</text>
+    </view>
+    <view class="info-item">
+      <text class="label">商品名称</text>
+      <text class="value">{{order.items[0].productName}}</text>
+    </view>
+    <view class="info-item">
+      <text class="label">创建时间</text>
+      <text class="value">{{order.createTime}}</text>
+    </view>
+  </view>
+
+  <!-- 支付方式 -->
+  <view class="payment-method card">
+    <view class="section-title">支付方式</view>
+    <view class="method-item">
+      <view class="method-left">
+        <image class="method-icon" src="/images/wechat-pay.png"></image>
+        <text class="method-name">微信支付</text>
+      </view>
+      <image class="check-icon" src="/images/checked.png"></image>
+    </view>
+  </view>
+
+  <!-- 支付按钮 -->
+  <view class="payment-actions">
+    <button class="pay-btn" bindtap="pay">立即支付</button>
+    <text class="cancel-text" bindtap="cancel">取消支付</text>
+  </view>
+</view>
