@@ -31,6 +31,36 @@
     </properties>
 
     <dependencies>
+<!--        langchain4j-->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-community-redis-spring-boot-starter</artifactId>
+            <version>1.0.1-beta6</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-easy-rag</artifactId>
+            <version>1.0.1-beta6</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-spring-boot-starter</artifactId>
+            <version>1.0.1-beta6</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+            <version>1.0.1-beta6</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-reactor</artifactId>
+            <version>1.0.1-beta6</version>
+        </dependency>
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -41,6 +71,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        
+        <!-- Redisson分布式锁 -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson-spring-boot-starter</artifactId>
+            <version>3.25.2</version>
         </dependency>
 
         <!-- Spring Boot RabbitMQ -->
@@ -67,6 +104,12 @@
             <groupId>com.baomidou</groupId>
             <artifactId>mybatis-plus-boot-starter</artifactId>
             <version>${mybatis-plus.version}</version>
+        </dependency>
+<!--        redisson-->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>3.24.3</version> <!-- 请根据需要更新版本号 -->
         </dependency>
 
         <!-- Druid连接池 -->
@@ -171,6 +214,13 @@
             <version>3.17.4</version>
         </dependency>
         
+        <!-- MinIO客户端 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+            <version>8.5.7</version>
+        </dependency>
+        
         <!-- JSQLParser (MyBatis Plus多租户需要) -->
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
@@ -194,6 +244,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- jqwik for property-based testing -->
+        <dependency>
+            <groupId>net.jqwik</groupId>
+            <artifactId>jqwik</artifactId>
+            <version>1.8.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
