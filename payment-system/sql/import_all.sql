@@ -17,6 +17,10 @@ SOURCE 07_exchange.sql;
 SOURCE 08_merchant_finance.sql;
 SOURCE 09_pos.sql;
 SOURCE 10_analytics.sql;
+SOURCE 11_message_idempotent.sql;
+SOURCE 12_rbac_permission.sql;
+SOURCE 13_user_permission.sql;
+SOURCE 14_platform_wallet_v1.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;
