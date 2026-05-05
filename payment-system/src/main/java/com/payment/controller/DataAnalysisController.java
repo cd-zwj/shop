@@ -1,6 +1,6 @@
 package com.payment.controller;
 
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
 import com.payment.dto.AnalysisRequestDTO;
 import com.payment.entity.DataAnalysisResult;
@@ -17,7 +17,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/analysis")
-@RequireAuth  // 整个Controller都需要认证
+@SaCheckLogin  // 整个Controller都需要认证
 public class DataAnalysisController {
     
     @Autowired

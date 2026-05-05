@@ -1,7 +1,8 @@
 package com.payment.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.ExchangeProductDTO;
 import com.payment.dto.PointsRuleDTO;
@@ -37,7 +38,7 @@ public class PointsController {
     /**
      * 获取商家积分规则（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:view")
     @GetMapping("/rule")
     public Result<PointsRule> getPointsRule() {
         Long tenantId = TenantContextHolder.getTenantId();
@@ -48,7 +49,7 @@ public class PointsController {
     /**
      * 设置商家积分规则（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:rule:edit")
     @PostMapping("/rule")
     public Result<Void> setPointsRule(@Validated @RequestBody PointsRuleDTO dto) {
         pointsService.setPointsRule(dto);
@@ -58,7 +59,7 @@ public class PointsController {
     /**
      * 查询用户积分余额（用户端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:view")
     @GetMapping("/balance")
     public Result<Map<String, Object>> getUserPoints() {
         Long userId = UserContextHolder.getUserId();
@@ -77,7 +78,7 @@ public class PointsController {
     /**
      * 查询积分明细（用户端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:view")
     @GetMapping("/logs")
     public Result<Page<PointsLog>> listPointsLogs(
                @RequestParam(defaultValue = "1") Integer pageNum,
@@ -92,7 +93,7 @@ public class PointsController {
     /**
      * 积分兑换商品列表（用户端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:view")
     @GetMapping("/exchange/products")
     public Result<List<ExchangeProduct>> listExchangeProducts() {
         Long tenantId = TenantContextHolder.getTenantId();
@@ -103,7 +104,7 @@ public class PointsController {
     /**
      * 积分兑换商品（用户端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:exchange")
     @PostMapping("/exchange/{exchangeProductId}")
     public Result<Map<String, String>> exchangeProduct(
                @PathVariable Long exchangeProductId) {
@@ -120,7 +121,7 @@ public class PointsController {
     /**
      * 添加积分兑换商品（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:product:manage")
     @PostMapping("/exchange/product")
     public Result<Void> setExchangeProduct(@Validated @RequestBody ExchangeProductDTO dto) {
         pointsService.setExchangeProduct(dto);
@@ -130,7 +131,7 @@ public class PointsController {
     /**
      * 更新积分兑换商品（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:product:manage")
     @PutMapping("/exchange/product/{id}")
     public Result<Void> updateExchangeProduct(
                @PathVariable Long id,
@@ -142,7 +143,7 @@ public class PointsController {
     /**
      * 删除积分兑换商品（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("points:product:manage")
     @DeleteMapping("/exchange/product/{id}")
     public Result<Void> deleteExchangeProduct(   @PathVariable Long id) {
         pointsService.deleteExchangeProduct(id);

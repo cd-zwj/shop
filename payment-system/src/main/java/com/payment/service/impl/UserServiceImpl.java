@@ -1,5 +1,7 @@
 package com.payment.service.impl;
 
+import cn.dev33.satoken.stp.SaLoginModel;
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
@@ -8,8 +10,8 @@ import com.payment.dto.MiniProgramUserVO;
 import com.payment.dto.WechatLoginDTO;
 import com.payment.entity.User;
 import com.payment.mapper.UserMapper;
+import com.payment.mapper.UserRoleMapper;
 import com.payment.service.UserService;
-import com.payment.util.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,31 +26,66 @@ import org.springframework.util.StringUtils;
 @Slf4j
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
-    
+
     @Autowired
-    private JwtUtil jwtUtil;
-    
+    private UserRoleMapper userRoleMapper;
+
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-    
+
     @Override
     public String login(LoginDTO dto) {
         User user = getByUsername(dto.getUsername());
         if (user == null) {
             throw new BusinessException("用户名或密码错误");
         }
-        
+
         if (user.getStatus() == 0) {
             throw new BusinessException("用户已被禁用");
         }
-        
+
         if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
             throw new BusinessException("用户名或密码错误");
         }
-        
-        // 生成JWT token（包含租户信息）
-        return jwtUtil.generateToken(user.getId(), user.getUsername(), user.getTenantId(), null);
+
+        // Sa-Token 登录
+        StpUtil.login(user.getId());
+
+        // 存储用户信息到Session
+        StpUtil.getSession().set("user", user);
+        StpUtil.getSession().set("tenantId", user.getTenantId());
+        StpUtil.getSession().set("userType", user.getUserType());
+
+        // 返回Token
+        return StpUtil.getTokenValue();
     }
-    
+
+    @Override
+    public String loginadmin(LoginDTO dto){
+        User user = getByUsername(dto.getUsername());
+        if (user == null) {
+            throw new BusinessException("用户名或密码错误");
+        }
+        if (user.getStatus() == 0) {
+            throw new BusinessException("用户已被禁用");
+        }
+        if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            throw new BusinessException("用户名或密码错误");
+        }
+        if (!user.getUserType().equals(2)){
+            throw new BusinessException("用户权限不足,该用户不是管理员");
+        }
+
+        // Sa-Token 登录
+        StpUtil.login(user.getId());
+
+        // 存储用户信息到Session
+        StpUtil.getSession().set("user", user);
+        StpUtil.getSession().set("tenantId", user.getTenantId());
+        StpUtil.getSession().set("userType", user.getUserType());
+
+        return StpUtil.getTokenValue();
+    }
+
     @Override
     public User getByUsername(String username) {
         // 多租户环境下，需要同时匹配用户名和租户ID
@@ -70,13 +107,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (existUser != null) {
             throw new BusinessException("用户名已存在");
         }
-        
+
         // 加密密码
         user.setPassword(passwordEncoder.encode(user.getPassword()));
         user.setUserType(1); // 普通用户
         user.setStatus(1); // 启用
-        
+
         save(user);
+
+        // 分配默认角色: user (role_id = 1)
+        userRoleMapper.insertUserRole(user.getId(), 1L);
+        log.info("用户注册成功，已分配默认角色: userId={}, roleId=1", user.getId());
+
         return user;
     }
     
@@ -118,15 +160,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
             updateById(user);
         }
-        
-        // 生成JWT token
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getTenantId(), null);
-        
+
+        // Sa-Token 登录
+        StpUtil.login(user.getId());
+
+        // 存储用户信息到Session
+        StpUtil.getSession().set("user", user);
+        StpUtil.getSession().set("tenantId", user.getTenantId());
+        StpUtil.getSession().set("userType", user.getUserType());
+
+        // 获取Token
+        String token = StpUtil.getTokenValue();
+
         // 构造返回对象
         MiniProgramUserVO userVO = new MiniProgramUserVO();
         BeanUtils.copyProperties(user, userVO);
         userVO.setToken(token);
-        
+
         return userVO;
     }
 }

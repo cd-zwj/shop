@@ -154,7 +154,6 @@ public class NettyServer {
                     );
                     if (tenant != null) {
                         TenantContextHolder.setTenantId(tenant.getId());
-                        TenantContextHolder.setTenantCode(tenant.getTenantCode());
                     } else {
                         sendErrorResponse(ctx, "租户不存在或已被禁用");
                         return;

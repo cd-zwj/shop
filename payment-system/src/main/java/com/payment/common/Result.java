@@ -1,12 +1,14 @@
 package com.payment.common;
 
 import lombok.Data;
+import org.springframework.beans.factory.annotation.Value;
+
 import java.io.Serializable;
 
 @Data
 public class Result<T> implements Serializable {
     private static final long serialVersionUID = 1L;
-    
+
     private Integer code;
     private String message;
     private T data;

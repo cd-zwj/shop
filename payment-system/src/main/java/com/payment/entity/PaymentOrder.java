@@ -90,6 +90,12 @@ public class PaymentOrder implements Serializable {
      */
     private String notifyUrl;
     
+    /**
+     * 交易类型：NATIVE-Native支付，JSAPI-小程序/公众号支付
+     */
+    @com.baomidou.mybatisplus.annotation.TableField(exist = false)
+    private String tradeType;
+    
     private Integer deleted;
     
     private LocalDateTime createTime;

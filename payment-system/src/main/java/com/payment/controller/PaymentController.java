@@ -28,7 +28,6 @@ public class PaymentController {
         try {
             Map<String, String> params = request.getParameterMap().entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue()[0]));
-            
             paymentOrderService.handlePayNotify("WECHAT", params);
             return "SUCCESS";
         } catch (Exception e) {

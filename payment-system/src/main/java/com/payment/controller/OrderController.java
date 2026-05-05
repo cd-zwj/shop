@@ -1,6 +1,7 @@
 package com.payment.controller;
 
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.CreateOrderDTO;
 import com.payment.dto.PayResponseDTO;
@@ -20,12 +21,12 @@ import jakarta.validation.Valid;
  
 @RestController
 @RequestMapping("/order")
-@RequireAuth  // 整个Controller都需要认证
 public class OrderController {
     
     @Autowired
     private PaymentOrderService paymentOrderService;
 
+    @SaCheckPermission("order:create")
     @PostMapping("/create")
     public Result<PaymentOrder> createOrder(@Valid @RequestBody CreateOrderDTO dto) {
         Long userId = UserContext.getCurrentUserId();
@@ -33,19 +34,22 @@ public class OrderController {
         return Result.success(order);
     }
 
+    @SaCheckPermission("order:pay")
     @PostMapping("/pay")
     public Result<PayResponseDTO> pay(@RequestParam String orderNo) {
         Long userId = UserContext.getCurrentUserId();
-        PayResponseDTO payResponse = paymentOrderService.pay(userId, orderNo);
+        PayResponseDTO payResponse = paymentOrderService.pay(userId, orderNo, "NATIVE");
         return Result.success(payResponse);
     }
 
+    @SaCheckPermission("order:query")
     @GetMapping("/query")
     public Result<PaymentOrder> queryOrder(@RequestParam String orderNo) {
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
         return Result.success(order);
     }
 
+    @SaCheckPermission("order:cancel")
     @PostMapping("/cancel")
     public Result<Void> cancelOrder(@RequestParam String orderNo) {
         paymentOrderService.cancelOrder(orderNo);

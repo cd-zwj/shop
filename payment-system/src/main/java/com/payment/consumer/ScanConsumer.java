@@ -54,7 +54,6 @@ public class ScanConsumer {
                 );
                 if (tenant != null) {
                     TenantContextHolder.setTenantId(tenant.getId());
-                    TenantContextHolder.setTenantCode(tenant.getTenantCode());
                     log.info("设置租户上下文，tenantId: {}, tenantCode: {}", tenant.getId(), tenant.getTenantCode());
                 } else {
                     log.warn("租户不存在或已被禁用，tenantCode: {}", request.getTenantCode());

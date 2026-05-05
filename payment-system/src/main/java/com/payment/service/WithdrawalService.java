@@ -48,8 +48,8 @@ public interface WithdrawalService {
     /**
      * 管理员查询提现申请列表（带商家名称）
      */
-    Page<WithdrawalVO> listWithdrawalsForAdmin(Integer current, Integer size, 
-            String merchantName, Integer status, String startDate, String endDate);
+    Page<WithdrawalVO> listWithdrawalsForAdmin(Integer current, Integer size,
+                                               String merchantName, Integer status, String startDate, String endDate);
     
     /**
      * 审核通过提现申请（简化版）

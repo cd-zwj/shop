@@ -21,6 +21,12 @@ SOURCE 11_message_idempotent.sql;
 SOURCE 12_rbac_permission.sql;
 SOURCE 13_user_permission.sql;
 SOURCE 14_platform_wallet_v1.sql;
+SOURCE 15_coupon_marketing.sql;
+SOURCE 16_refund.sql;
+SOURCE 17_auth_security.sql;
+SOURCE 18_store_membership.sql;
+SOURCE 19_message_retry.sql;
+SOURCE 20_payment_bill_status_remark.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

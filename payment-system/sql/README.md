@@ -15,9 +15,17 @@ sql/
 ├── 08_merchant_finance.sql    # 商家财务模块
 ├── 09_pos.sql                 # POS 收银模块
 ├── 10_analytics.sql           # 数据分析模块
+├── 11_message_idempotent.sql  # 消息幂等模块
+├── 12_rbac_permission.sql     # RBAC 权限模块
+├── 13_user_permission.sql     # 用户额外权限模块
+├── 14_platform_wallet_v1.sql  # 平台用户 / 双钱包 / 统一支付模型
+├── 15_coupon_marketing.sql    # 优惠券与营销活动模块
+├── 16_refund.sql              # 退款模块
+├── 17_auth_security.sql       # 登录与安全模块
+├── 18_store_membership.sql    # 门店与会员扩展模块
+├── 19_message_retry.sql       # 消息重试与消费日志模块
 ├── 99_init_data.sql           # 初始化数据
 ├── import_all.sql             # 完整导入脚本
-├── update_tables.sql          # 表结构更新脚本
 ├── payment_db.sql             # 单租户版本（旧）
 └── payment_db_multitenant.sql # 多租户版本（旧）
 ```
@@ -50,6 +58,15 @@ mysql -u root -p < 07_exchange.sql
 mysql -u root -p < 08_merchant_finance.sql
 mysql -u root -p < 09_pos.sql
 mysql -u root -p < 10_analytics.sql
+mysql -u root -p < 11_message_idempotent.sql
+mysql -u root -p < 12_rbac_permission.sql
+mysql -u root -p < 13_user_permission.sql
+mysql -u root -p < 14_platform_wallet_v1.sql
+mysql -u root -p < 15_coupon_marketing.sql
+mysql -u root -p < 16_refund.sql
+mysql -u root -p < 17_auth_security.sql
+mysql -u root -p < 18_store_membership.sql
+mysql -u root -p < 19_message_retry.sql
 mysql -u root -p < 99_init_data.sql
 ```
 
@@ -108,6 +125,59 @@ mysql -u root -p < payment_db_multitenant.sql
 - `user_behavior_log` - 用户行为日志表
 - `data_analysis_result` - 数据分析结果表
 
+### 11_message_idempotent.sql
+- `message_idempotent` - 消息幂等记录表
+
+### 12_rbac_permission.sql
+- `sys_role` - 角色表
+- `sys_permission` - 权限表
+- `sys_user_role` - 用户角色关联表
+- `sys_role_permission` - 角色权限关联表
+
+### 13_user_permission.sql
+- `sys_user_permission` - 用户额外权限关联表
+
+### 14_platform_wallet_v1.sql
+- `platform_user` - 平台用户主表
+- `platform_user_auth` - 第三方认证绑定表
+- `tenant_employee` - 商户员工关系表
+- `tenant_member` - 商户会员关系表
+- `unified_wallet_account` / `merchant_wallet_account` - 双钱包账户表
+- `sales_order` / `recharge_order_v1` / `payment_bill` - 统一业务单模型
+- `message_outbox` / `compensation_task` / `dead_letter_task` - 消息与补偿表
+
+### 15_coupon_marketing.sql
+- `coupon_template` - 优惠券模板表
+- `user_coupon` - 用户领券表
+- `coupon_operation_log` - 优惠券操作日志表
+- `order_coupon_detail` - 订单优惠明细表
+- `marketing_activity` - 营销活动表
+- `activity_grant_record` - 活动发放记录表
+
+### 16_refund.sql
+- `refund_order` - 退款业务单表
+- `refund_record` - 退款流水表
+- `refund_callback_record` - 退款回调记录表
+- `refund_reconcile_task` - 退款补查任务表
+
+### 17_auth_security.sql
+- `sms_verify_code` - 短信验证码表
+- `login_session` - 登录会话表
+- `user_login_log` - 登录日志表
+- `login_fail_record` - 登录失败控制表
+- `password_reset_record` - 密码重置记录表
+
+### 18_store_membership.sql
+- `store` - 门店表
+- `member_level` - 会员等级表
+- `member_tag` - 会员标签表
+- `member_tag_relation` - 会员标签关联表
+- `member_growth_log` - 会员成长值日志表
+
+### 19_message_retry.sql
+- `message_consume_log` - 消息消费日志表
+- `retry_task` - 重试任务表
+
 ### 99_init_data.sql
 - 默认租户数据
 - 默认管理员账号
@@ -118,11 +188,7 @@ mysql -u root -p < payment_db_multitenant.sql
 
 ## 更新现有数据库
 
-如果已经有旧版本的数据库，需要更新表结构：
-
-```bash
-mysql -u root -p payment_db < update_tables.sql
-```
+如果已经有旧版本的数据库，建议按版本新增增量 SQL 脚本并按顺序执行，不再依赖单一的 `update_tables.sql` 文件。
 
 ## 注意事项
 
@@ -130,6 +196,8 @@ mysql -u root -p payment_db < update_tables.sql
 2. **字符集**：确保使用 utf8mb4 字符集
 3. **外键**：当前未使用外键约束，通过应用层保证数据一致性
 4. **备份**：导入前请备份现有数据库
+5. **模型说明**：`14_platform_wallet_v1.sql` 及后续 `15-19` 扩展表默认基于平台用户 / 双钱包 / 统一支付模型设计
+6. **渐进演进**：`18_store_membership.sql` 当前仅落地门店主数据与会员扩展，未引入新的商品分类与门店库存真相源
 
 ## 默认账号
 

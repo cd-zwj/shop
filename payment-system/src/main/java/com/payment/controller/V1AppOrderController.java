@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.Result;
 import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.OrderPaymentVO;
+import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.SalesOrder;
 import com.payment.service.AppOrderService;
 import com.payment.util.PlatformSessionHelper;
@@ -37,8 +38,8 @@ public class V1AppOrderController {
 
     @SaCheckLogin
     @GetMapping("/{orderNo}")
-    public Result<SalesOrder> getOrder(@PathVariable String orderNo) {
-        return Result.success(appOrderService.getByOrderNo(PlatformSessionHelper.getPlatformUserId(), orderNo));
+    public Result<SalesOrderDetailVO> getOrder(@PathVariable String orderNo) {
+        return Result.success(appOrderService.getOrderDetail(PlatformSessionHelper.getPlatformUserId(), orderNo));
     }
 
     @SaCheckLogin

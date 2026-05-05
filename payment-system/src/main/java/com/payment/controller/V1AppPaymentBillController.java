@@ -22,4 +22,10 @@ public class V1AppPaymentBillController {
     public Result<PaymentBill> getPaymentBill(@PathVariable String billNo) {
         return Result.success(paymentBillV1Service.getByBillNo(billNo));
     }
+
+    @SaCheckLogin
+    @PostMapping("/{billNo}/sync")
+    public Result<PaymentBill> syncPaymentBill(@PathVariable String billNo) {
+        return Result.success(paymentBillV1Service.syncBillStatus(billNo));
+    }
 }

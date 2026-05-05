@@ -27,6 +27,7 @@ public class PaymentBill implements Serializable {
     private String payStatus;
     private String thirdPartyBillNo;
     private String callbackStatus;
+    private String statusRemark;
     private LocalDateTime expireTime;
     private String extensionJson;
     private LocalDateTime createTime;

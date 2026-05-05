@@ -2,7 +2,8 @@ package com.payment.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.*;
 import com.payment.entity.PaymentOrder;
@@ -54,7 +55,7 @@ public class MiniProgramController {
     }
 
     @GetMapping("/auth/userinfo")
-    @RequireAuth
+    @SaCheckLogin
     public Result<User> getUserInfo() {
         Long userId = UserContext.getCurrentUserId();
         User user = userService.getById(userId);
@@ -97,7 +98,7 @@ public class MiniProgramController {
     // ==================== 订单接口 ====================
 
     @PostMapping("/order/create")
-    @RequireAuth
+    @SaCheckLogin
     public Result<PaymentOrder> createOrder(@Valid @RequestBody CreateOrderDTO dto) {
         Long userId = UserContext.getCurrentUserId();
         PaymentOrder order = paymentOrderService.createOrder(userId, dto);
@@ -105,7 +106,7 @@ public class MiniProgramController {
     }
 
     @GetMapping("/order/list")
-    @RequireAuth
+    @SaCheckLogin
     public Result<IPage<PaymentOrder>> getOrderList(
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "10") Integer size,
@@ -117,7 +118,7 @@ public class MiniProgramController {
     }
 
     @GetMapping("/order/detail/{orderNo}")
-    @RequireAuth
+    @SaCheckLogin
     public Result<PaymentOrder> getOrderDetail(@PathVariable String orderNo) {
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
         return Result.success(order);
@@ -126,17 +127,18 @@ public class MiniProgramController {
     // ==================== 支付接口 ====================
     
 
+    @SaCheckPermission("miniprogram:pay")
     @PostMapping("/pay/create")
-    @RequireAuth
     public Result<PayResponseDTO> createPayment(@RequestParam String orderNo) {
         Long userId = UserContext.getCurrentUserId();
-        PayResponseDTO payResponse = paymentOrderService.pay(userId, orderNo);
+        // 小程序支付使用JSAPI模式
+        PayResponseDTO payResponse = paymentOrderService.pay(userId, orderNo, "JSAPI");
         return Result.success(payResponse);
     }
     
 
     @GetMapping("/pay/status")
-    @RequireAuth
+    @SaCheckLogin
     public Result<String> getPaymentStatus(@RequestParam String orderNo) {
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
         return Result.success(order.getPayStatus());
@@ -145,7 +147,7 @@ public class MiniProgramController {
     // ==================== 积分接口 ====================
 
     @GetMapping("/points/balance")
-    @RequireAuth
+    @SaCheckLogin
     public Result<Integer> getPointsBalance() {
         Long userId = UserContext.getCurrentUserId();
         Long tenantId = UserContext.getCurrentTenantId();
@@ -155,7 +157,7 @@ public class MiniProgramController {
     
 
     @GetMapping("/points/exchange/list")
-    @RequireAuth
+    @SaCheckLogin
     public Result<List<com.payment.entity.ExchangeProduct>> getExchangeProductList() {
         Long tenantId = UserContext.getCurrentTenantId();
         List<com.payment.entity.ExchangeProduct> products = pointsService.listExchangeProducts(tenantId);
@@ -164,7 +166,7 @@ public class MiniProgramController {
     
    
     @PostMapping("/points/exchange")
-    @RequireAuth
+    @SaCheckLogin
     public Result<PaymentOrder> exchangeProduct(@RequestParam Long exchangeProductId) {
         Long userId = UserContext.getCurrentUserId();
         String orderNo = pointsService.exchangeProduct(userId, exchangeProductId);
@@ -176,7 +178,7 @@ public class MiniProgramController {
     
 
     @GetMapping("/recharge/rules")
-    @RequireAuth
+    @SaCheckLogin
     public Result<List<com.payment.entity.RechargeRule>> getRechargeRules() {
         Long tenantId = UserContext.getCurrentTenantId();
         List<com.payment.entity.RechargeRule> rules = rechargeService.getRechargeRules(tenantId);
@@ -184,7 +186,7 @@ public class MiniProgramController {
     }
 
     @PostMapping("/recharge/create")
-    @RequireAuth
+    @SaCheckLogin
     public Result<com.payment.entity.RechargeOrder> createRechargeOrder(@Valid @RequestBody CreateRechargeOrderDTO dto) {
         Long userId = UserContext.getCurrentUserId();
         com.payment.entity.RechargeOrder order = rechargeService.createRechargeOrder(userId, dto.getRuleId());
@@ -192,7 +194,7 @@ public class MiniProgramController {
     }
 
     @GetMapping("/recharge/balance")
-    @RequireAuth
+    @SaCheckLogin
     public Result<BigDecimal> getUserBalance() {
         Long userId = UserContext.getCurrentUserId();
         Long tenantId = UserContext.getCurrentTenantId();

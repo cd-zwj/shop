@@ -1,7 +1,8 @@
 package com.payment.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.WithdrawalApplyDTO;
 import com.payment.dto.WithdrawalApproveDTO;
@@ -36,7 +37,7 @@ public class WithdrawalController {
     /**
      * 查询商家余额（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("withdrawal:view")
     @GetMapping("/balance")
     public Result<MerchantBalance> getMerchantBalance() {
         Long tenantId = TenantContextHolder.getTenantId();
@@ -47,7 +48,7 @@ public class WithdrawalController {
     /**
      * 创建提现申请（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("withdrawal:create")
     @PostMapping("/apply")
     public Result<Map<String, Object>> createWithdrawal(@Validated @RequestBody WithdrawalApplyDTO dto) {
         Long tenantId = TenantContextHolder.getTenantId();
@@ -64,7 +65,7 @@ public class WithdrawalController {
     /**
      * 查询提现记录（商家端）
      */
-    @RequireAuth
+    @SaCheckPermission("withdrawal:view")
     @GetMapping("/list")
     public Result<Page<Withdrawal>> listWithdrawals(
                @RequestParam(required = false) Integer status,
@@ -85,7 +86,7 @@ public class WithdrawalController {
     /**
      * 查询所有提现申请（管理端）
      */
-    @RequireAuth
+    @SaCheckPermission("admin:withdrawal:list")
     @GetMapping("/admin/list")
     public Result<Page<Withdrawal>> listAllWithdrawals(
                @RequestParam(required = false) Long tenantId,
@@ -106,7 +107,7 @@ public class WithdrawalController {
     /**
      * 审核提现申请（管理端）
      */
-    @RequireAuth
+    @SaCheckPermission("admin:withdrawal:approve")
     @PostMapping("/admin/approve")
     public Result<Void> approveWithdrawal(@Validated @RequestBody WithdrawalApproveDTO dto) {
         Long approverId = UserContextHolder.getUserId();

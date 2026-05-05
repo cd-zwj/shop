@@ -15,6 +15,8 @@ public interface UserService extends IService<User> {
      * 用户登录
      */
     String login(LoginDTO dto);
+
+    String loginadmin(LoginDTO dto);
     
     /**
      * 根据用户名查询用户

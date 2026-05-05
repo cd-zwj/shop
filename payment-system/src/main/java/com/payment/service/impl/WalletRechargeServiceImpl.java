@@ -12,6 +12,7 @@ import com.payment.entity.RechargeOrderV1;
 import com.payment.entity.TenantMember;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentBizTypeEnum;
+import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.WalletTypeEnum;
 import com.payment.mapper.MerchantRechargeRuleMapper;
 import com.payment.mapper.RechargeOrderV1Mapper;
@@ -68,7 +69,8 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
                 rechargeOrder.getRechargeNo(),
                 null,
                 platformUserId,
-                dto.getAmount()
+                dto.getAmount(),
+                requireChannel(dto.getPaymentChannelCode())
         );
         PayResponseDTO payResponse = paymentBillV1Service.createExternalPayment(paymentBill);
         return buildRechargeVO(rechargeOrder, paymentBill, payResponse);
@@ -106,7 +108,8 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
                 rechargeOrder.getRechargeNo(),
                 tenantId,
                 platformUserId,
-                rule.getRechargeAmount()
+                rule.getRechargeAmount(),
+                requireChannel(dto.getPaymentChannelCode())
         );
         PayResponseDTO payResponse = paymentBillV1Service.createExternalPayment(paymentBill);
         return buildRechargeVO(rechargeOrder, paymentBill, payResponse);
@@ -171,5 +174,12 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         vo.setPaymentBillNo(paymentBill.getBillNo());
         vo.setExternalPayUrl(payResponse.getPayUrl());
         return vo;
+    }
+
+    private PaymentChannelCodeEnum requireChannel(PaymentChannelCodeEnum channelCode) {
+        if (channelCode == null) {
+            throw new BusinessException("支付渠道不能为空");
+        }
+        return channelCode;
     }
 }

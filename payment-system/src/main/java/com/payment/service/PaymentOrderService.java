@@ -20,9 +20,13 @@ public interface PaymentOrderService extends IService<PaymentOrder> {
     PaymentOrder createOrder(Long userId, CreateOrderDTO dto);
     
     /**
-     * 发起支付
+     * 支付订单
+     * @param userId 用户ID
+     * @param orderNo 订单号
+     * @param tradeType 交易类型（可选，默认NATIVE）
+     * @return 支付响应
      */
-    PayResponseDTO pay(Long userId, String orderNo);
+    PayResponseDTO pay(Long userId, String orderNo, String tradeType);
     
     /**
      * 查询订单

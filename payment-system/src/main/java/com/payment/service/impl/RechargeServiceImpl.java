@@ -16,6 +16,10 @@ import com.payment.service.RechargeService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import com.payment.config.PaymentConfig;
+import com.payment.config.RabbitMQConfig;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +46,12 @@ public class RechargeServiceImpl implements RechargeService {
     
     @Resource
     private BalanceLogMapper balanceLogMapper;
+    
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+    
+    @Autowired
+    private PaymentConfig paymentConfig;
     
     @Override
     public List<RechargeRule> getRechargeRules(Long tenantId) {
@@ -115,6 +125,21 @@ public class RechargeServiceImpl implements RechargeService {
         order.setCreateTime(LocalDateTime.now());
         
         rechargeOrderMapper.insert(order);
+        
+        // 发送延迟消息到队列，处理订单超时自动取消
+        try {
+            int timeoutMinutes = paymentConfig.getRechargeOrderTimeoutMinutes() != null ? 
+                    paymentConfig.getRechargeOrderTimeoutMinutes() : 15;
+            String ttl = String.valueOf(timeoutMinutes * 60 * 1000); // 毫秒
+            
+            rabbitTemplate.convertAndSend(RabbitMQConfig.RECHARGE_ORDER_DELAY_QUEUE, (Object) order.getOrderNo(), message -> {
+                message.getMessageProperties().setExpiration(ttl);
+                return message;
+            });
+            log.info("充值订单 {} 已发送延迟消息，超时时间 {} 分钟", order.getOrderNo(), timeoutMinutes);
+        } catch (Exception e) {
+            log.error("发送充值订单延迟消息失败：{}", order.getOrderNo(), e);
+        }
         
         log.info("用户 {} 创建充值订单 {}，充值金额 {}，赠送金额 {}", 
                 userId, order.getOrderNo(), order.getRechargeAmount(), order.getBonusAmount());

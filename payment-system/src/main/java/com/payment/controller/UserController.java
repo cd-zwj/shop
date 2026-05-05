@@ -1,6 +1,7 @@
 package com.payment.controller;
 
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
 import com.payment.common.Result;
 import com.payment.dto.LoginDTO;
 import com.payment.entity.User;
@@ -28,6 +29,12 @@ public class UserController {
         String token = userService.login(dto);
         return Result.success(token);
     }
+
+    @PostMapping("/logout")
+    public Result<Void> logout() {
+        StpUtil.logout();
+        return Result.success();
+    }
     
 
     @PostMapping("/register")
@@ -37,7 +44,7 @@ public class UserController {
     }
 
     @GetMapping("/info")
-    @RequireAuth  // 需要认证
+    @SaCheckLogin  // 需要认证
     public Result<User> getCurrentUser() {
         // 从ThreadLocal中获取用户ID
         Long userId = UserContext.getCurrentUserId();

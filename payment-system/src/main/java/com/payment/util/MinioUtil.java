@@ -5,9 +5,7 @@ import io.minio.*;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,9 +28,7 @@ public class MinioUtil {
     private MinioConfig minioConfig;
 
     @Autowired
-    private RedisTemplate<String, String> redisTemplate;
-    @Autowired
-    private RedissonClient redissonClient;
+    private RedisUtils redisUtils;
 
     /**
      * 简单上传文件（适用于小文件）
@@ -180,7 +176,7 @@ public class MinioUtil {
         try {
             ensureBucketExists();
             String md5Key = "upload:md5:" + fileId;
-            redisTemplate.opsForValue().set(md5Key, fileMd5, 1, TimeUnit.DAYS);
+            redisUtils.set(md5Key, fileMd5, 1, TimeUnit.DAYS);
             String chunkObjectName = fileId + "_part" + chunkNumber;
             minioClient.putObject(
                     PutObjectArgs.builder()
@@ -231,7 +227,7 @@ public class MinioUtil {
      */
     private void updateUploadProgress(String fileId, int chunkNumber, int totalChunks, String fileMd5) {
         String lockKey = "lock:upload:progress:" + fileId;
-        RLock lock = redissonClient.getLock(lockKey);
+        RLock lock = redisUtils.getLock(lockKey);
         
         try {
             // 尝试获取锁，最多等待10秒，锁自动释放时间30秒
@@ -241,20 +237,16 @@ public class MinioUtil {
                     String totalChunksKey = "upload:total:" + fileId;
                     String md5Key = "upload:md5:" + fileId;
                     
-                    redisTemplate.opsForSet().add(progressKey, String.valueOf(chunkNumber));
-                    redisTemplate.opsForValue().set(totalChunksKey, String.valueOf(totalChunks));
-                    redisTemplate.opsForValue().set(md5Key, fileMd5);
-                    redisTemplate.expire(progressKey, 1, TimeUnit.DAYS);
-                    redisTemplate.expire(totalChunksKey, 1, TimeUnit.DAYS);
-                    redisTemplate.expire(md5Key, 1, TimeUnit.DAYS);
+                    redisUtils.setAdd(progressKey, String.valueOf(chunkNumber));
+                    redisUtils.set(totalChunksKey, String.valueOf(totalChunks), 1, TimeUnit.DAYS);
+                    redisUtils.set(md5Key, fileMd5, 1, TimeUnit.DAYS);
+                    redisUtils.expire(progressKey, 1, TimeUnit.DAYS);
                     
-                    Long uploadedCount = redisTemplate.opsForSet().size(progressKey);
-                    if (uploadedCount != null && uploadedCount == totalChunks) {
+                    int uploadedCount = redisUtils.setSize(progressKey);
+                    if (uploadedCount == totalChunks) {
                         try {
                             mergeFileChunks(fileId, totalChunks, fileMd5);
-                            redisTemplate.delete(progressKey);
-                            redisTemplate.delete(totalChunksKey);
-                            redisTemplate.delete(md5Key);
+                            redisUtils.delete(progressKey, totalChunksKey, md5Key);
                         } catch (Exception e) {
                             log.error("合并文件分片失败: fileId={}", fileId, e);
                             throw new RuntimeException("合并文件分片失败：" + e.getMessage());
@@ -285,7 +277,7 @@ public class MinioUtil {
      */
     public List<Integer> getUploadedChunks(String fileId) {
         String progressKey = "upload:progress:" + fileId;
-        Set<String> uploadedChunks = redisTemplate.opsForSet().members(progressKey);
+        Set<String> uploadedChunks = redisUtils.setMembers(progressKey);
         if (uploadedChunks == null || uploadedChunks.isEmpty()) {
             return new ArrayList<>();
         }
@@ -308,11 +300,11 @@ public class MinioUtil {
         List<Integer> uploadedChunksList = getUploadedChunks(fileId);
         int uploadedCount = uploadedChunksList.size();
         String totalChunksKey = "upload:total:" + fileId;
-        String totalChunksStr = redisTemplate.opsForValue().get(totalChunksKey);
+        String totalChunksStr = redisUtils.get(totalChunksKey);
         int totalChunks = totalChunksStr != null ? Integer.parseInt(totalChunksStr) : 0;
         int progressPercent = totalChunks > 0 ? (uploadedCount * 100 / totalChunks) : 0;
         String urlKey = "upload:url:" + fileId;
-        String fileUrl = redisTemplate.opsForValue().get(urlKey);
+        String fileUrl = redisUtils.get(urlKey);
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
         response.put("progress", progressPercent);
@@ -370,7 +362,7 @@ public class MinioUtil {
         log.info("文件MD5校验成功: fileId={}, md5={}", fileId, actualMd5);
         String presignedUrl = getPresignedUrl(mergedObjectName, minioConfig.getUrlExpiryDays());
         String urlKey = "upload:url:" + fileId;
-        redisTemplate.opsForValue().set(urlKey, presignedUrl, minioConfig.getUrlExpiryDays(), TimeUnit.DAYS);
+        redisUtils.set(urlKey, presignedUrl, minioConfig.getUrlExpiryDays(), TimeUnit.DAYS);
         for (int i = 1; i <= totalChunks; i++) {
             String partName = fileId + "_part" + i;
             try {

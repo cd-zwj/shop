@@ -6,11 +6,14 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.config.RabbitMQConfig;
 import com.payment.entity.PointsRule;
 import com.payment.entity.SalesOrder;
+import com.payment.entity.SalesOrderItem;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.mapper.PointsRuleMapper;
+import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
+import com.payment.service.ProductInventoryService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,6 +38,8 @@ public class PaymentV1Consumer {
 
     private final WalletRechargeService walletRechargeService;
     private final SalesOrderMapper salesOrderMapper;
+    private final SalesOrderItemMapper salesOrderItemMapper;
+    private final ProductInventoryService productInventoryService;
     private final WithdrawalService withdrawalService;
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsRuleMapper pointsRuleMapper;
@@ -65,6 +71,17 @@ public class PaymentV1Consumer {
             return;
         }
 
+        // 先扣库存，再落已支付状态，避免出现“订单已支付但库存完全没动”的长期不一致。
+        List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
+        for (SalesOrderItem orderItem : orderItems) {
+            productInventoryService.deductStock(
+                    salesOrder.getTenantId(),
+                    orderItem.getProductId(),
+                    orderItem.getQuantity(),
+                    salesOrder.getOrderNo()
+            );
+        }
+
         salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
         salesOrder.setOrderStatus(OrderStatusEnum.PAID.name());
         salesOrderMapper.updateById(salesOrder);
@@ -81,7 +98,14 @@ public class PaymentV1Consumer {
                 .eq(PointsRule::getEnabled, 1));
         if (pointsRule != null && pointsRule.getPointsRatio() != null && pointsRule.getPointsRatio() > 0) {
             int points = salesOrder.getTotalAmount().intValue() * pointsRule.getPointsRatio();
-            memberPointsAccountService.grantPoints(salesOrder.getTenantId(), salesOrder.getPlatformUserId(), points, "SALES_ORDER", orderNo, "消费赠送积分");
+            memberPointsAccountService.grantPoints(
+                    salesOrder.getTenantId(),
+                    salesOrder.getPlatformUserId(),
+                    points,
+                    "SALES_ORDER",
+                    orderNo,
+                    "消费赠送积分"
+            );
         }
     }
 }

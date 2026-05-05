@@ -1,7 +1,7 @@
 package com.payment.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.payment.annotation.RequireAuth;
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
 import com.payment.dto.MerchantDTO;
 import com.payment.dto.MerchantDetailVO;
@@ -32,7 +32,7 @@ public class MerchantController {
     /**
      * 创建商家（管理端）
      */
-    @RequireAuth
+    @SaCheckLogin
     @PostMapping("/admin/create")
 
     public Result<Map<String, Object>> createMerchant(@Validated @RequestBody MerchantDTO dto) {
@@ -51,7 +51,7 @@ public class MerchantController {
     /**
      * 更新商家信息（管理端）
      */
-    @RequireAuth
+    @SaCheckLogin
     @PutMapping("/admin/update/{tenantId}")
 
     public Result<Void> updateMerchant(
@@ -67,7 +67,7 @@ public class MerchantController {
     /**
      * 启用商家（管理端）
      */
-    @RequireAuth
+    @SaCheckLogin
     @PostMapping("/admin/enable/{tenantId}")
 
     public Result<Void> enableMerchant( @PathVariable Long tenantId) {
@@ -81,7 +81,7 @@ public class MerchantController {
     /**
      * 禁用商家（管理端）
      */
-    @RequireAuth
+    @SaCheckLogin
     @PostMapping("/admin/disable/{tenantId}")
 
     public Result<Void> disableMerchant(@PathVariable Long tenantId) {
@@ -95,7 +95,7 @@ public class MerchantController {
     /**
      * 商家列表（管理端）
      */
-    @RequireAuth
+    @SaCheckLogin
     @GetMapping("/admin/list")
 
     public Result<Page<Tenant>> listMerchants(
@@ -118,7 +118,7 @@ public class MerchantController {
     /**
      * 商家详情
      */
-    @RequireAuth
+    @SaCheckLogin
     @GetMapping("/detail/{tenantId}")
 
     public Result<MerchantDetailVO> getMerchantDetail( @PathVariable Long tenantId) {

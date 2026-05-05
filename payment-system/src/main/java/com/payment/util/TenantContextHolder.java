@@ -1,47 +1,43 @@
 package com.payment.util;
 
+import cn.dev33.satoken.stp.StpUtil;
+
 /**
- * 租户上下文 - 使用ThreadLocal保存当前租户信息
+ * 租户上下文 - 适配 Sa-Token
  */
 public class TenantContextHolder {
-    
+
     private static final ThreadLocal<Long> tenantIdHolder = new ThreadLocal<>();
-    private static final ThreadLocal<String> tenantCodeHolder = new ThreadLocal<>();
-    
+
     /**
-     * 设置租户ID
+     * 设置租户ID (保留ThreadLocal以支持某些非Web场景或手动切换租户)
      */
     public static void setTenantId(Long tenantId) {
         tenantIdHolder.set(tenantId);
     }
-    
+
     /**
      * 获取租户ID
+     * 优先从ThreadLocal获取(手动设置优先)，其次从Sa-Token Session获取
      */
     public static Long getTenantId() {
-        return tenantIdHolder.get();
+        Long tid = tenantIdHolder.get();
+        if (tid != null) {
+            return tid;
+        }
+        try {
+            // 从Session获取
+            return StpUtil.getSession().getLong("tenantId");
+        } catch (Exception e) {
+            return null;
+        }
     }
-    
+
     /**
-     * 设置租户编码
-     */
-    public static void setTenantCode(String tenantCode) {
-        tenantCodeHolder.set(tenantCode);
-    }
-    
-    /**
-     * 获取租户编码
-     */
-    public static String getTenantCode() {
-        return tenantCodeHolder.get();
-    }
-    
-    /**
-     * 清除所有租户信息（防止内存泄漏）
+     * 清除所有租户信息
      */
     public static void clear() {
         tenantIdHolder.remove();
-        tenantCodeHolder.remove();
     }
 }
 

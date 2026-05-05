@@ -29,7 +29,7 @@ spring:
   # Redis配置
   data:
     redis:
-      host: localhost
+      host: 39.108.175.183
       port: 6379
       password: # 如果Redis设置了密码，请在此填写
       database: 0
@@ -78,26 +78,70 @@ mybatis-plus:
 
 # 支付配置
 payment:
+  # 充值订单超时时间（分钟）
+  recharge-order-timeout-minutes: 15
   wechat:
     app-id: your-wechat-appid
     mch-id: your-wechat-mch-id
     api-v3-key: your-wechat-api-v3-key
-    cert-path: classpath:cert/wechat/apiclient_cert.pem
-    key-path: classpath:cert/wechat/apiclient_key.pem
+    cert-path: classpath:cert/wechat/apiclient_cert.pem # 商户API证书路径
+    key-path: classpath:cert/wechat/apiclient_key.pem   # 商户API私钥路径
     notify-url: http://your-domain.com/api/payment/wechat/notify
+    # 商户API证书序列号（从商户平台获取）
+    merchant-serial-number: your-merchant-serial-number
+    # 私钥内容（可选，如果不使用key-path文件方式）
+    private-key:
   alipay:
     app-id: your-alipay-appid
     private-key: your-alipay-private-key
     public-key: your-alipay-public-key
     gateway-url: https://openapi.alipay.com/gateway.do
-    notify-url: http://your-domain.com/api/payment/alipay/notify
-    return-url: http://your-domain.com/api/payment/alipay/return
+    notify-url: http://your-domain.com/api/v1/open/payments/callbacks/alipay-page
+    return-url: http://your-domain.com/api/v1/open/payments/returns/alipay-page
+  ext-provider:
+    base-url: https://pay.myzfw.com
+    merchant-id:
+    merchant-key:
+    notify-url: http://your-domain.com/api/v1/open/payments/callbacks/ext-provider
+    return-url: http://your-domain.com/pay/return
+    default-pay-type: alipay
+    default-device: pc
+    client-ip: 127.0.0.1
 
 # AI模块配置
-ai:
-  base-url: http://localhost:8000
-  analyze-endpoint: /api/ai/analyze
-  timeout: 30000
+langchain4j:
+  community:
+    redis:
+      host: localhost
+      port: 6379
+  open-ai:
+    embedding-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      model-name: text-embedding-v3
+      log-requests: true
+      log-responses: true
+    streaming-chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      model-name: qwen-plus
+      log-requests: true
+      log-responses: true
+    chat-model:
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      model-name: qwen-plus
+      log-requests: true
+      log-responses: true
+
+sa-token:
+  token-name: Authorization
+  timeout: 86400          # token有效期(秒) = 24小时
+  active-timeout: -1      # token临时有效期
+  is-concurrent: true     # 是否允许同账号并发登录
+  is-share: true          # 多账号共享token
+  token-style: uuid       # token风格
+  is-log: true            # 是否输出日志
 
 # JWT配置
 jwt:
@@ -110,15 +154,13 @@ file:
   upload-path: /uploads
   max-size: 10485760 # 10MB
 
-# 阿里云OSS配置
-aliyun:
-  oss:
-    endpoint: https://oss-cn-shenzhen.aliyuncs.com
-    access-key-id: your-access-key-id
-    access-key-secret: your-access-key-secret
-    bucket-name: zhuweijie-java-1741420998780-9694
-    domain: https://your-bucket-name.oss-cn-hangzhou.aliyuncs.com
-    path-prefix: payment/product/
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket-name: payment-system
+  path-prefix: uploads/
+  url-expiry-days: 7  # 预签名URL有效期（天）
 
 # Netty配置
 netty:

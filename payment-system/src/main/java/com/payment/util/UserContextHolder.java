@@ -1,63 +1,48 @@
 package com.payment.util;
 
+import cn.dev33.satoken.stp.StpUtil;
+import com.payment.entity.User;
+
 /**
- * 用户上下文 - 使用ThreadLocal保存当前登录用户信息
+ * 用户上下文 - 适配 Sa-Token
  */
 public class UserContextHolder {
-    
-    private static final ThreadLocal<Long> userIdHolder = new ThreadLocal<>();
-    private static final ThreadLocal<String> usernameHolder = new ThreadLocal<>();
-    private static final ThreadLocal<String> tokenHolder = new ThreadLocal<>();
-    
-    /**
-     * 设置用户ID
-     */
-    public static void setUserId(Long userId) {
-        userIdHolder.set(userId);
-    }
-    
+
     /**
      * 获取用户ID
      */
     public static Long getUserId() {
-        return userIdHolder.get();
+        try {
+            return StpUtil.getLoginIdAsLong();
+        } catch (Exception e) {
+            return null;
+        }
     }
-    
-    /**
-     * 设置用户名
-     */
-    public static void setUsername(String username) {
-        usernameHolder.set(username);
-    }
-    
+
     /**
      * 获取用户名
      */
     public static String getUsername() {
-        return usernameHolder.get();
+        try {
+            User user = (User) StpUtil.getSession().get("user");
+            return user != null ? user.getUsername() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
-    
-    /**
-     * 设置token
-     */
-    public static void setToken(String token) {
-        tokenHolder.set(token);
-    }
-    
+
     /**
      * 获取token
      */
     public static String getToken() {
-        return tokenHolder.get();
+        return StpUtil.getTokenValue();
     }
-    
+
     /**
-     * 清除所有用户信息（防止内存泄漏）
+     * 清除所有用户信息 (Sa-Token会自动管理，此处留空或用于清理ThreadLocal如果仍有混合使用)
      */
     public static void clear() {
-        userIdHolder.remove();
-        usernameHolder.remove();
-        tokenHolder.remove();
+        // Sa-Token不需要手动清理ThreadLocal
     }
 }
 

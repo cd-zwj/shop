@@ -1,23 +1,30 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
-import com.payment.config.RabbitMQConfig;
 import com.payment.dto.AppCreateOrderDTO;
+import com.payment.dto.AppCreateOrderItemDTO;
 import com.payment.dto.OrderPaymentVO;
 import com.payment.dto.PayResponseDTO;
-import com.payment.dto.WalletAccountVO;
+import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PointsRule;
+import com.payment.entity.Product;
 import com.payment.entity.SalesOrder;
+import com.payment.entity.SalesOrderItem;
+import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentBizTypeEnum;
-import com.payment.enums.WalletStrategyEnum;
+import com.payment.enums.PaymentChannelCodeEnum;
+import com.payment.enums.PaymentStatusReasonEnum;
+import com.payment.mapper.PointsRuleMapper;
+import com.payment.mapper.ProductMapper;
+import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.service.AppOrderService;
 import com.payment.service.MemberPointsAccountService;
@@ -27,39 +34,49 @@ import com.payment.service.UnifiedWalletService;
 import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 用户端订单服务。
  *
- * 这里按用户选择的钱包策略拆分扣款，并只为外部支付部分创建支付单。
+ * 本次按商品明细重算订单金额，并把订单头、订单明细和钱包扣款放在同一条链路里。
  */
 @Service
 @RequiredArgsConstructor
 public class AppOrderServiceImpl implements AppOrderService {
 
     private final SalesOrderMapper salesOrderMapper;
+    private final SalesOrderItemMapper salesOrderItemMapper;
+    private final TenantEmployeeMapper tenantEmployeeMapper;
     private final TenantMemberMapper tenantMemberMapper;
+    private final ProductMapper productMapper;
     private final UnifiedWalletService unifiedWalletService;
     private final MerchantWalletService merchantWalletService;
     private final PaymentBillV1Service paymentBillV1Service;
-    private final RabbitTemplate rabbitTemplate;
     private final WithdrawalService withdrawalService;
     private final MemberPointsAccountService memberPointsAccountService;
-    private final com.payment.mapper.PointsRuleMapper pointsRuleMapper;
+    private final PointsRuleMapper pointsRuleMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderPaymentVO createOrder(Long platformUserId, AppCreateOrderDTO dto) {
+        List<OrderLine> orderLines = buildOrderLines(dto);
         ensureTenantMember(dto.getTenantId(), platformUserId);
 
-        WalletSplit split = calculateWalletSplit(platformUserId, dto);
+        BigDecimal totalAmount = calculateTotalAmount(orderLines);
+        WalletSplit split = calculateWalletSplit(platformUserId, dto, totalAmount);
         String orderNo = BizNoGenerator.generate("SO");
 
         SalesOrder salesOrder = new SalesOrder();
@@ -70,19 +87,21 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setPayStatus(split.externalPayAmount.compareTo(BigDecimal.ZERO) == 0
                 ? PayStatusEnum.SUCCESS.name()
                 : PayStatusEnum.WAIT_PAY.name());
-        salesOrder.setTotalAmount(dto.getTotalAmount());
+        salesOrder.setTotalAmount(totalAmount);
         salesOrder.setDiscountAmount(BigDecimal.ZERO);
         salesOrder.setWalletDeductAmount(split.unifiedWalletAmount.add(split.merchantWalletAmount));
         salesOrder.setUnifiedWalletDeductAmount(split.unifiedWalletAmount);
         salesOrder.setMerchantWalletDeductAmount(split.merchantWalletAmount);
         salesOrder.setExternalPayAmount(split.externalPayAmount);
-        salesOrder.setPayableAmount(dto.getTotalAmount());
-        salesOrder.setSubject(dto.getSubject());
+        salesOrder.setPayableAmount(totalAmount);
+        salesOrder.setSubject(resolveSubject(dto.getSubject(), orderLines));
         salesOrder.setSource(dto.getSource());
         salesOrder.setWalletStrategy(dto.getWalletStrategy().name());
         salesOrder.setExpireTime(LocalDateTime.now().plusMinutes(30));
         salesOrder.setDeleted(0);
         salesOrderMapper.insert(salesOrder);
+
+        insertOrderItems(salesOrder, orderLines);
 
         // 钱包金额在下单时直接扣减，取消订单时再按原路径回补。
         if (split.unifiedWalletAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -99,7 +118,8 @@ public class AppOrderServiceImpl implements AppOrderService {
                     orderNo,
                     dto.getTenantId(),
                     platformUserId,
-                    split.externalPayAmount
+                    split.externalPayAmount,
+                    resolveExternalChannel(dto.getPaymentChannelCode())
             );
             PayResponseDTO payResponse = paymentBillV1Service.createExternalPayment(paymentBill);
             result.setPaymentBillNo(paymentBill.getBillNo());
@@ -137,6 +157,52 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     @Override
+    public SalesOrderDetailVO getOrderDetail(Long platformUserId, String orderNo) {
+        SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
+        return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
+    }
+
+    @Override
+    public SalesOrderDetailVO getMerchantOrderDetail(Long tenantId, Long platformUserId, String orderNo) {
+        TenantEmployee tenantEmployee = tenantEmployeeMapper.selectOne(new LambdaQueryWrapper<TenantEmployee>()
+                .eq(TenantEmployee::getTenantId, tenantId)
+                .eq(TenantEmployee::getPlatformUserId, platformUserId)
+                .eq(TenantEmployee::getStatus, 1));
+        if (tenantEmployee == null) {
+            throw new BusinessException("当前用户无权查看该商户订单");
+        }
+
+        SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getOrderNo, orderNo)
+                .eq(SalesOrder::getTenantId, tenantId)
+                .eq(SalesOrder::getDeleted, 0));
+        if (salesOrder == null) {
+            throw new BusinessException("订单不存在");
+        }
+
+        return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
+    }
+
+    @Override
+    public Page<SalesOrder> listMerchantOrders(Long tenantId, Integer current, Integer size, String orderStatus, String payStatus, String keyword) {
+        return salesOrderMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getTenantId, tenantId)
+                .eq(SalesOrder::getDeleted, 0)
+                .eq(orderStatus != null && !orderStatus.isBlank(), SalesOrder::getOrderStatus, orderStatus)
+                .eq(payStatus != null && !payStatus.isBlank(), SalesOrder::getPayStatus, payStatus)
+                .and(keyword != null && !keyword.isBlank(), wrapper -> wrapper.like(SalesOrder::getOrderNo, keyword)
+                        .or()
+                        .like(SalesOrder::getSubject, keyword))
+                .orderByDesc(SalesOrder::getCreateTime));
+    }
+
+    @Override
+    public List<SalesOrderItem> listOrderItems(Long platformUserId, String orderNo) {
+        SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
+        return salesOrderItemMapper.selectByOrderId(salesOrder.getId());
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
@@ -157,6 +223,81 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setOrderStatus(OrderStatusEnum.CANCELLED.name());
         salesOrder.setPayStatus(PayStatusEnum.CLOSED.name());
         salesOrderMapper.updateById(salesOrder);
+        paymentBillV1Service.markBizClosed(
+                PaymentBizTypeEnum.SALES_ORDER.name(),
+                orderNo,
+                PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED
+        );
+    }
+
+    private List<OrderLine> buildOrderLines(AppCreateOrderDTO dto) {
+        if (dto.getItems() == null || dto.getItems().isEmpty()) {
+            throw new BusinessException("订单商品明细不能为空");
+        }
+
+        LinkedHashMap<Long, Integer> mergedQuantities = new LinkedHashMap<>();
+        for (AppCreateOrderItemDTO item : dto.getItems()) {
+            if (item.getProductId() == null) {
+                throw new BusinessException("商品ID不能为空");
+            }
+            if (item.getQuantity() == null || item.getQuantity() <= 0) {
+                throw new BusinessException("商品数量必须大于0");
+            }
+            mergedQuantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
+        }
+
+        Set<Long> productIds = mergedQuantities.keySet();
+        Map<Long, Product> productMap = productMapper.selectBatchIds(productIds).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+
+        List<OrderLine> orderLines = new ArrayList<>();
+        for (Map.Entry<Long, Integer> entry : mergedQuantities.entrySet()) {
+            Long productId = entry.getKey();
+            Integer quantity = entry.getValue();
+
+            Product product = productMap.get(productId);
+            if (product == null) {
+                throw new BusinessException("商品不存在, productId=" + productId);
+            }
+            if (product.getDeleted() != null && product.getDeleted() == 1) {
+                throw new BusinessException("商品已删除, productId=" + productId);
+            }
+            if (!dto.getTenantId().equals(product.getTenantId())) {
+                throw new BusinessException("商品不属于当前商户, productId=" + productId);
+            }
+            if (product.getStatus() == null || product.getStatus() != 1) {
+                throw new BusinessException("商品已下架, productId=" + productId);
+            }
+            if (product.getPrice() == null || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("商品价格非法, productId=" + productId);
+            }
+
+            BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
+            orderLines.add(new OrderLine(product, quantity, subtotal));
+        }
+
+        return orderLines;
+    }
+
+    private BigDecimal calculateTotalAmount(List<OrderLine> orderLines) {
+        return orderLines.stream()
+                .map(OrderLine::subtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private void insertOrderItems(SalesOrder salesOrder, List<OrderLine> orderLines) {
+        for (OrderLine orderLine : orderLines) {
+            SalesOrderItem orderItem = new SalesOrderItem();
+            orderItem.setOrderId(salesOrder.getId());
+            orderItem.setOrderNo(salesOrder.getOrderNo());
+            orderItem.setTenantId(salesOrder.getTenantId());
+            orderItem.setProductId(orderLine.product().getId());
+            orderItem.setProductName(orderLine.product().getName());
+            orderItem.setPrice(orderLine.product().getPrice());
+            orderItem.setQuantity(orderLine.quantity());
+            orderItem.setSubtotal(orderLine.subtotal());
+            salesOrderItemMapper.insert(orderItem);
+        }
     }
 
     private void ensureTenantMember(Long tenantId, Long platformUserId) {
@@ -176,8 +317,19 @@ public class AppOrderServiceImpl implements AppOrderService {
         tenantMemberMapper.insert(newTenantMember);
     }
 
-    private WalletSplit calculateWalletSplit(Long platformUserId, AppCreateOrderDTO dto) {
-        BigDecimal totalAmount = dto.getTotalAmount();
+    private String resolveSubject(String subject, List<OrderLine> orderLines) {
+        if (StringUtils.hasText(subject)) {
+            return subject.trim();
+        }
+
+        OrderLine firstLine = orderLines.get(0);
+        if (orderLines.size() == 1) {
+            return firstLine.product().getName() + " x " + firstLine.quantity();
+        }
+        return firstLine.product().getName() + "等" + orderLines.size() + "件商品";
+    }
+
+    private WalletSplit calculateWalletSplit(Long platformUserId, AppCreateOrderDTO dto, BigDecimal totalAmount) {
         BigDecimal unifiedBalance = unifiedWalletService.getWallet(platformUserId).getAvailableAmount();
         BigDecimal merchantBalance = merchantWalletService.getWallet(dto.getTenantId(), platformUserId).getAvailableAmount();
         boolean allowFallback = Boolean.TRUE.equals(dto.getAllowExternalPayFallback());
@@ -200,6 +352,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         if (!allowFallback && used.compareTo(totalAmount) < 0) {
             throw new BusinessException("钱包余额不足");
         }
+
         BigDecimal external = totalAmount.subtract(used);
         return unifiedFirst
                 ? new WalletSplit(used, BigDecimal.ZERO, external)
@@ -218,6 +371,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         if (!allowFallback && external.compareTo(BigDecimal.ZERO) > 0) {
             throw new BusinessException("钱包余额不足");
         }
+
         return unifiedFirst
                 ? new WalletSplit(firstUsed, secondUsed, external)
                 : new WalletSplit(secondUsed, firstUsed, external);
@@ -244,6 +398,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         if (!allowFallback && external.compareTo(BigDecimal.ZERO) > 0) {
             throw new BusinessException("当前订单不允许剩余金额走外部支付");
         }
+
         return new WalletSplit(unifiedAmount, merchantAmount, external);
     }
 
@@ -251,11 +406,11 @@ public class AppOrderServiceImpl implements AppOrderService {
         return amount == null ? BigDecimal.ZERO : amount;
     }
 
-    private void publishPaidEvent(String orderNo) {
-        rabbitTemplate.convertAndSend(RabbitMQConfig.V1_ORDER_PAID_QUEUE, JSON.toJSONString(Map.of(
-                "bizType", PaymentBizTypeEnum.SALES_ORDER.name(),
-                "bizNo", orderNo
-        )));
+    private PaymentChannelCodeEnum resolveExternalChannel(PaymentChannelCodeEnum channelCode) {
+        if (channelCode == null) {
+            throw new BusinessException("存在外部支付金额时必须指定 paymentChannelCode");
+        }
+        return channelCode;
     }
 
     /**
@@ -273,7 +428,14 @@ public class AppOrderServiceImpl implements AppOrderService {
                 .eq(PointsRule::getEnabled, 1));
         if (pointsRule != null && pointsRule.getPointsRatio() != null && pointsRule.getPointsRatio() > 0) {
             int points = salesOrder.getTotalAmount().intValue() * pointsRule.getPointsRatio();
-            memberPointsAccountService.grantPoints(salesOrder.getTenantId(), salesOrder.getPlatformUserId(), points, "SALES_ORDER", salesOrder.getOrderNo(), "消费赠送积分");
+            memberPointsAccountService.grantPoints(
+                    salesOrder.getTenantId(),
+                    salesOrder.getPlatformUserId(),
+                    points,
+                    "SALES_ORDER",
+                    salesOrder.getOrderNo(),
+                    "消费赠送积分"
+            );
         }
     }
 
@@ -289,8 +451,20 @@ public class AppOrderServiceImpl implements AppOrderService {
         return vo;
     }
 
+    private SalesOrderDetailVO buildOrderDetailVO(SalesOrder salesOrder, List<SalesOrderItem> orderItems) {
+        SalesOrderDetailVO detailVO = new SalesOrderDetailVO();
+        detailVO.setOrder(salesOrder);
+        detailVO.setItems(orderItems);
+        return detailVO;
+    }
+
     private record WalletSplit(BigDecimal unifiedWalletAmount,
                                BigDecimal merchantWalletAmount,
                                BigDecimal externalPayAmount) {
+    }
+
+    private record OrderLine(Product product,
+                             Integer quantity,
+                             BigDecimal subtotal) {
     }
 }

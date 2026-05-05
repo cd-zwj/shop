@@ -1,24 +1,15 @@
 package com.payment.config;
 
-import com.payment.interceptor.JwtAuthInterceptor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Web配置类 - 注册拦截器
+ * Web配置类
+ * Sa-Token的拦截器配置已移动到 SaTokenConfig.java
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
-    
-    @Autowired
-    private JwtAuthInterceptor jwtAuthInterceptor;
-    
-    @Override
-    public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(jwtAuthInterceptor)
-                .addPathPatterns("/**");  // 拦截所有请求，但只在有@RequireAuth注解时才验证
-    }
+
+    // 原有的 JwtAuthInterceptor 已移除，使用 Sa-Token 接管鉴权
 }
 
