@@ -1,0 +1,142 @@
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'motion/react';
+import { Calendar, Download, SearchIcon, Wallet } from 'lucide-react';
+import { appWalletService } from '../services/modules/appWallet';
+import type { WalletLog } from '../types/wallet';
+import { formatCurrency } from '../utils/display';
+
+export default function ConsumptionHistory() {
+  const [logs, setLogs] = useState<WalletLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadHistory() {
+      try {
+        const result = await appWalletService.getUnifiedWalletLogs(1, 20);
+        if (!isMounted) return;
+        setLogs(result.records ?? []);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const stats = useMemo(() => {
+    const changes = logs.map((item) => Number(item.changeAmount || 0));
+    const totalSpend = changes.filter((value) => value < 0).reduce((sum, value) => sum + Math.abs(value), 0);
+    const maxSpend = Math.max(0, ...changes.filter((value) => value < 0).map((value) => Math.abs(value)));
+    return {
+      totalSpend,
+      count: logs.length,
+      maxSpend,
+    };
+  }, [logs]);
+
+  return (
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 pb-10 md:mt-8">
+      <header className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">消费记录</h1>
+          <p className="mt-2 font-medium text-slate-500">这里展示统一钱包的真实流水记录。</p>
+        </div>
+
+        <div className="flex w-full flex-col gap-3 sm:flex-row md:w-auto">
+          <div className="group relative">
+            <Calendar className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary" />
+            <select className="cursor-pointer appearance-none rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-10 text-sm font-bold text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5">
+              <option>最近 20 条</option>
+              <option>本月</option>
+              <option>最近 90 天</option>
+            </select>
+          </div>
+          <div className="group relative flex-1 sm:w-64">
+            <SearchIcon className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary" />
+            <input
+              type="text"
+              placeholder="搜索业务号..."
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-6 text-sm font-bold text-slate-700 outline-none transition-all focus:ring-4 focus:ring-primary/5"
+            />
+          </div>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {[
+          { label: '累计支出', value: formatCurrency(stats.totalSpend) },
+          { label: '流水笔数', value: stats.count.toString() },
+          { label: '单笔最大变动', value: formatCurrency(stats.maxSpend) },
+        ].map((stat) => (
+          <motion.div
+            key={stat.label}
+            whileHover={{ y: -4 }}
+            className="rounded-3xl border border-slate-100 bg-white p-6 shadow-lg shadow-slate-200/30"
+          >
+            <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">{stat.label}</p>
+            <p className="text-3xl font-black tracking-tight text-slate-900">{stat.value}</p>
+          </motion.div>
+        ))}
+      </div>
+
+      <section className="overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-2xl shadow-slate-200/40">
+        <div className="flex items-center justify-between border-b border-slate-50 px-8 py-6">
+          <h3 className="text-lg font-black text-slate-900">最近流水</h3>
+          <button className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold text-primary transition-all hover:bg-primary/5 hover:underline">
+            <Download className="h-4 w-4" />
+            导出 CSV
+          </button>
+        </div>
+
+        <div className="divide-y divide-slate-50">
+          {(isLoading ? Array.from({ length: 5 }) : logs).map((item, index) => {
+            const isData = typeof item === 'object';
+            const amount = isData ? Number(item.changeAmount || 0) : 0;
+            const isExpense = amount < 0;
+
+            return (
+              <motion.div
+                key={isData ? `${item.bizNo}-${index}` : index}
+                whileHover={{ backgroundColor: '#f8fafc' }}
+                className="group flex items-center justify-between px-8 py-6 transition-colors"
+              >
+                <div className="flex items-center gap-6">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 transition-all group-hover:scale-110">
+                    <Wallet className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-slate-900 transition-colors group-hover:text-primary">
+                      {isData ? item.bizType || '钱包流水' : '加载流水中...'}
+                    </h4>
+                    <div className="mt-1 flex items-center gap-3">
+                      <span className="text-xs font-bold text-slate-400">{isData ? item.createTime || '--' : '--'}</span>
+                      <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-500">
+                        {isData ? item.bizNo : '同步中'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <p className={`text-xl font-black tracking-tight ${isExpense ? 'text-slate-900' : 'text-primary'}`}>
+                    {isData ? formatCurrency(amount) : '...'}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-slate-400">
+                    {isData ? item.remark || `余额变更至 ${formatCurrency(item.balanceAfter)}` : '正在同步'}
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}

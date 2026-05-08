@@ -1,0 +1,294 @@
+import { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import {
+  ArrowRight,
+  Bot,
+  Github,
+  LayoutDashboard,
+  Lock,
+  Mail,
+  MessageSquare,
+  Smartphone,
+  Store,
+  Zap,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { cn } from '../lib/utils';
+import { ApiError } from '../types/api';
+import type { AuthRole } from '../types/auth';
+
+export default function Login() {
+  const navigate = useNavigate();
+  const { loginAdmin, loginMerchant, loginUser } = useAuth();
+  const [selectedRole, setSelectedRole] = useState<AuthRole>('user');
+  const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const roles = [
+    { id: 'user', title: '普通用户', desc: '浏览商品、充值钱包、查看消费', icon: Smartphone, color: 'bg-blue-50 text-blue-600' },
+    { id: 'merchant', title: '商户中心', desc: '管理商品、订单与财务', icon: Store, color: 'bg-orange-50 text-orange-600' },
+    { id: 'admin', title: '管理后台', desc: '治理平台商户、用户与数据', icon: LayoutDashboard, color: 'bg-slate-100 text-slate-600' },
+  ] as const;
+
+  useEffect(() => {
+    if (selectedRole !== 'user') {
+      setLoginMethod('password');
+    }
+    setError('');
+  }, [selectedRole]);
+
+  async function handleLogin() {
+    if (!username.trim() || !password.trim()) {
+      setError('请输入完整的登录信息');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const payload = {
+        username: username.trim(),
+        password: password.trim(),
+      };
+
+      if (selectedRole === 'user') {
+        await loginUser(loginMethod, payload);
+        navigate('/');
+      } else if (selectedRole === 'merchant') {
+        await loginMerchant(payload);
+        navigate('/merchant');
+      } else {
+        await loginAdmin(payload);
+        navigate('/admin');
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleThirdPartyLogin() {
+    if (!username.trim() || !password.trim()) {
+      setError('请先填写账号和凭证，再触发第三方登录');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await loginUser('third-party', {
+        username: username.trim(),
+        password: password.trim(),
+      });
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '第三方登录失败，请稍后重试');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const identifierPlaceholder =
+    selectedRole === 'user' && loginMethod === 'sms' ? '手机号 / 用户名' : '用户名 / Email';
+  const passwordPlaceholder =
+    selectedRole === 'user' && loginMethod === 'sms'
+      ? '短信验证码（当前后端仍复用 password 字段）'
+      : '请输入密码';
+
+  return (
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 p-4">
+      <div className="absolute right-0 top-0 h-[600px] w-[600px] -mr-40 -mt-40 rounded-full bg-primary/5 blur-[120px]" />
+      <div className="absolute bottom-0 left-0 h-[500px] w-[500px] -mb-40 -ml-40 rounded-full bg-indigo-500/5 blur-[100px]" />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative z-10 grid w-full max-w-5xl grid-cols-1 overflow-hidden rounded-[48px] border border-slate-100 bg-white shadow-2xl lg:grid-cols-2"
+      >
+        <div className="relative hidden flex-col justify-between overflow-hidden bg-slate-900 p-16 text-white lg:flex">
+          <div className="absolute inset-0 opacity-10">
+            <div className="grid scale-150 grid-cols-6 gap-8 -rotate-12">
+              {Array.from({ length: 36 }).map((_, i) => (
+                <div key={i} className="h-12 w-12 rounded-lg bg-white" />
+              ))}
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            <div className="mb-10 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
+                <Zap className="h-6 w-6 fill-current text-white" />
+              </div>
+              <span className="text-2xl font-black tracking-tight text-white">SalesSystem</span>
+            </div>
+            <h2 className="mb-8 text-5xl font-black leading-tight">
+              多角色统一接入
+              <br />
+              电商支付系统
+            </h2>
+            <p className="max-w-sm text-lg font-medium leading-relaxed text-slate-400">
+              当前登录页已经接入真实认证接口，登录成功后会保存真实 token 和对应会话。
+            </p>
+          </div>
+
+          <div className="relative z-10 flex flex-col gap-6">
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-slate-500">
+              <Bot className="h-4 w-4 text-primary" />
+              <span>API Connected</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col justify-center p-8 md:p-16">
+          <header className="mb-12">
+            <h1 className="mb-3 text-3xl font-black tracking-tight text-slate-900">登录你的账户</h1>
+            <p className="font-medium text-slate-500">选择访问角色并填写真实后端登录信息。</p>
+          </header>
+
+          <div className="flex flex-col gap-8">
+            {selectedRole === 'user' && (
+              <div className="flex w-fit rounded-2xl bg-slate-100 p-1">
+                <button
+                  onClick={() => setLoginMethod('password')}
+                  className={cn(
+                    'rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all',
+                    loginMethod === 'password' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400',
+                  )}
+                >
+                  密码登录
+                </button>
+                <button
+                  onClick={() => setLoginMethod('sms')}
+                  className={cn(
+                    'rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all',
+                    loginMethod === 'sms' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400',
+                  )}
+                >
+                  短信登录
+                </button>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              {roles.map((role) => {
+                const isActive = selectedRole === role.id;
+                return (
+                  <button
+                    key={role.id}
+                    onClick={() => setSelectedRole(role.id)}
+                    className={cn(
+                      'group relative flex flex-col items-center gap-3 rounded-[24px] border-2 p-5 transition-all',
+                      isActive
+                        ? 'border-primary bg-white shadow-xl shadow-primary/5 ring-4 ring-primary/5'
+                        : 'border-transparent bg-slate-50 hover:bg-slate-100',
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        'flex h-12 w-12 items-center justify-center rounded-2xl transition-transform group-hover:scale-110',
+                        role.color,
+                      )}
+                    >
+                      <role.icon size={24} />
+                    </div>
+                    <span className="text-sm font-black text-slate-900">{role.title}</span>
+                    {isActive && <div className="absolute right-2 top-2 h-2 w-2 rounded-full bg-primary" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  登录账号
+                </label>
+                <div className="group relative">
+                  <Mail className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder={identifierPlaceholder}
+                    className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  {selectedRole === 'user' && loginMethod === 'sms' ? '验证码' : '密码'}
+                </label>
+                <div className="group relative">
+                  <Lock className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                  <input
+                    type={selectedRole === 'user' && loginMethod === 'sms' ? 'text' : 'password'}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder={passwordPlaceholder}
+                    className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-6 pt-4">
+              {error && (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={handleLogin}
+                disabled={isSubmitting}
+                className="flex w-full items-center justify-center gap-3 rounded-[24px] bg-primary py-5 text-lg font-black text-white shadow-2xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <span>{isSubmitting ? '登录中...' : '确认登录'}</span>
+                <ArrowRight className="h-6 w-6" />
+              </button>
+
+              {selectedRole === 'user' && (
+                <div className="flex items-center justify-center gap-4 py-2">
+                  <button
+                    onClick={handleThirdPartyLogin}
+                    disabled={isSubmitting}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 shadow-sm transition-all hover:bg-slate-100"
+                  >
+                    <Github size={20} />
+                  </button>
+                  <button
+                    onClick={handleThirdPartyLogin}
+                    disabled={isSubmitting}
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 shadow-sm transition-all hover:bg-slate-100"
+                  >
+                    <MessageSquare size={20} />
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between px-2">
+                <button className="text-xs font-black text-slate-400 transition-colors hover:text-primary">
+                  忘记密码？
+                </button>
+                <div className="text-xs font-medium text-slate-400">
+                  没有账号？
+                  <button onClick={() => navigate('/register')} className="font-black text-primary hover:underline">
+                    立即注册
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
