@@ -1,6 +1,6 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.payment.config.RabbitMQConfig;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.PaymentBill;
@@ -133,7 +133,8 @@ class PaymentBillV1ServiceImplTest {
         bill.setPayAmount(new BigDecimal("18.80"));
         bill.setPayStatus(PayStatusEnum.CLOSED.name());
         bill.setExpireTime(LocalDateTime.now().minusMinutes(1));
-        bill.setExtensionJson(JSON.toJSONString(Map.of("statusReasonCode", reasonEnum.getCode())));
+        bill.setExtensionJson(JsonUtils.toJson(Map.of("statusReasonCode", reasonEnum.getCode())));
         return bill;
     }
 }
+

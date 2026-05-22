@@ -1,8 +1,9 @@
 package com.payment.util;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RAtomicLong;
+import org.redisson.api.RBloomFilter;
 import org.redisson.api.RBucket;
 import org.redisson.api.RLock;
 import org.redisson.api.RMap;
@@ -66,11 +67,11 @@ public class RedisUtils {
     }
 
     public <T> void setJson(String key, T value, Duration duration) {
-        getBucket(key).set(JSON.toJSONString(value), duration);
+        getBucket(key).set(JsonUtils.toJson(value), duration);
     }
 
     public <T> void setJsonWithRandomTtl(String key, T value, Duration baseDuration, long randomSeconds) {
-        getBucket(key).set(JSON.toJSONString(value), addRandomJitter(baseDuration, randomSeconds));
+        getBucket(key).set(JsonUtils.toJson(value), addRandomJitter(baseDuration, randomSeconds));
     }
 
     public <T> T getJson(String key, Class<T> clazz) {
@@ -78,7 +79,7 @@ public class RedisUtils {
         if (value == null || value.isBlank() || NULL_VALUE.equals(value)) {
             return null;
         }
-        return JSON.parseObject(value, clazz);
+        return JsonUtils.fromJson(value, clazz);
     }
 
     public boolean setIfAbsent(String key, String value, long timeout, TimeUnit unit) {
@@ -172,6 +173,22 @@ public class RedisUtils {
         getAtomicLongRef(key).set(value);
     }
 
+    public boolean bloomFilterTryInit(String key, long expectedInsertions, double falseProbability) {
+        return getBloomFilter(key).tryInit(expectedInsertions, falseProbability);
+    }
+
+    public boolean bloomFilterAdd(String key, String value) {
+        return getBloomFilter(key).add(value);
+    }
+
+    public boolean bloomFilterContains(String key, String value) {
+        return getBloomFilter(key).contains(value);
+    }
+
+    public boolean bloomFilterExpire(String key, long timeout, TimeUnit unit) {
+        return getBloomFilter(key).expire(timeout, unit);
+    }
+
     public <T> T queryWithPassThrough(String key,
                                       Class<T> clazz,
                                       Duration cacheDuration,
@@ -183,7 +200,7 @@ public class RedisUtils {
             if (NULL_VALUE.equals(cachedValue)) {
                 return null;
             }
-            return JSON.parseObject(cachedValue, clazz);
+            return JsonUtils.fromJson(cachedValue, clazz);
         }
 
         T dbResult = dbFallback.get();
@@ -207,7 +224,7 @@ public class RedisUtils {
             if (NULL_VALUE.equals(cachedValue)) {
                 return null;
             }
-            return JSON.parseObject(cachedValue, clazz);
+            return JsonUtils.fromJson(cachedValue, clazz);
         }
 
         String lockKey = CACHE_LOCK_PREFIX + key;
@@ -225,7 +242,7 @@ public class RedisUtils {
                 if (NULL_VALUE.equals(doubleCheckValue)) {
                     return null;
                 }
-                return JSON.parseObject(doubleCheckValue, clazz);
+                return JsonUtils.fromJson(doubleCheckValue, clazz);
             }
 
             T dbResult = dbFallback.get();
@@ -266,6 +283,10 @@ public class RedisUtils {
         return redissonClient.getAtomicLong(key);
     }
 
+    private RBloomFilter<String> getBloomFilter(String key) {
+        return redissonClient.getBloomFilter(key);
+    }
+
     private Duration addRandomJitter(Duration baseDuration, long randomSeconds) {
         if (randomSeconds <= 0) {
             return baseDuration;
@@ -282,3 +303,5 @@ public class RedisUtils {
         }
     }
 }
+
+

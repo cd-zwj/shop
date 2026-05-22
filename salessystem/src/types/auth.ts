@@ -14,6 +14,13 @@ export interface PlatformUser {
 export interface PlatformLoginDTO {
   username: string;
   password: string;
+  captchaKey: string;
+  captchaCode: string;
+}
+
+export interface LoginCaptchaVO {
+  captchaKey: string;
+  captchaImage: string;
 }
 
 export interface PlatformRegisterDTO {

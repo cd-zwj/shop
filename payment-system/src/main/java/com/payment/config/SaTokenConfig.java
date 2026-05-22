@@ -22,6 +22,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                         "/user/login",
                         "/user/register",
                         "/admin/login",
+                        "/v1/auth/captcha",
                         "/v1/app/auth/register",
                         "/v1/app/auth/login/password",
                         "/v1/app/auth/login/sms",

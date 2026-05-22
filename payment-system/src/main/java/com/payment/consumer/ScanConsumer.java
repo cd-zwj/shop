@@ -1,6 +1,6 @@
 package com.payment.consumer;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.payment.dto.ScanRequestDTO;
 import com.payment.dto.ScanResponseDTO;
 import com.payment.entity.Tenant;
@@ -43,7 +43,7 @@ public class ScanConsumer {
             String messageBody = new String(message.getBody());
             log.info("RabbitMQ收到扫码请求消息：{}", messageBody);
             
-            ScanRequestDTO request = JSON.parseObject(messageBody, ScanRequestDTO.class);
+            ScanRequestDTO request = JsonUtils.fromJson(messageBody, ScanRequestDTO.class);
             
             // 根据tenantCode查询tenantId并设置上下文
             if (request.getTenantCode() != null) {
@@ -61,7 +61,7 @@ public class ScanConsumer {
                     ScanResponseDTO errorResponse = new ScanResponseDTO();
                     errorResponse.setStatus("ERROR");
                     errorResponse.setMessage("租户不存在或已被禁用");
-                    rabbitTemplate.convertAndSend("payment.scan.result", JSON.toJSONString(errorResponse));
+                    rabbitTemplate.convertAndSend("payment.scan.result", JsonUtils.toJson(errorResponse));
                     
                     // 确认消息
                     channel.basicAck(deliveryTag, false);
@@ -74,7 +74,7 @@ public class ScanConsumer {
             log.info("扫码请求处理完成，响应状态: {}", response.getStatus());
             
             // 发送处理结果到结果队列（供Netty服务器或其他消费者使用）
-            rabbitTemplate.convertAndSend("payment.scan.result", JSON.toJSONString(response));
+            rabbitTemplate.convertAndSend("payment.scan.result", JsonUtils.toJson(response));
             log.info("扫码处理结果已发送到结果队列");
             
             // 手动确认消息
@@ -87,7 +87,7 @@ public class ScanConsumer {
                 ScanResponseDTO errorResponse = new ScanResponseDTO();
                 errorResponse.setStatus("ERROR");
                 errorResponse.setMessage("处理失败：" + e.getMessage());
-                rabbitTemplate.convertAndSend("payment.scan.result", JSON.toJSONString(errorResponse));
+                rabbitTemplate.convertAndSend("payment.scan.result", JsonUtils.toJson(errorResponse));
                 
                 // 拒绝消息，不重新入队（避免死循环）
                 channel.basicNack(deliveryTag, false, false);
@@ -100,4 +100,6 @@ public class ScanConsumer {
         }
     }
 }
+
+
 

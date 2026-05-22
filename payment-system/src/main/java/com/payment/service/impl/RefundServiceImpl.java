@@ -1,6 +1,6 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.constant.RefundConstants;
 import com.payment.common.BusinessException;
@@ -355,7 +355,7 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private String buildAuditPayload(String status, String reasonCode, String reason) {
-        return JSON.toJSONString(Map.of(
+        return JsonUtils.toJson(Map.of(
                 "status", status,
                 "reasonCode", reasonCode,
                 "reason", reason
@@ -363,9 +363,10 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private String buildProviderPayload(String rawStatus, String message) {
-        return JSON.toJSONString(Map.of(
+        return JsonUtils.toJson(Map.of(
                 "rawStatus", rawStatus == null ? "" : rawStatus,
                 "message", message == null ? "" : message
         ));
     }
 }
+

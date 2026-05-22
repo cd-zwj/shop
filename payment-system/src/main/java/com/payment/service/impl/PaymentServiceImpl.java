@@ -1,5 +1,6 @@
 package com.payment.service.impl;
 
+import com.payment.util.JsonUtils;
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
 import com.alipay.api.DefaultAlipayClient;
@@ -145,7 +146,7 @@ public class PaymentServiceImpl implements PaymentService {
             payParams.put("signType", response.getSignType());
             payParams.put("paySign", response.getPaySign());
             
-            payResponse.setPayUrl(com.alibaba.fastjson.JSON.toJSONString(payParams));
+            payResponse.setPayUrl(JsonUtils.toJson(payParams));
 
             log.info("创建微信JSAPI支付订单成功：{}", order.getOrderNo());
             return payResponse;
@@ -361,3 +362,4 @@ public class PaymentServiceImpl implements PaymentService {
         return result;
     }
 }
+

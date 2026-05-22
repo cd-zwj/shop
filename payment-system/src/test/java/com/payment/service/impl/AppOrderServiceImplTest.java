@@ -12,6 +12,8 @@ import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
+import com.payment.enums.OrderStatusEnum;
+import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.mapper.PointsRuleMapper;
 import com.payment.mapper.ProductMapper;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -249,6 +252,159 @@ class AppOrderServiceImplTest {
         when(tenantEmployeeMapper.selectOne(any())).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> service.getMerchantOrderDetail(9L, 100L, "SO001"));
+    }
+
+    @Test
+    void repayOrderShouldReuseExistingActivePaymentBillBeforeCreatingNewOne() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper
+        );
+
+        SalesOrder salesOrder = new SalesOrder();
+        salesOrder.setId(101L);
+        salesOrder.setOrderNo("SO1001");
+        salesOrder.setTenantId(9L);
+        salesOrder.setPlatformUserId(100L);
+        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
+        salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setTotalAmount(new BigDecimal("11.00"));
+        salesOrder.setUnifiedWalletDeductAmount(BigDecimal.ZERO);
+        salesOrder.setMerchantWalletDeductAmount(BigDecimal.ZERO);
+        salesOrder.setExternalPayAmount(new BigDecimal("11.00"));
+
+        PaymentBill closedBill = new PaymentBill();
+        closedBill.setBillNo("PB_OLD");
+        closedBill.setBizType("SALES_ORDER");
+        closedBill.setBizNo("SO1001");
+        closedBill.setPayStatus(PayStatusEnum.CLOSED.name());
+
+        PaymentBill activeBill = new PaymentBill();
+        activeBill.setBillNo("PB_ACTIVE");
+        activeBill.setBizType("SALES_ORDER");
+        activeBill.setBizNo("SO1001");
+        activeBill.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        activeBill.setExpireTime(LocalDateTime.now().plusMinutes(10));
+
+        PayResponseDTO payResponseDTO = new PayResponseDTO();
+        payResponseDTO.setPayUrl("https://pay.local/PB_ACTIVE");
+
+        when(salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(paymentBillV1Service.listByBizTypeAndBizNo("SALES_ORDER", "SO1001"))
+                .thenReturn(List.of(activeBill, closedBill));
+        when(paymentBillV1Service.syncBillStatus("PB_ACTIVE")).thenReturn(activeBill);
+        when(paymentBillV1Service.createExternalPayment(activeBill)).thenReturn(payResponseDTO);
+
+        OrderPaymentVO result = service.repayOrder(100L, "SO1001", PaymentChannelCodeEnum.ALIPAY_PAGE);
+
+        verify(paymentBillV1Service, never()).createBill(any(), any(), any(), any(), any(), any());
+        assertEquals("PB_ACTIVE", result.getPaymentBillNo());
+        assertEquals("https://pay.local/PB_ACTIVE", result.getExternalPayUrl());
+        assertEquals(Boolean.TRUE, result.getReusedPaymentBill());
+    }
+
+    @Test
+    void repayOrderShouldCreateNewPaymentBillWhenNoReusableBillExists() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper
+        );
+
+        SalesOrder salesOrder = new SalesOrder();
+        salesOrder.setId(102L);
+        salesOrder.setOrderNo("SO1002");
+        salesOrder.setTenantId(9L);
+        salesOrder.setPlatformUserId(100L);
+        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
+        salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setTotalAmount(new BigDecimal("20.00"));
+        salesOrder.setUnifiedWalletDeductAmount(BigDecimal.ZERO);
+        salesOrder.setMerchantWalletDeductAmount(BigDecimal.ZERO);
+        salesOrder.setExternalPayAmount(new BigDecimal("20.00"));
+
+        PaymentBill expiredBill = new PaymentBill();
+        expiredBill.setBillNo("PB_EXPIRED");
+        expiredBill.setBizType("SALES_ORDER");
+        expiredBill.setBizNo("SO1002");
+        expiredBill.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        expiredBill.setExpireTime(LocalDateTime.now().minusMinutes(1));
+
+        PaymentBill newBill = new PaymentBill();
+        newBill.setBillNo("PB_NEW");
+
+        PayResponseDTO payResponseDTO = new PayResponseDTO();
+        payResponseDTO.setPayUrl("https://pay.local/PB_NEW");
+
+        when(salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(paymentBillV1Service.listByBizTypeAndBizNo("SALES_ORDER", "SO1002"))
+                .thenReturn(List.of(expiredBill));
+        when(paymentBillV1Service.syncBillStatus("PB_EXPIRED")).thenReturn(expiredBill);
+        when(paymentBillV1Service.createBill(
+                eq("SALES_ORDER"),
+                eq("SO1002"),
+                eq(9L),
+                eq(100L),
+                eq(new BigDecimal("20.00")),
+                eq(PaymentChannelCodeEnum.ALIPAY_PAGE)
+        )).thenReturn(newBill);
+        when(paymentBillV1Service.createExternalPayment(newBill)).thenReturn(payResponseDTO);
+
+        OrderPaymentVO result = service.repayOrder(100L, "SO1002", PaymentChannelCodeEnum.ALIPAY_PAGE);
+
+        verify(paymentBillV1Service).markBillClosed(eq("PB_EXPIRED"), any());
+        verify(paymentBillV1Service).createBill(
+                eq("SALES_ORDER"),
+                eq("SO1002"),
+                eq(9L),
+                eq(100L),
+                eq(new BigDecimal("20.00")),
+                eq(PaymentChannelCodeEnum.ALIPAY_PAGE)
+        );
+        assertEquals("PB_NEW", result.getPaymentBillNo());
+        assertEquals("https://pay.local/PB_NEW", result.getExternalPayUrl());
+        assertEquals(Boolean.FALSE, result.getReusedPaymentBill());
     }
 
     private Product buildProduct(Long id, Long tenantId, String name, String price) {

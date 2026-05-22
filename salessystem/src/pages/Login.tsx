@@ -8,6 +8,7 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  RefreshCcw,
   Smartphone,
   Store,
   Zap,
@@ -15,6 +16,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { appAuthService } from '../services/modules/appAuth';
 import { ApiError } from '../types/api';
 import type { AuthRole } from '../types/auth';
 
@@ -25,8 +27,12 @@ export default function Login() {
   const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaCode, setCaptchaCode] = useState('');
+  const [captchaKey, setCaptchaKey] = useState('');
+  const [captchaImage, setCaptchaImage] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
 
   const roles = [
     { id: 'user', title: '普通用户', desc: '浏览商品、充值钱包、查看消费', icon: Smartphone, color: 'bg-blue-50 text-blue-600' },
@@ -41,9 +47,32 @@ export default function Login() {
     setError('');
   }, [selectedRole]);
 
+  useEffect(() => {
+    void loadCaptcha();
+  }, []);
+
+  async function loadCaptcha() {
+    setIsCaptchaLoading(true);
+
+    try {
+      const data = await appAuthService.getCaptcha();
+      setCaptchaKey(data.captchaKey);
+      setCaptchaImage(data.captchaImage);
+      setCaptchaCode('');
+    } catch {
+      setError('验证码加载失败，请稍后重试');
+    } finally {
+      setIsCaptchaLoading(false);
+    }
+  }
+
   async function handleLogin() {
-    if (!username.trim() || !password.trim()) {
+    if (!username.trim() || !password.trim() || !captchaCode.trim()) {
       setError('请输入完整的登录信息');
+      return;
+    }
+    if (!captchaKey) {
+      setError('验证码未准备好，请刷新后重试');
       return;
     }
 
@@ -54,6 +83,8 @@ export default function Login() {
       const payload = {
         username: username.trim(),
         password: password.trim(),
+        captchaKey,
+        captchaCode: captchaCode.trim(),
       };
 
       if (selectedRole === 'user') {
@@ -68,14 +99,19 @@ export default function Login() {
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
+      void loadCaptcha();
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleThirdPartyLogin() {
-    if (!username.trim() || !password.trim()) {
-      setError('请先填写账号和凭证，再触发第三方登录');
+    if (!username.trim() || !password.trim() || !captchaCode.trim()) {
+      setError('请先填写账号、凭证和图形验证码，再触发第三方登录');
+      return;
+    }
+    if (!captchaKey) {
+      setError('验证码未准备好，请刷新后重试');
       return;
     }
 
@@ -86,10 +122,13 @@ export default function Login() {
       await loginUser('third-party', {
         username: username.trim(),
         password: password.trim(),
+        captchaKey,
+        captchaCode: captchaCode.trim(),
       });
       navigate('/');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '第三方登录失败，请稍后重试');
+      void loadCaptcha();
     } finally {
       setIsSubmitting(false);
     }
@@ -235,6 +274,34 @@ export default function Login() {
                     placeholder={passwordPlaceholder}
                     className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
                   />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  图形验证码
+                </label>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_148px]">
+                  <input
+                    type="text"
+                    value={captchaCode}
+                    onChange={(event) => setCaptchaCode(event.target.value.toUpperCase())}
+                    placeholder="请输入图片中的字符"
+                    className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 px-6 py-4 font-bold uppercase tracking-[0.2em] text-slate-900 outline-none transition-all placeholder:tracking-normal placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void loadCaptcha()}
+                    disabled={isCaptchaLoading}
+                    className="flex h-[58px] items-center justify-center gap-2 rounded-[20px] border-2 border-slate-100 bg-slate-50/70 px-3 transition-all hover:border-primary hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {captchaImage ? (
+                      <img src={captchaImage} alt="登录验证码" className="h-10 w-full rounded-lg object-cover" />
+                    ) : (
+                      <span className="text-xs font-bold text-slate-400">加载中...</span>
+                    )}
+                    <RefreshCcw className={cn('h-4 w-4 text-slate-400', isCaptchaLoading && 'animate-spin')} />
+                  </button>
                 </div>
               </div>
             </div>

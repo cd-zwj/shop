@@ -1,7 +1,7 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
+import com.payment.util.JsonUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
 import com.alipay.api.DefaultAlipayClient;
@@ -101,7 +101,7 @@ public class AlipayPagePaymentProvider implements PaymentProvider {
 
         try {
             PaymentConfig.Alipay config = requireConfig();
-            Map<String, String> params = JSON.parseObject(
+            Map<String, String> params = JsonUtils.fromJson(
                     callbackDTO.getRawBody(),
                     new TypeReference<Map<String, String>>() {
                     }
@@ -291,3 +291,5 @@ public class AlipayPagePaymentProvider implements PaymentProvider {
         return "unknown";
     }
 }
+
+

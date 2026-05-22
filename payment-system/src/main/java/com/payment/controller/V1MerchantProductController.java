@@ -10,6 +10,7 @@ import com.payment.entity.Product;
 import com.payment.entity.ProductStock;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
+import com.payment.service.impl.ProductIndexMessagePublisher;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
@@ -31,6 +32,7 @@ public class V1MerchantProductController {
     private final ProductMapper productMapper;
     private final ProductStockMapper productStockMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
+    private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
     @GetMapping
     public Result<Page<V1MerchantProductVO>> listProducts(@PathVariable Long tenantId,
@@ -102,7 +104,9 @@ public class V1MerchantProductController {
         stock.setQuantity(Math.max(dto.getStock(), 0));
         productStockMapper.updateById(stock);
 
-        return Result.success(toProductVO(productMapper.selectById(product.getId()), productStockMapper.selectById(stock.getId())));
+        Product savedProduct = productMapper.selectById(product.getId());
+        productIndexMessagePublisher.publishUpsert(savedProduct);
+        return Result.success(toProductVO(savedProduct, productStockMapper.selectById(stock.getId())));
     }
 
     @PutMapping("/{productId}")
@@ -136,7 +140,9 @@ public class V1MerchantProductController {
         stock.setQuantity(Math.max(dto.getStock(), 0));
         productStockMapper.updateById(stock);
 
-        return Result.success(toProductVO(productMapper.selectById(productId), productStockMapper.selectById(stock.getId())));
+        Product updatedProduct = productMapper.selectById(productId);
+        productIndexMessagePublisher.publishUpsert(updatedProduct);
+        return Result.success(toProductVO(updatedProduct, productStockMapper.selectById(stock.getId())));
     }
 
     @DeleteMapping("/{productId}")
@@ -146,6 +152,7 @@ public class V1MerchantProductController {
         product.setDeleted(1);
         product.setStatus(0);
         productMapper.updateById(product);
+        productIndexMessagePublisher.publishDelete(product);
         return Result.success();
     }
 

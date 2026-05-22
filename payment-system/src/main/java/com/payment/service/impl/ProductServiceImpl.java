@@ -50,7 +50,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     private RedisUtils redisUtils;
 
     @Autowired(required = false)
-    private com.payment.service.ProductSearchService productSearchService;
+    private ProductIndexMessagePublisher productIndexMessagePublisher;
 
     private String generateProductCacheKey(Long tenantId, Long productId) {
         return PRODUCT_CACHE_PREFIX + tenantId + ":" + productId;
@@ -80,14 +80,13 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         }
     }
 
-    private void deleteProductCache(Long tenantId, Long productId) {
+    private void deleteProductCache(Product product) {
         try {
-            Product product = getById(productId);
-            redisUtils.delete(generateProductCacheKey(tenantId, productId));
+            redisUtils.delete(generateProductCacheKey(product.getTenantId(), product.getId()));
             if (product != null && product.getProductCode() != null) {
-                redisUtils.delete(generateProductCodeCacheKey(tenantId, product.getProductCode()));
+                redisUtils.delete(generateProductCodeCacheKey(product.getTenantId(), product.getProductCode()));
             }
-            log.info("删除商品 Redis 缓存，tenantId={}, productId={}", tenantId, productId);
+            log.info("删除商品 Redis 缓存，tenantId={}, productId={}", product.getTenantId(), product.getId());
         } catch (Exception e) {
             log.error("删除商品 Redis 缓存失败", e);
         }
@@ -145,13 +144,14 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         stock.setQuantity(0);
         productStockMapper.insert(stock);
 
-        setProductToCache(product);
+        Product savedProduct = getById(product.getId());
+        setProductToCache(savedProduct);
 
-        if (productSearchService != null) {
-            productSearchService.syncProduct(product);
+        if (productIndexMessagePublisher != null) {
+            productIndexMessagePublisher.publishUpsert(savedProduct);
         }
 
-        return product;
+        return savedProduct;
     }
 
     @Override
@@ -183,15 +183,33 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
         updateById(product);
 
-        redisUtils.delete(generateProductCacheKey(product.getTenantId(), product.getId()));
-        redisUtils.delete(generateProductCodeCacheKey(product.getTenantId(), oldProductCode));
-        setProductToCache(product);
+        Product updatedProduct = getById(product.getId());
 
-        if (productSearchService != null) {
-            productSearchService.syncProduct(product);
+        redisUtils.delete(generateProductCacheKey(updatedProduct.getTenantId(), updatedProduct.getId()));
+        redisUtils.delete(generateProductCodeCacheKey(updatedProduct.getTenantId(), oldProductCode));
+        setProductToCache(updatedProduct);
+
+        if (productIndexMessagePublisher != null) {
+            productIndexMessagePublisher.publishUpsert(updatedProduct);
         }
 
-        return product;
+        return updatedProduct;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteProduct(Long id) {
+        Product product = getById(id);
+        if (product == null) {
+            throw new BusinessException("商品不存在");
+        }
+
+        removeById(id);
+        deleteProductCache(product);
+
+        if (productIndexMessagePublisher != null) {
+            productIndexMessagePublisher.publishDelete(product);
+        }
     }
 
     @Override

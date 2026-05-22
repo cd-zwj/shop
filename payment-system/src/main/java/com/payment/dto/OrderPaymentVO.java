@@ -15,4 +15,5 @@ public class OrderPaymentVO {
     private BigDecimal externalPayAmount;
     private String paymentBillNo;
     private String externalPayUrl;
+    private Boolean reusedPaymentBill;
 }

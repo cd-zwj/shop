@@ -1,7 +1,7 @@
 package com.payment.consumer;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
+import com.payment.util.JsonUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.config.RabbitMQConfig;
 import com.payment.entity.PointsRule;
@@ -46,7 +46,7 @@ public class PaymentV1Consumer {
 
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
-        Map<String, Object> payload = JSON.parseObject(body, new TypeReference<Map<String, Object>>() {
+        Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
         });
         String rechargeNo = String.valueOf(payload.get("bizNo"));
         walletRechargeService.handleRechargeSuccess(rechargeNo);
@@ -55,7 +55,7 @@ public class PaymentV1Consumer {
     @RabbitListener(queues = RabbitMQConfig.V1_ORDER_PAID_QUEUE)
     @Transactional(rollbackFor = Exception.class)
     public void handleOrderPaid(String body) {
-        Map<String, Object> payload = JSON.parseObject(body, new TypeReference<Map<String, Object>>() {
+        Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
         });
         String orderNo = String.valueOf(payload.get("bizNo"));
 
@@ -109,3 +109,5 @@ public class PaymentV1Consumer {
         }
     }
 }
+
+

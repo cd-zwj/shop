@@ -24,6 +24,11 @@ public interface ProductService extends IService<Product> {
      * 更新商品
      */
     Product updateProduct(Long id, ProductDTO dto);
+
+    /**
+     * 删除商品
+     */
+    void deleteProduct(Long id);
     
     /**
      * 根据商品编码查询商品

@@ -1,6 +1,6 @@
 package com.payment.consumer;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.payment.entity.PaymentOrder;
 import com.payment.service.MessageIdempotentService;
 import com.payment.service.PaymentOrderService;
@@ -47,7 +47,7 @@ public class OrderConsumer {
             log.info("收到订单创建消息：{}", messageBody);
             
             // 解析消息
-            Map<String, Object> messageMap = JSON.parseObject(messageBody, Map.class);
+            Map<String, Object> messageMap = JsonUtils.fromJson(messageBody, Map.class);
             messageId = (String) messageMap.get("messageId");
             String orderNo = (String) messageMap.get("orderNo");
             
@@ -106,7 +106,7 @@ public class OrderConsumer {
             log.info("收到订单支付成功消息：{}", messageBody);
             
             // 解析消息
-            Map<String, Object> messageMap = JSON.parseObject(messageBody, Map.class);
+            Map<String, Object> messageMap = JsonUtils.fromJson(messageBody, Map.class);
             messageId = (String) messageMap.get("messageId");
             String orderNo = (String) messageMap.get("orderNo");
             
@@ -198,3 +198,5 @@ public class OrderConsumer {
         log.info("订单支付成功业务处理完成，orderNo: {}, totalAmount: {}", orderNo, order.getAmount());
     }
 }
+
+

@@ -37,6 +37,7 @@ export interface OrderPayment {
   externalPayAmount: number;
   paymentBillNo?: string | null;
   externalPayUrl?: string | null;
+  reusedPaymentBill?: boolean | null;
 }
 
 export interface SalesOrder {
@@ -77,5 +78,5 @@ export interface SalesOrderItem {
 export interface SalesOrderDetail {
   order: SalesOrder;
   items: SalesOrderItem[];
+  paymentBillNo?: string | null;
 }
-

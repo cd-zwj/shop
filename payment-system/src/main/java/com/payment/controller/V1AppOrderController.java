@@ -7,6 +7,7 @@ import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.OrderPaymentVO;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.SalesOrder;
+import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.service.AppOrderService;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
@@ -40,6 +41,13 @@ public class V1AppOrderController {
     @GetMapping("/{orderNo}")
     public Result<SalesOrderDetailVO> getOrder(@PathVariable String orderNo) {
         return Result.success(appOrderService.getOrderDetail(PlatformSessionHelper.getPlatformUserId(), orderNo));
+    }
+
+    @SaCheckLogin
+    @PostMapping("/{orderNo}/repay")
+    public Result<OrderPaymentVO> repayOrder(@PathVariable String orderNo,
+                                             @RequestParam(defaultValue = "ALIPAY_PAGE") PaymentChannelCodeEnum paymentChannelCode) {
+        return Result.success(appOrderService.repayOrder(PlatformSessionHelper.getPlatformUserId(), orderNo, paymentChannelCode));
     }
 
     @SaCheckLogin

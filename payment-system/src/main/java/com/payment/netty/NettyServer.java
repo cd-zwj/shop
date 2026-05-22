@@ -1,6 +1,6 @@
 package com.payment.netty;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.payment.dto.ScanRequestDTO;
 import com.payment.dto.ScanResponseDTO;
 import com.payment.entity.Tenant;
@@ -143,7 +143,7 @@ public class NettyServer {
                 log.info("收到扫码请求：{}", message);
                 
                 // 解析请求
-                ScanRequestDTO request = JSON.parseObject(message, ScanRequestDTO.class);
+                ScanRequestDTO request = JsonUtils.fromJson(message, ScanRequestDTO.class);
                 
                 // 根据tenantCode查询tenantId并设置上下文
                 if (request.getTenantCode() != null) {
@@ -167,7 +167,7 @@ public class NettyServer {
                 ScanResponseDTO response = scanService.handleScan(request);
                 
                 // 返回响应（添加换行符作为消息分隔符）
-                String responseJson = JSON.toJSONString(response) + "\n";
+                String responseJson = JsonUtils.toJson(response) + "\n";
                 ctx.writeAndFlush(responseJson);
                 
             } catch (Exception e) {
@@ -202,9 +202,11 @@ public class NettyServer {
             ScanResponseDTO errorResponse = new ScanResponseDTO();
             errorResponse.setStatus("ERROR");
             errorResponse.setMessage(errorMessage);
-            String responseJson = JSON.toJSONString(errorResponse) + "\n";
+            String responseJson = JsonUtils.toJson(errorResponse) + "\n";
             ctx.writeAndFlush(responseJson);
         }
     }
 }
+
+
 

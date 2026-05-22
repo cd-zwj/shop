@@ -34,6 +34,15 @@ export const appOrderService = {
     });
   },
 
+  repayOrder(orderNo: string, paymentChannelCode: 'ALIPAY_PAGE' | 'EXT_PROVIDER' = 'ALIPAY_PAGE') {
+    return request<OrderPayment>({
+      url: `/v1/app/orders/${orderNo}/repay`,
+      method: 'post',
+      params: { paymentChannelCode },
+      authRole: 'user',
+    });
+  },
+
   cancelOrder(orderNo: string) {
     return request<void>({
       url: `/v1/app/orders/${orderNo}/cancel`,
@@ -42,4 +51,3 @@ export const appOrderService = {
     });
   },
 };
-

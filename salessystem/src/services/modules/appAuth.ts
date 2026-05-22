@@ -1,7 +1,15 @@
 import { request } from '../request';
-import type { PlatformLoginDTO, PlatformRegisterDTO, PlatformUser } from '../../types/auth';
+import type { LoginCaptchaVO, PlatformLoginDTO, PlatformRegisterDTO, PlatformUser } from '../../types/auth';
 
 export const appAuthService = {
+  getCaptcha() {
+    return request<LoginCaptchaVO>({
+      url: '/v1/auth/captcha',
+      method: 'get',
+      authRole: false,
+    });
+  },
+
   register(payload: PlatformRegisterDTO) {
     return request<PlatformUser>({
       url: '/v1/app/auth/register',
@@ -46,4 +54,3 @@ export const appAuthService = {
     });
   },
 };
-

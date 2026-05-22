@@ -6,23 +6,38 @@ import {
   Clock,
   CreditCard,
   RefreshCcw,
+  RotateCcw,
   ShieldCheck,
   XCircle,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import { appOrderService } from '../services/modules/appOrder';
 import { appPaymentBillService } from '../services/modules/appPaymentBill';
 import type { PaymentBill } from '../types/payment';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import {
+  getPaymentBillReuseHint,
+  getPaymentStatusPresentation,
+} from '../utils/paymentStatus';
+import {
+  buildRepurchaseCartItems,
+  getPaymentFailureActions,
+} from '../utils/orderActions';
 
 export default function PaymentStatus() {
   const navigate = useNavigate();
+  const { addCartItems } = useCart();
   const [searchParams] = useSearchParams();
   const billNo = searchParams.get('billNo');
+  const orderNo = searchParams.get('orderNo');
   const source = searchParams.get('source');
+  const reusedFlag = searchParams.get('reused');
   const [paymentBill, setPaymentBill] = useState<PaymentBill | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRepurchasing, setIsRepurchasing] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -87,38 +102,91 @@ export default function PaymentStatus() {
   }
 
   const statusKey = useMemo(() => {
-    const payStatus = paymentBill?.payStatus;
-    if (payStatus === 'SUCCESS') return 'success';
-    if (payStatus === 'FAILED' || payStatus === 'CLOSED') return 'failed';
-    return 'pending';
-  }, [paymentBill?.payStatus]);
+    const presentation = getPaymentStatusPresentation(paymentBill);
+    if (presentation.state === 'success') return 'success';
+    if (presentation.state === 'pending') return 'pending';
+    return 'failed';
+  }, [paymentBill]);
+
+  const statusPresentation = useMemo(
+    () => getPaymentStatusPresentation(paymentBill),
+    [paymentBill],
+  );
+
+  const repayHint = useMemo(() => {
+    if (source !== 'order') {
+      return '';
+    }
+
+    if (reusedFlag === '1') {
+      return getPaymentBillReuseHint(true);
+    }
+
+    if (reusedFlag === '0') {
+      return getPaymentBillReuseHint(false);
+    }
+
+    return '';
+  }, [reusedFlag, source]);
 
   const content = {
     success: {
       icon: CheckCircle2,
       color: 'border-green-100 bg-green-50 text-green-500 shadow-green-200/50',
-      title: '支付已确认',
+      title: statusPresentation.title,
       desc: source === 'recharge' ? '充值支付成功，资金会在钱包明细中体现。' : '订单支付成功，后续可进入订单详情继续查看。',
       primaryAction: source === 'recharge' ? '返回钱包' : '查看订单',
-      primaryPath: source === 'recharge' ? '/wallet' : '/orders',
+      primaryPath: source === 'recharge' ? '/wallet' : orderNo ? `/order/${encodeURIComponent(orderNo)}` : '/orders',
     },
     pending: {
       icon: Clock,
       color: 'border-orange-100 bg-orange-50 text-orange-500 shadow-orange-200/50',
-      title: '交易确认中',
-      desc: '后端支付单仍在同步状态中，页面会自动轮询，也可以手动刷新。',
+      title: statusPresentation.title,
+      desc: statusPresentation.description,
       primaryAction: '刷新状态',
       primaryPath: null,
     },
     failed: {
       icon: XCircle,
       color: 'border-red-100 bg-red-50 text-red-500 shadow-red-200/50',
-      title: '交易已关闭',
-      desc: '支付单状态为失败或关闭，请返回上一步重新发起支付。',
+      title: statusPresentation.title,
+      desc: statusPresentation.description,
       primaryAction: source === 'recharge' ? '重新充值' : '返回订单',
-      primaryPath: source === 'recharge' ? '/recharge' : '/orders',
+      primaryPath: source === 'recharge' ? '/recharge' : orderNo ? `/order/${encodeURIComponent(orderNo)}` : '/orders',
     },
   }[statusKey];
+
+  const failureActions = useMemo(
+    () => getPaymentFailureActions(statusPresentation.state, orderNo),
+    [orderNo, statusPresentation.state],
+  );
+
+  async function handleRepurchase() {
+    if (!orderNo || isRepurchasing) {
+      return;
+    }
+
+    setIsRepurchasing(true);
+    setError('');
+
+    try {
+      const detail = await appOrderService.getOrder(orderNo);
+      const nextItems = buildRepurchaseCartItems(detail);
+
+      if (nextItems.length === 0) {
+        throw new Error('当前订单缺少可重新购买的商品明细');
+      }
+
+      addCartItems(nextItems);
+      navigate('/cart');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : '重新加入购物车失败，请稍后重试',
+      );
+    } finally {
+      setIsRepurchasing(false);
+    }
+  }
 
   return (
     <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-white p-6 md:p-12">
@@ -142,6 +210,11 @@ export default function PaymentStatus() {
             {error}
           </div>
         )}
+        {repayHint && !error && (
+          <div className="mb-6 w-full rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-left text-sm font-medium text-emerald-700">
+            {repayHint}
+          </div>
+        )}
 
         <div className="mb-12 flex w-full flex-col gap-4 rounded-[32px] border border-slate-100 bg-slate-50 p-6">
           <div className="flex items-center justify-between px-2">
@@ -163,7 +236,13 @@ export default function PaymentStatus() {
           </div>
           <div className="flex items-center justify-between px-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">支付状态</span>
-            <span className="text-xs font-black text-primary">{paymentBill?.payStatus || (isLoading ? 'LOADING' : '--')}</span>
+            <span className="text-xs font-black text-primary">{statusPresentation.badgeLabel || (isLoading ? 'LOADING' : '--')}</span>
+          </div>
+          <div className="flex items-start justify-between gap-4 px-2">
+            <span className="pt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">状态说明</span>
+            <span className="max-w-[220px] text-right text-xs font-medium leading-relaxed text-slate-500">
+              {paymentBill?.statusRemark || statusPresentation.description}
+            </span>
           </div>
         </div>
 
@@ -176,6 +255,24 @@ export default function PaymentStatus() {
             {content.primaryAction}
             {statusKey === 'pending' ? <RefreshCcw size={20} className={cn(isRefreshing && 'animate-spin')} /> : <ShieldCheck size={20} />}
           </button>
+          {source === 'order' && failureActions.showRepurchase && (
+            <button
+              onClick={handleRepurchase}
+              disabled={isRepurchasing}
+              className="flex w-full items-center justify-center gap-3 rounded-[24px] border border-emerald-200 bg-emerald-50 py-5 text-lg font-black text-emerald-700 transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isRepurchasing ? '加入购物车中...' : '重新购买同款商品'}
+              <RotateCcw size={20} />
+            </button>
+          )}
+          {source === 'order' && orderNo && statusKey === 'failed' && (
+            <button
+              onClick={() => navigate('/orders')}
+              className="flex w-full items-center justify-center gap-2 rounded-[24px] border border-slate-200 bg-white py-5 text-sm font-black uppercase tracking-widest text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-900"
+            >
+              查看全部订单
+            </button>
+          )}
           <button
             onClick={() => navigate('/')}
             className="flex w-full items-center justify-center gap-2 py-5 text-sm font-black uppercase tracking-widest text-slate-400 transition-colors hover:text-slate-900"

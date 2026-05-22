@@ -3,14 +3,14 @@ package com.payment.service.impl;
 import com.payment.common.BusinessException;
 import com.payment.document.ProductDocument;
 import com.payment.entity.Product;
+import com.payment.mapper.ProductMapper;
 import com.payment.repository.ProductRepository;
 import com.payment.service.ProductSearchService;
-import com.payment.service.ProductService;
 import com.payment.util.TenantContextHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.elasticsearch.core.  ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHit;
 import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.data.elasticsearch.core.query.Criteria;
@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 /**
  * 商品搜索服务实现
@@ -28,18 +28,22 @@ import java.util.stream.Collectors;
 @Service
 public class ProductSearchServiceImpl implements ProductSearchService {
     
-    @Autowired
+    @Autowired(required = false)
     private ProductRepository productRepository;
     
-    @Autowired
-    private   ElasticsearchOperations   ElasticsearchOperations;
+    @Autowired(required = false)
+    private ElasticsearchOperations elasticsearchOperations;
     
     @Autowired
-    private ProductService productService;
+    private ProductMapper productMapper;
     
     @Override
     public void syncProduct(Product product) {
         try {
+            if (productRepository == null) {
+                log.warn("商品索引同步已跳过，Elasticsearch repository 未启用，productId={}", product.getId());
+                return;
+            }
             ProductDocument document = new ProductDocument();
             BeanUtils.copyProperties(product, document);
             productRepository.save(document);
@@ -52,6 +56,10 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     @Override
     public void deleteProduct(Long productId) {
         try {
+            if (productRepository == null) {
+                log.warn("商品索引删除已跳过，Elasticsearch repository 未启用，productId={}", productId);
+                return;
+            }
             productRepository.deleteById(productId);
             log.info("从Elasticsearch删除商品成功，productId={}", productId);
         } catch (Exception e) {
@@ -71,6 +79,9 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
         
         try {
+            if (elasticsearchOperations == null) {
+                throw new IllegalStateException("Elasticsearch 未启用");
+            }
             // 构建查询条件
             Criteria criteria = new Criteria("tenantId").is(tenantId)
                     .and(new Criteria("status").is(1))
@@ -81,25 +92,16 @@ public class ProductSearchServiceImpl implements ProductSearchService {
             CriteriaQuery query = new CriteriaQuery(criteria);
             
             // 执行搜索
-            SearchHits<ProductDocument> searchHits =   ElasticsearchOperations.search(query, ProductDocument.class);
+            SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
             
-            // 提取商品ID列表
-            List<Long> productIds = searchHits.getSearchHits().stream()
+            return searchHits.getSearchHits().stream()
                     .map(SearchHit::getContent)
-                    .map(ProductDocument::getId)
-                    .collect(Collectors.toList());
-            
-            // 从数据库或缓存获取完整商品信息
-            if (productIds.isEmpty()) {
-                return new ArrayList<>();
-            }
-            
-            return productService.listByIds(productIds);
+                    .map(this::toProduct)
+                    .toList();
             
         } catch (Exception e) {
             log.error("Elasticsearch搜索商品失败，使用数据库查询", e);
-            // 降级到数据库查询
-            return productService.getProductList(keyword, null);
+            return queryProducts(tenantId, keyword, null);
         }
     }
     
@@ -111,21 +113,48 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
         
         try {
-            List<ProductDocument> documents = productRepository.findByTenantIdAndCategory(tenantId, category);
-            
-            List<Long> productIds = documents.stream()
-                    .map(ProductDocument::getId)
-                    .collect(Collectors.toList());
-            
-            if (productIds.isEmpty()) {
-                return new ArrayList<>();
+            if (elasticsearchOperations == null) {
+                throw new IllegalStateException("Elasticsearch 未启用");
             }
-            
-            return productService.listByIds(productIds);
+            Criteria criteria = new Criteria("tenantId").is(tenantId)
+                    .and(new Criteria("category").is(category));
+
+            SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(new CriteriaQuery(criteria), ProductDocument.class);
+            return searchHits.getSearchHits().stream()
+                    .map(SearchHit::getContent)
+                    .map(this::toProduct)
+                    .toList();
             
         } catch (Exception e) {
             log.error("Elasticsearch按分类搜索商品失败，使用数据库查询", e);
-            return productService.getProductList(null, category);
+            return queryProducts(tenantId, null, category);
         }
+    }
+
+    private Product toProduct(ProductDocument document) {
+        Product product = new Product();
+        BeanUtils.copyProperties(document, product);
+        product.setDeleted(0);
+        return product;
+    }
+
+    private List<Product> queryProducts(Long tenantId, String keyword, String category) {
+        LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<Product>()
+                .eq(Product::getTenantId, tenantId)
+                .eq(Product::getDeleted, 0)
+                .orderByDesc(Product::getCreateTime);
+
+        if (keyword != null && !keyword.isBlank()) {
+            wrapper.and(query -> query.like(Product::getName, keyword)
+                    .or()
+                    .like(Product::getProductCode, keyword));
+        }
+
+        if (category != null && !category.isBlank()) {
+            wrapper.eq(Product::getCategory, category);
+        }
+
+        List<Product> products = productMapper.selectList(wrapper);
+        return products == null ? new ArrayList<>() : products;
     }
 }

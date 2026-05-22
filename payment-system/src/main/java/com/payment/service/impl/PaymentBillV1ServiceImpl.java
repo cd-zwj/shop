@@ -1,7 +1,7 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.payment.util.JsonUtils;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.constant.RefundConstants;
 import com.payment.common.BusinessException;
@@ -143,6 +143,24 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         if (paymentBill == null) {
             return;
         }
+        closePaymentBill(paymentBill, statusReason);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markBillClosed(String billNo, PaymentStatusReasonEnum statusReason) {
+        if (statusReason == null) {
+            throw new BusinessException("支付关闭原因不能为空");
+        }
+
+        PaymentBill paymentBill = getByBillNo(billNo);
+        if (paymentBill == null) {
+            return;
+        }
+        closePaymentBill(paymentBill, statusReason);
+    }
+
+    private void closePaymentBill(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
         }
@@ -158,6 +176,21 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     public PaymentBill getByBillNo(String billNo) {
         return paymentBillMapper.selectOne(new LambdaQueryWrapper<PaymentBill>()
                 .eq(PaymentBill::getBillNo, billNo));
+    }
+
+    @Override
+    public PaymentBill getLatestByBizTypeAndBizNo(String bizType, String bizNo) {
+        List<PaymentBill> paymentBills = listByBizTypeAndBizNo(bizType, bizNo);
+        return paymentBills.isEmpty() ? null : paymentBills.get(0);
+    }
+
+    @Override
+    public List<PaymentBill> listByBizTypeAndBizNo(String bizType, String bizNo) {
+        return paymentBillMapper.selectList(new LambdaQueryWrapper<PaymentBill>()
+                .eq(PaymentBill::getBizType, bizType)
+                .eq(PaymentBill::getBizNo, bizNo)
+                .orderByDesc(PaymentBill::getCreateTime)
+                .orderByDesc(PaymentBill::getId));
     }
 
     @Override
@@ -289,7 +322,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         outbox.setBizNo(paymentBill.getBizNo());
         outbox.setExchangeName("");
         outbox.setRoutingKey(queueName);
-        outbox.setMessageBody(JSON.toJSONString(body));
+        outbox.setMessageBody(JsonUtils.toJson(body));
         outbox.setSendStatus(OutboxSendStatusEnum.PENDING.name());
         outbox.setRetryCount(0);
         messageOutboxMapper.insert(outbox);
@@ -314,37 +347,37 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             return null;
         }
         try {
-            JSONObject extension = JSON.parseObject(paymentBill.getExtensionJson());
+            ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
             if (extension == null) {
                 return null;
             }
-            return PaymentStatusReasonEnum.fromCode(extension.getString(RefundConstants.EXTENSION_STATUS_REASON_CODE));
+            return PaymentStatusReasonEnum.fromCode(extension.path(RefundConstants.EXTENSION_STATUS_REASON_CODE).asText(null));
         } catch (Exception e) {
             return null;
         }
     }
 
     private void applyStatusReason(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
-        JSONObject extension = parseExtensionJson(paymentBill.getExtensionJson());
+        ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
         extension.put(RefundConstants.EXTENSION_STATUS_REASON_CODE, statusReason.getCode());
-        paymentBill.setExtensionJson(extension.toJSONString());
+        paymentBill.setExtensionJson(JsonUtils.toJson(extension));
     }
 
     private void clearStatusReason(PaymentBill paymentBill) {
-        JSONObject extension = parseExtensionJson(paymentBill.getExtensionJson());
+        ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
         extension.remove(RefundConstants.EXTENSION_STATUS_REASON_CODE);
-        paymentBill.setExtensionJson(extension.isEmpty() ? null : extension.toJSONString());
+        paymentBill.setExtensionJson(extension.isEmpty() ? null : JsonUtils.toJson(extension));
     }
 
-    private JSONObject parseExtensionJson(String extensionJson) {
+    private ObjectNode parseExtensionJson(String extensionJson) {
         if (extensionJson == null || extensionJson.isBlank()) {
-            return new JSONObject();
+            return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
         }
         try {
-            JSONObject parsed = JSON.parseObject(extensionJson);
-            return parsed == null ? new JSONObject() : parsed;
+            ObjectNode parsed = (ObjectNode) JsonUtils.fromJsonTree(extensionJson);
+            return parsed == null ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode() : parsed;
         } catch (Exception e) {
-            return new JSONObject();
+            return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
         }
     }
 
@@ -375,3 +408,5 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         return null;
     }
 }
+
+

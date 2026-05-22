@@ -15,4 +15,6 @@ public class SalesOrderDetailVO {
     private SalesOrder order;
 
     private List<SalesOrderItem> items;
+
+    private String paymentBillNo;
 }

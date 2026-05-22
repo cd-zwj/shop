@@ -1,6 +1,6 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
@@ -53,7 +53,7 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         DataAnalysisResult result = new DataAnalysisResult();
         result.setAnalysisType(request.getAnalysisType());
         result.setStatus("PROCESSING");
-        result.setAnalysisData(JSON.toJSONString(request.getParams()));
+        result.setAnalysisData(JsonUtils.toJson(request.getParams()));
         save(result);
         
         // 异步调用AI模块
@@ -90,7 +90,7 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
             DataAnalysisResult result = getById(resultId);
             if (result != null && response.getBody() != null) {
                 Map<String, Object> responseBody = response.getBody();
-                result.setAnalysisData(JSON.toJSONString(responseBody.get("analysisData")));
+                result.setAnalysisData(JsonUtils.toJson(responseBody.get("analysisData")));
                 result.setChartUrl((String) responseBody.get("chartUrl"));
                 result.setStatus("SUCCESS");
                 result.setUpdateTime(LocalDateTime.now());
@@ -151,4 +151,5 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         return list(wrapper);
     }
 }
+
 

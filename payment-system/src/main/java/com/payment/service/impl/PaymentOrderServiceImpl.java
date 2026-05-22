@@ -1,5 +1,6 @@
 package com.payment.service.impl;
 
+import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
@@ -108,7 +109,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("messageId", generateMessageId());
         messageMap.put("orderNo", orderNo);
-        rabbitTemplate.convertAndSend("payment.order.created", com.alibaba.fastjson2.JSON.toJSONString(messageMap));
+        rabbitTemplate.convertAndSend("payment.order.created", JsonUtils.toJson(messageMap));
         return order;
     }
 
@@ -222,7 +223,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         Map<String, Object> messageMap = new HashMap<>();
         messageMap.put("messageId", generateMessageId());
         messageMap.put("orderNo", orderNo);
-        rabbitTemplate.convertAndSend("payment.order.paid", com.alibaba.fastjson2.JSON.toJSONString(messageMap));
+        rabbitTemplate.convertAndSend("payment.order.paid", JsonUtils.toJson(messageMap));
 
         if (orderNo.startsWith("R")) {
             try {
@@ -274,3 +275,5 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
         return page(page, wrapper);
     }
 }
+
+

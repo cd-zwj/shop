@@ -1,6 +1,6 @@
 package com.payment.service.impl;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.dto.ScanRequestDTO;
@@ -135,7 +135,7 @@ public class ScanServiceImpl implements ScanService {
         String productKey = "product_" + product.getId();
         Map<String, Object> cartItem;
         if (cartMap.containsKey(productKey)) {
-            cartItem = JSON.parseObject(cartMap.get(productKey), Map.class);
+            cartItem = JsonUtils.fromJson(cartMap.get(productKey), Map.class);
             Integer currentQty = ((Number) cartItem.get("quantity")).intValue();
             cartItem.put("quantity", currentQty + quantity);
         } else {
@@ -148,7 +148,7 @@ public class ScanServiceImpl implements ScanService {
             cartItem.put("imageUrl", product.getImageUrl());
         }
 
-        redisUtils.hashPut(cartKey, productKey, JSON.toJSONString(cartItem));
+        redisUtils.hashPut(cartKey, productKey, JsonUtils.toJson(cartItem));
         redisUtils.expire(cartKey, CART_EXPIRE_MINUTES, TimeUnit.MINUTES);
         log.info("商品已添加到购物车，sessionId: {}, productId: {}, quantity: {}", sessionId, product.getId(), quantity);
     }
@@ -190,9 +190,9 @@ public class ScanServiceImpl implements ScanService {
             throw new BusinessException("购物车中不存在该商品");
         }
 
-        Map<String, Object> cartItem = JSON.parseObject(itemJson, Map.class);
+        Map<String, Object> cartItem = JsonUtils.fromJson(itemJson, Map.class);
         cartItem.put("quantity", quantity);
-        redisUtils.hashPut(cartKey, productKey, JSON.toJSONString(cartItem));
+        redisUtils.hashPut(cartKey, productKey, JsonUtils.toJson(cartItem));
         redisUtils.expire(cartKey, CART_EXPIRE_MINUTES, TimeUnit.MINUTES);
 
         log.info("购物车商品数量已更新，sessionId: {}, productId: {}, quantity: {}", sessionId, productId, quantity);
@@ -203,7 +203,7 @@ public class ScanServiceImpl implements ScanService {
         Map<String, String> cartMap = redisUtils.hashEntries(CART_PREFIX + sessionId);
         List<Map<String, Object>> cartItems = new ArrayList<>();
         for (String value : cartMap.values()) {
-            cartItems.add(JSON.parseObject(value, Map.class));
+            cartItems.add(JsonUtils.fromJson(value, Map.class));
         }
         return cartItems;
     }
@@ -259,3 +259,5 @@ public class ScanServiceImpl implements ScanService {
         return total;
     }
 }
+
+

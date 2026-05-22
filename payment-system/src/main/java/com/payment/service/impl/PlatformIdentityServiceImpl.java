@@ -3,28 +3,42 @@ package com.payment.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
-import com.payment.dto.PlatformLoginDTO;
 import com.payment.dto.PlatformRegisterDTO;
 import com.payment.entity.PlatformUser;
+import com.payment.enums.PlatformLoginTypeEnum;
 import com.payment.mapper.PlatformUserMapper;
 import com.payment.service.PlatformIdentityService;
+import com.payment.service.login.PlatformLoginHandler;
+import com.payment.service.login.PlatformLoginRequest;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
-import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 平台统一用户认证服务。
  */
 @Service
-@RequiredArgsConstructor
 public class PlatformIdentityServiceImpl implements PlatformIdentityService {
 
     private final PlatformUserMapper platformUserMapper;
+    private final Map<PlatformLoginTypeEnum, PlatformLoginHandler> loginHandlerMap;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+
+    public PlatformIdentityServiceImpl(PlatformUserMapper platformUserMapper, List<PlatformLoginHandler> loginHandlers) {
+        this.platformUserMapper = platformUserMapper;
+        Map<PlatformLoginTypeEnum, PlatformLoginHandler> handlerMap = new EnumMap<>(PlatformLoginTypeEnum.class);
+        for (PlatformLoginHandler loginHandler : loginHandlers) {
+            handlerMap.put(loginHandler.supports(), loginHandler);
+        }
+        this.loginHandlerMap = Map.copyOf(handlerMap);
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -50,25 +64,13 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
     }
 
     @Override
-    public String login(PlatformLoginDTO dto) {
-        PlatformUser platformUser = platformUserMapper.selectOne(new LambdaQueryWrapper<PlatformUser>()
-                .eq(PlatformUser::getUsername, dto.getUsername())
-                .eq(PlatformUser::getDeleted, 0));
-        if (platformUser == null) {
-            throw new BusinessException("用户名或密码错误");
+    public String login(PlatformLoginRequest request) {
+        PlatformLoginHandler loginHandler = loginHandlerMap.get(request.loginType());
+        if (loginHandler == null) {
+            throw new BusinessException("暂不支持该登录方式");
         }
-        if (platformUser.getStatus() == null || platformUser.getStatus() == 0) {
-            throw new BusinessException("用户已禁用");
-        }
-        if (!passwordEncoder.matches(dto.getPassword(), platformUser.getPasswordHash())) {
-            throw new BusinessException("用户名或密码错误");
-        }
-
-        // 使用带前缀的 loginId，避免和旧 sys_user 体系冲突。
-        StpUtil.login("platform:" + platformUser.getId());
-        StpUtil.getSession().set("platformUserId", platformUser.getId());
-        StpUtil.getSession().set("platformUsername", platformUser.getUsername());
-        return StpUtil.getTokenValue();
+        PlatformUser platformUser = loginHandler.authenticate(request);
+        return createLoginSession(platformUser);
     }
 
     @Override
@@ -80,5 +82,13 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
         }
         platformUser.setPasswordHash(null);
         return platformUser;
+    }
+
+    String createLoginSession(PlatformUser platformUser) {
+        // 使用带前缀的 loginId，避免和旧 sys_user 体系冲突。
+        StpUtil.login("platform:" + platformUser.getId());
+        StpUtil.getSession().set("platformUserId", platformUser.getId());
+        StpUtil.getSession().set("platformUsername", platformUser.getUsername());
+        return StpUtil.getTokenValue();
     }
 }

@@ -20,6 +20,7 @@ public class RabbitMQConfig {
     public static final String RECHARGE_ORDER_DELAY_QUEUE = "payment.recharge.delay";
     public static final String V1_RECHARGE_SUCCESS_QUEUE = "payment.v1.recharge.success";
     public static final String V1_ORDER_PAID_QUEUE = "payment.v1.order.paid";
+    public static final String PRODUCT_INDEX_QUEUE = "payment.product.index";
     
     /**
      * 充值订单延迟队列（消息过期后进入死信队列）
@@ -85,6 +86,14 @@ public class RabbitMQConfig {
     @Bean
     public Queue v1OrderPaidQueue() {
         return new Queue(V1_ORDER_PAID_QUEUE, true);
+    }
+
+    /**
+     * 商品索引同步队列。
+     */
+    @Bean
+    public Queue productIndexQueue() {
+        return new Queue(PRODUCT_INDEX_QUEUE, true);
     }
     
     /**

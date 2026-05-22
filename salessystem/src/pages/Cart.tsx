@@ -1,163 +1,320 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { 
-  Trash2, 
-  Plus, 
-  Minus, 
-  Store, 
+import {
   ArrowRight,
-  ShoppingBag
+  Minus,
+  Plus,
+  ShoppingBag,
+  Store,
+  Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
+import { appCatalogService } from '../services/modules/appCatalog';
+import {
+  createOrderForItems,
+  getOrderCheckoutPath,
+} from '../services/orderCheckout';
+import { ApiError } from '../types/api';
+import { formatCurrency, getImageUrl } from '../utils/display';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      name: '专业无线降噪耳机',
-      store: '科技电子城',
-      options: '哑光黑 • 标准版',
-      price: 299,
-      quantity: 1,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC_-tdO6zIEAZ5ngASindCeQeaZa60kMTgNa4zX2_R8JM0cNL-7M6z1_jTgYuZ2ICkCckhPQukuFDo770EdxiKdNi2cSsgmBW2JGLtYN9MpDUCke4NJvJg02H2q9kJFIMCUWffYfYNp3flDlyXr7M_anZIfLsKlCbyZV98Xa-qYi06TwmoT0_IVC6aqt7ZrG156YuUsbj1N0m5CmKTDpoF7R9lK0jgs-tzYHy9owqS2cdoJwXERCGSW-D3484BB69Guw-jD_0-GarM'
-    },
-    {
-      id: 2,
-      name: 'Series 8 智能手表',
-      store: '科技电子城',
-      options: '石墨不锈钢 • 午夜色表带',
-      price: 399,
-      quantity: 2,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuC6FwUC_ai_4Iz9Kdt7wpsSvERAjxgXJBErFHLhXigfTvuIAMHpRgAGzd-qKtLTp0S31ZJXt0PxAwda8DgM_53Zr3_HYjI-Edzl4uiQ4JGmu58rndhfZKw6pQZaSw0FGAvl9-kKAyhzyan0sFzZBCfLqReXaDyQ1tnRhHjItXMLQtV7Dxj0ZcaFTubtLJ8QS6d_ICz2-E8rAx_F9dX61OomGXE-A_ZkLCxdKuyzFvzqxPJ88r8-HHdKyNorMMn9_fR0bMb7G_2s06Y'
-    },
-    {
-      id: 3,
-      name: '商务真皮笔记本',
-      store: '办公用品精选',
-      options: 'A5 尺寸 • 横线内页',
-      price: 45,
-      quantity: 3,
-      image: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBQWURNhYrJ8jFlhOQvL98w85PlVeMWyagyEeViTvKCyGg7yYKQ7Pl5YI0sswk1E5w7m2PK72eYCUvOysMPCErqIubURma43yyoSBvfXT-sucnSpc5qTJEk6e8IcYV6ZkeKQjJnXMvSBhSfcS7d3O1wB2bV0JmWsSHBowTd76dfyoyObE6EislOCZ1WoZsMZP8GaoR41YzG66EghP1jHYZ6Hg7b0iovHR3BXeG7cCKGKR3doz_5xpGbLMziiAyaAocR5ZjiPzsXpoU'
+  const { currentRole } = useAuth();
+  const {
+    items,
+    totalItems,
+    updateQuantity,
+    removeItem,
+    clearTenantItems,
+  } = useCart();
+  const [tenantNames, setTenantNames] = useState<Record<number, string>>({});
+  const [isSubmittingTenantId, setIsSubmittingTenantId] = useState<number | null>(
+    null,
+  );
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const tenantIds = [...new Set<number>(items.map((item) => item.tenantId))].filter(
+      (tenantId) => !tenantNames[tenantId],
+    );
+
+    if (tenantIds.length === 0) {
+      return;
     }
-  ]);
 
-  const updateQuantity = (id: number, delta: number) => {
-    setItems(items.map(item => 
-      item.id === id ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
-    ));
-  };
+    let isMounted = true;
 
-  const removeItem = (id: number) => {
-    setItems(items.filter(item => item.id !== id));
-  };
+    async function loadTenantNames() {
+      const tenantEntries = await Promise.all(
+        tenantIds.map(async (tenantId) => {
+          try {
+            const tenant = await appCatalogService.getTenant(tenantId);
+            return [tenantId, tenant.name] as const;
+          } catch {
+            return [tenantId, `商户 #${tenantId}`] as const;
+          }
+        }),
+      );
 
-  const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+      if (!isMounted) {
+        return;
+      }
 
-  // Group items by store
-  const stores = [...new Set(items.map(item => item.store))];
+      setTenantNames((current) => ({
+        ...current,
+        ...Object.fromEntries(tenantEntries),
+      }));
+    }
+
+    void loadTenantNames();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items, tenantNames]);
+
+  const groupedItems = useMemo(() => {
+    const groups = new Map<
+      number,
+      { tenantId: number; storeName: string; items: typeof items; subtotal: number }
+    >();
+
+    items.forEach((item) => {
+      const existingGroup = groups.get(item.tenantId);
+      const storeName = tenantNames[item.tenantId] ?? `商户 #${item.tenantId}`;
+
+      if (existingGroup) {
+        existingGroup.items.push(item);
+        existingGroup.subtotal += item.price * item.quantity;
+        return;
+      }
+
+      groups.set(item.tenantId, {
+        tenantId: item.tenantId,
+        storeName,
+        items: [item],
+        subtotal: item.price * item.quantity,
+      });
+    });
+
+    return Array.from(groups.values());
+  }, [items, tenantNames]);
+
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+  async function handleCheckoutByTenant(tenantId: number) {
+    const tenantItems = items.filter((item) => item.tenantId === tenantId);
+
+    if (tenantItems.length === 0) {
+      return;
+    }
+
+    if (currentRole !== 'user') {
+      navigate('/login');
+      return;
+    }
+
+    setError('');
+    setIsSubmittingTenantId(tenantId);
+
+    try {
+      const payment = await createOrderForItems(tenantItems, 'APP_CART');
+      clearTenantItems(tenantId);
+
+      if (payment.externalPayUrl) {
+        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      navigate(getOrderCheckoutPath(payment));
+    } catch (err) {
+      setError(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : '订单创建失败，请稍后重试',
+      );
+    } finally {
+      setIsSubmittingTenantId(null);
+    }
+  }
 
   return (
-    <div className="flex flex-col gap-8 pb-40 px-4 md:mt-8 max-w-4xl mx-auto w-full">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-40 md:mt-8">
       <header className="flex flex-col gap-2">
-        <h1 className="text-4xl font-black text-slate-900 tracking-tight">购物车</h1>
-        <p className="text-slate-500 font-medium font-inter">在去结算前核对您的商品。</p>
+        <h1 className="text-4xl font-black tracking-tight text-slate-900">购物车</h1>
+        <p className="font-medium text-slate-500">
+          当前按商户分别结算，提交后会创建真实订单并进入支付状态页。
+        </p>
       </header>
 
-      {items.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100 shadow-inner">
-          <ShoppingBag className="w-16 h-16 text-slate-200 mb-4" />
-          <p className="text-slate-400 font-bold">购物车空空如也</p>
-          <button onClick={() => navigate('/discovery')} className="text-primary font-bold mt-4 hover:underline">去逛逛</button>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-10">
-          {stores.map(storeName => (
-            <motion.section 
-              key={storeName}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
-            >
-              <div className="bg-slate-50/80 p-5 border-b border-slate-200 flex items-center gap-3">
-                <div className="p-2 bg-white rounded-xl shadow-sm border border-slate-100">
-                  <Store className="w-5 h-5 text-primary" />
-                </div>
-                <h2 className="text-lg font-black text-slate-900 tracking-tight">{storeName}</h2>
-              </div>
-              
-              <div className="p-2 flex flex-col divide-y divide-slate-100">
-                {items.filter(item => item.store === storeName).map(item => (
-                  <article key={item.id} className="p-4 flex flex-col sm:flex-row gap-5 group">
-                    <div className="w-full sm:w-32 h-32 rounded-2xl overflow-hidden shrink-0 bg-slate-50 border border-slate-100 shadow-inner relative">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                    </div>
-                    
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div className="flex justify-between items-start gap-4">
-                        <div>
-                          <h3 className="text-base font-bold text-slate-900 mb-1 group-hover:text-primary transition-colors cursor-pointer">{item.name}</h3>
-                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{item.options}</p>
-                        </div>
-                        <button 
-                          onClick={() => removeItem(item.id)}
-                          className="text-slate-300 hover:text-red-500 transition-colors p-2 hover:bg-red-50 rounded-xl"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                      
-                      <div className="flex items-end justify-between mt-6">
-                        <span className="text-2xl font-black text-slate-900 tracking-tight">${item.price}</span>
-                        <div className="flex items-center bg-slate-100 rounded-2xl border border-slate-200 p-1">
-                          <button 
-                            onClick={() => updateQuantity(item.id, -1)}
-                            className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white hover:shadow-sm rounded-xl transition-all active:scale-90"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                          <span className="text-base font-black text-slate-900 w-12 text-center">{item.quantity}</span>
-                          <button 
-                            onClick={() => updateQuantity(item.id, 1)}
-                            className="w-10 h-10 flex items-center justify-center text-slate-600 hover:bg-white hover:shadow-sm rounded-xl transition-all active:scale-90"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </motion.section>
-          ))}
+      {error && (
+        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+          {error}
         </div>
       )}
 
-      {/* Sticky Bottom Summary */}
-      <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 w-full max-w-4xl px-4 z-40">
-        <motion.div 
+      {items.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-slate-100 bg-white py-20 shadow-inner">
+          <ShoppingBag className="mb-4 h-16 w-16 text-slate-200" />
+          <p className="font-bold text-slate-400">购物车空空如也</p>
+          <button
+            onClick={() => navigate('/discovery')}
+            className="mt-4 font-bold text-primary hover:underline"
+          >
+            去逛逛
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-8">
+          {groupedItems.map((group) => {
+            const tenantItemCount = group.items.reduce(
+              (sum, item) => sum + item.quantity,
+              0,
+            );
+            const isSubmitting = isSubmittingTenantId === group.tenantId;
+
+            return (
+              <motion.section
+                key={group.tenantId}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+              >
+                <div className="flex items-center gap-3 border-b border-slate-200 bg-slate-50/80 p-5">
+                  <div className="rounded-xl border border-slate-100 bg-white p-2 shadow-sm">
+                    <Store className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black tracking-tight text-slate-900">
+                      {group.storeName}
+                    </h2>
+                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                      {tenantItemCount} 件商品
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col divide-y divide-slate-100 p-2">
+                  {group.items.map((item) => (
+                    <article
+                      key={item.productId}
+                      className="group flex flex-col gap-5 p-4 sm:flex-row"
+                    >
+                      <div className="relative h-32 w-full shrink-0 overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-inner sm:w-32">
+                        <img
+                          src={getImageUrl(item.imageUrl)}
+                          alt={item.name}
+                          className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        />
+                      </div>
+
+                      <div className="flex flex-1 flex-col justify-between">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="mb-1 text-base font-bold text-slate-900 transition-colors group-hover:text-primary">
+                              {item.name}
+                            </h3>
+                            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                              {item.category || '真实商品'}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => removeItem(item.productId)}
+                            className="rounded-xl p-2 text-slate-300 transition-colors hover:bg-red-50 hover:text-red-500"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+
+                        <div className="mt-6 flex items-end justify-between">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-2xl font-black tracking-tight text-slate-900">
+                              {formatCurrency(item.price)}
+                            </span>
+                            {typeof item.stock === 'number' && (
+                              <span className="text-xs font-bold text-slate-400">
+                                库存 {item.stock}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-100 p-1">
+                            <button
+                              onClick={() =>
+                                updateQuantity(item.productId, item.quantity - 1)
+                              }
+                              disabled={item.quantity <= 1}
+                              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition-all active:scale-90 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Minus className="h-4 w-4" />
+                            </button>
+                            <span className="w-12 text-center text-base font-black text-slate-900">
+                              {item.quantity}
+                            </span>
+                            <button
+                              onClick={() =>
+                                updateQuantity(item.productId, item.quantity + 1)
+                              }
+                              disabled={
+                                typeof item.stock === 'number' &&
+                                item.stock > 0 &&
+                                item.quantity >= item.stock
+                              }
+                              className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition-all active:scale-90 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/60 p-5 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-widest text-slate-400">
+                      商户小计
+                    </p>
+                    <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                      {formatCurrency(group.subtotal)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleCheckoutByTenant(group.tenantId)}
+                    disabled={isSubmitting}
+                    className="flex items-center justify-center gap-3 rounded-2xl bg-primary px-8 py-4 text-lg font-black text-white shadow-xl shadow-primary/20 transition-all active:scale-95 hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <span>{isSubmitting ? '创建订单中...' : '结算该商户商品'}</span>
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                </div>
+              </motion.section>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="fixed bottom-20 left-1/2 z-40 w-full max-w-5xl -translate-x-1/2 px-4 md:bottom-6">
+        <motion.div
           initial={{ y: 100 }}
           animate={{ y: 0 }}
-          className="bg-white/95 backdrop-blur-2xl border border-slate-200 shadow-2xl rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-6"
+          className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white/95 p-6 shadow-2xl backdrop-blur-2xl sm:flex-row sm:items-center sm:justify-between"
         >
-          <div className="flex flex-col items-center sm:items-start w-full sm:w-auto">
-            <span className="text-sm font-semibold text-slate-400 uppercase tracking-widest">总计 ({totalItems} 件商品)</span>
-            <div className="flex items-baseline gap-1 mt-1">
-              <span className="text-3xl font-black text-slate-900 tracking-tight">${subtotal.toLocaleString()}</span>
+          <div className="flex flex-col items-center sm:items-start">
+            <span className="text-sm font-semibold uppercase tracking-widest text-slate-400">
+              总计 ({totalItems} 件商品 / {groupedItems.length} 个商户)
+            </span>
+            <div className="mt-1 flex items-baseline gap-1">
+              <span className="text-3xl font-black tracking-tight text-slate-900">
+                {formatCurrency(subtotal)}
+              </span>
             </div>
           </div>
-          
-          <button 
-            disabled={items.length === 0}
-            onClick={() => navigate('/success')}
-            className="w-full sm:w-auto px-12 py-4 bg-primary text-white rounded-2xl font-black text-lg shadow-xl shadow-primary/20 hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
-          >
-            <span>去结算</span>
-            <ArrowRight className="w-5 h-5" />
-          </button>
+
+          <div className="text-center text-sm font-medium text-slate-500 sm:max-w-sm sm:text-right">
+            当前不支持跨商户合单，请在上方卡片中分别结算各商户商品。
+          </div>
         </motion.div>
       </div>
     </div>

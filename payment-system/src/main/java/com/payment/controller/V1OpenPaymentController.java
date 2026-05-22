@@ -1,6 +1,6 @@
 package com.payment.controller;
 
-import com.alibaba.fastjson2.JSON;
+import com.payment.util.JsonUtils;
 import com.payment.common.Result;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.PaymentBill;
@@ -44,7 +44,7 @@ public class V1OpenPaymentController {
         dto.setThirdPartyBillNo(params.get("trade_no"));
         dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status"))
                 || "TRADE_FINISHED".equals(params.get("trade_status")));
-        dto.setRawBody(JSON.toJSONString(params));
+        dto.setRawBody(JsonUtils.toJson(params));
         paymentBillV1Service.handleCallback("ALIPAY_PAGE", dto);
         return "success";
     }
@@ -93,7 +93,7 @@ public class V1OpenPaymentController {
         dto.setCallbackRequestId(params.get("trade_no"));
         dto.setThirdPartyBillNo(params.get("trade_no"));
         dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status")));
-        dto.setRawBody(JSON.toJSONString(params));
+        dto.setRawBody(JsonUtils.toJson(params));
         paymentBillV1Service.handleCallback("EXT_PROVIDER", dto);
         return "success";
     }
@@ -102,3 +102,4 @@ public class V1OpenPaymentController {
         return value == null ? "" : value;
     }
 }
+

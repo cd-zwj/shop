@@ -204,6 +204,53 @@ public class AppOrderServiceImpl implements AppOrderService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public OrderPaymentVO repayOrder(Long platformUserId, String orderNo, PaymentChannelCodeEnum paymentChannelCode) {
+        SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
+        if (!OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())) {
+            throw new BusinessException("当前订单状态不允许重新发起支付");
+        }
+        if (PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())) {
+            throw new BusinessException("订单已支付成功，无需重复支付");
+        }
+        if (PayStatusEnum.CLOSED.name().equals(salesOrder.getPayStatus())) {
+            throw new BusinessException("订单支付已关闭，请重新下单");
+        }
+        if (salesOrder.getExternalPayAmount() == null || salesOrder.getExternalPayAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("当前订单不存在待支付的外部支付金额");
+        }
+
+        List<PaymentBill> paymentBills = paymentBillV1Service.listByBizTypeAndBizNo(
+                PaymentBizTypeEnum.SALES_ORDER.name(),
+                orderNo
+        );
+
+        PaymentBill activeBill = resolveReusablePaymentBill(paymentBills, salesOrder);
+        boolean reusedPaymentBill = activeBill != null;
+        if (activeBill == null) {
+            PaymentChannelCodeEnum resolvedChannel = paymentChannelCode != null
+                    ? paymentChannelCode
+                    : PaymentChannelCodeEnum.ALIPAY_PAGE;
+            activeBill = paymentBillV1Service.createBill(
+                    PaymentBizTypeEnum.SALES_ORDER.name(),
+                    orderNo,
+                    salesOrder.getTenantId(),
+                    salesOrder.getPlatformUserId(),
+                    salesOrder.getExternalPayAmount(),
+                    resolvedChannel
+            );
+        }
+
+        PayResponseDTO payResponse = paymentBillV1Service.createExternalPayment(activeBill);
+
+        OrderPaymentVO result = buildOrderPaymentVO(salesOrder);
+        result.setPaymentBillNo(activeBill.getBillNo());
+        result.setExternalPayUrl(payResponse.getPayUrl());
+        result.setReusedPaymentBill(reusedPaymentBill);
+        return result;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
         if (OrderStatusEnum.PAID.name().equals(salesOrder.getOrderStatus())) {
@@ -223,11 +270,23 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setOrderStatus(OrderStatusEnum.CANCELLED.name());
         salesOrder.setPayStatus(PayStatusEnum.CLOSED.name());
         salesOrderMapper.updateById(salesOrder);
-        paymentBillV1Service.markBizClosed(
+
+        List<PaymentBill> paymentBills = paymentBillV1Service.listByBizTypeAndBizNo(
                 PaymentBizTypeEnum.SALES_ORDER.name(),
-                orderNo,
-                PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED
+                orderNo
         );
+        if (paymentBills.isEmpty()) {
+            return;
+        }
+
+        for (PaymentBill paymentBill : paymentBills) {
+            if (!PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
+                paymentBillV1Service.markBillClosed(
+                        paymentBill.getBillNo(),
+                        PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED
+                );
+            }
+        }
     }
 
     private List<OrderLine> buildOrderLines(AppCreateOrderDTO dto) {
@@ -451,10 +510,52 @@ public class AppOrderServiceImpl implements AppOrderService {
         return vo;
     }
 
+    private PaymentBill resolveReusablePaymentBill(List<PaymentBill> paymentBills, SalesOrder salesOrder) {
+        if (paymentBills == null || paymentBills.isEmpty()) {
+            return null;
+        }
+
+        for (PaymentBill bill : paymentBills) {
+            PaymentBill paymentBill = bill;
+            if (paymentBill == null) {
+                continue;
+            }
+            if (!PaymentBizTypeEnum.SALES_ORDER.name().equals(paymentBill.getBizType())) {
+                continue;
+            }
+            if (!salesOrder.getOrderNo().equals(paymentBill.getBizNo())) {
+                continue;
+            }
+
+            paymentBill = paymentBillV1Service.syncBillStatus(paymentBill.getBillNo());
+
+            if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
+                throw new BusinessException("订单已支付成功，无需重复支付");
+            }
+            if (PayStatusEnum.WAIT_PAY.name().equals(paymentBill.getPayStatus())
+                    || PayStatusEnum.PAYING.name().equals(paymentBill.getPayStatus())) {
+                if (paymentBill.getExpireTime() != null && paymentBill.getExpireTime().isBefore(LocalDateTime.now())) {
+                    paymentBillV1Service.markBillClosed(
+                            paymentBill.getBillNo(),
+                            PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED
+                    );
+                    continue;
+                }
+                return paymentBill;
+            }
+        }
+        return null;
+    }
+
     private SalesOrderDetailVO buildOrderDetailVO(SalesOrder salesOrder, List<SalesOrderItem> orderItems) {
         SalesOrderDetailVO detailVO = new SalesOrderDetailVO();
         detailVO.setOrder(salesOrder);
         detailVO.setItems(orderItems);
+        PaymentBill paymentBill = paymentBillV1Service.getLatestByBizTypeAndBizNo(
+                PaymentBizTypeEnum.SALES_ORDER.name(),
+                salesOrder.getOrderNo()
+        );
+        detailVO.setPaymentBillNo(paymentBill != null ? paymentBill.getBillNo() : null);
         return detailVO;
     }
 

@@ -14,19 +14,28 @@ import {
   ZoomIn,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useCart } from '../context/CartContext';
 import { appCatalogService } from '../services/modules/appCatalog';
+import { createOrderForItems, getOrderCheckoutPath } from '../services/orderCheckout';
+import { ApiError } from '../types/api';
 import type { Product } from '../types/catalog';
+import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
 
 export default function ProductDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { currentRole } = useAuth();
+  const { addItem, totalItems } = useCart();
   const productId = Number(id);
   const [selectedTier, setSelectedTier] = useState('pro');
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionMessage, setActionMessage] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   const thumbnails = [
     'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=600&q=80',
@@ -64,6 +73,72 @@ export default function ProductDetails() {
     };
   }, [productId]);
 
+  const isOutOfStock = typeof product?.stock === 'number' && product.stock <= 0;
+
+  function toCheckoutItem(detail: Product): CartItem {
+    return {
+      productId: detail.id,
+      tenantId: detail.tenantId,
+      name: detail.name,
+      price: detail.price,
+      quantity: 1,
+      imageUrl: detail.imageUrl,
+      stock: detail.stock,
+      category: detail.category,
+    };
+  }
+
+  function handleAddToCart() {
+    if (!product) {
+      return;
+    }
+
+    if (isOutOfStock) {
+      setActionMessage('该商品暂时无库存，暂不能加入购物车');
+      return;
+    }
+
+    addItem(product, 1);
+    setActionMessage('已加入购物车，可以继续选购或前往结算');
+  }
+
+  async function handleBuyNow() {
+    if (!product) {
+      return;
+    }
+
+    if (isOutOfStock) {
+      setActionMessage('该商品暂时无库存，暂不能下单');
+      return;
+    }
+
+    if (currentRole !== 'user') {
+      navigate('/login');
+      return;
+    }
+
+    setActionMessage('');
+    setIsSubmittingOrder(true);
+
+    try {
+      const payment = await createOrderForItems([toCheckoutItem(product)], 'APP_BUY_NOW');
+
+      if (payment.externalPayUrl) {
+        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      navigate(getOrderCheckoutPath(payment));
+    } catch (err) {
+      setActionMessage(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : '订单创建失败，请稍后重试',
+      );
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 pb-32 md:bg-white md:pb-12">
       <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between border-b border-slate-200 bg-white px-4 md:hidden">
@@ -75,9 +150,13 @@ export default function ProductDetails() {
           <button className="rounded-full p-2 text-slate-600">
             <Search className="h-5 w-5" />
           </button>
-          <button className="relative rounded-full p-2 text-slate-600">
+          <button onClick={() => navigate('/cart')} className="relative rounded-full p-2 text-slate-600">
             <ShoppingCart className="h-5 w-5" />
-            <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-error" />
+            {totalItems > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 text-[10px] font-black text-white">
+                {Math.min(totalItems, 99)}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -153,6 +232,12 @@ export default function ProductDetails() {
             )}
           </div>
 
+          {actionMessage && (
+            <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+              {actionMessage}
+            </div>
+          )}
+
           <div className="mb-10 flex flex-col gap-4">
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">许可等级</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -215,17 +300,19 @@ export default function ProductDetails() {
 
           <div className="mt-auto hidden flex-col gap-4 md:flex">
             <button
-              onClick={() => navigate('/cart')}
-              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-container hover:shadow-xl"
+              onClick={handleAddToCart}
+              disabled={!product || isOutOfStock || isSubmittingOrder}
+              className="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-container hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShoppingCart className="h-5 w-5" />
               加入购物车
             </button>
             <button
-              onClick={() => navigate('/success')}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-900 shadow-sm transition-all hover:bg-slate-50"
+              onClick={handleBuyNow}
+              disabled={!product || isOutOfStock || isSubmittingOrder}
+              className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-900 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              立即购买
+              {isSubmittingOrder ? '创建订单中...' : '立即购买'}
             </button>
           </div>
         </section>
@@ -233,14 +320,16 @@ export default function ProductDetails() {
 
       <div className="fixed bottom-16 z-50 flex w-full gap-3 border-t border-slate-100 bg-white/95 p-4 pb-10 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur-xl md:hidden">
         <button
-          onClick={() => navigate('/success')}
-          className="flex-1 rounded-2xl border border-slate-200 bg-white px-2 py-4 font-bold text-slate-900 shadow-sm transition-colors active:bg-slate-100"
+          onClick={handleBuyNow}
+          disabled={!product || isOutOfStock || isSubmittingOrder}
+          className="flex-1 rounded-2xl border border-slate-200 bg-white px-2 py-4 font-bold text-slate-900 shadow-sm transition-colors active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          立即购买
+          {isSubmittingOrder ? '创建订单中...' : '立即购买'}
         </button>
         <button
-          onClick={() => navigate('/cart')}
-          className="flex-[1.5] rounded-2xl bg-primary px-4 py-4 font-bold text-white shadow-xl shadow-primary/20 transition-all active:scale-95"
+          onClick={handleAddToCart}
+          disabled={!product || isOutOfStock || isSubmittingOrder}
+          className="flex-[1.5] rounded-2xl bg-primary px-4 py-4 font-bold text-white shadow-xl shadow-primary/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <div className="flex items-center justify-center gap-2">
             <ShoppingCart className="h-5 w-5" />

@@ -195,8 +195,8 @@ SELECT id, 3 FROM sys_user WHERE user_type = 2 AND deleted = 0;
 -- v1 绠＄悊绔渶灏忛棴鐜ˉ鍏呮潈闄?
 -- =============================================
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
-('admin:user:list', '骞冲彴鐢ㄦ埛鍒楄〃', 'admin', '鏌ョ湅骞冲彴鐢ㄦ埛鍒楄〃涓庤鎯?),
-('admin:user:update', '骞冲彴鐢ㄦ埛鐘舵€佺淮鎶?', 'admin', '鍚敤鎴栫鐢ㄥ钩鍙扮敤鎴?),
-('admin:trade:overview', '浜ゆ槗鎬昏', 'admin', '鏌ョ湅骞冲彴浜ゆ槗鑱氬悎鏁版嵁'),
-('admin:trade:list', '浜ゆ槗鍒楄〃', 'admin', '鏌ョ湅璁㈠崟銆佹敮浠樺崟銆佸厖鍊煎崟鍒楄〃'),
-('admin:trade:detail', '浜ゆ槗璇︽儏', 'admin', '鏌ョ湅璁㈠崟璇︽儏');
+('admin:user:list', '平台用户列表', 'admin', '查看平台用户列表与详情'),
+('admin:user:update', '平台用户状态维护', 'admin', '启用或禁用平台用户'),
+('admin:trade:overview', '交易总览', 'admin', '查看平台交易聚合数据'),
+('admin:trade:list', '交易列表', 'admin', '查看订单、支付单、充值单列表'),
+('admin:trade:detail', '交易详情', 'admin', '查看订单详情');

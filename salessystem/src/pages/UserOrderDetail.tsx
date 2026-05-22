@@ -2,25 +2,37 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
+  Ban,
   CheckCircle2,
   CreditCard,
   HelpCircle,
   MapPin,
   MessageCircle,
   Package,
+  RotateCcw,
   Truck,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
 import { appOrderService } from '../services/modules/appOrder';
+import { ApiError } from '../types/api';
 import type { SalesOrderDetail } from '../types/order';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { getPaymentBillReuseHint } from '../utils/paymentStatus';
+import {
+  buildRepurchaseCartItems,
+  canRepurchaseOrder,
+} from '../utils/orderActions';
 
 export default function UserOrderDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { addCartItems } = useCart();
   const [detail, setDetail] = useState<SalesOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [actionHint, setActionHint] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -37,6 +49,7 @@ export default function UserOrderDetail() {
         const result = await appOrderService.getOrder(id);
         if (!isMounted) return;
         setDetail(result);
+        setError('');
       } catch {
         if (!isMounted) return;
         setError('订单详情加载失败，请稍后重试');
@@ -54,6 +67,15 @@ export default function UserOrderDetail() {
   }, [id]);
 
   const order = detail?.order;
+  const canRepurchase = canRepurchaseOrder(order);
+  const canCancel =
+    Boolean(order?.orderNo) &&
+    order?.orderStatus !== 'PAID' &&
+    order?.orderStatus !== 'CANCELLED' &&
+    order?.orderStatus !== 'CLOSED' &&
+    order?.payStatus !== 'SUCCESS' &&
+    order?.payStatus !== 'CLOSED';
+
   const steps = useMemo(
     () => [
       { icon: CreditCard, label: '已创建', active: Boolean(order) },
@@ -63,6 +85,75 @@ export default function UserOrderDetail() {
     ],
     [order],
   );
+
+  function handleRepurchase() {
+    const nextItems = buildRepurchaseCartItems(detail);
+    if (nextItems.length === 0) {
+      setError('当前订单缺少可重新购买的商品明细');
+      return;
+    }
+
+    setError('');
+    setActionHint('已将原订单商品重新加入购物车，你可以重新确认后再结算。');
+    addCartItems(nextItems);
+    navigate('/cart');
+  }
+
+  async function handleCancelOrder() {
+    if (!order?.orderNo || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setError('');
+    setActionHint('');
+
+    try {
+      await appOrderService.cancelOrder(order.orderNo);
+      const refreshed = await appOrderService.getOrder(order.orderNo);
+      setDetail(refreshed);
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message : '取消订单失败，请稍后重试',
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  }
+
+  async function handleContinuePay() {
+    if (!order?.orderNo || isCancelling) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setError('');
+    setActionHint('');
+
+    try {
+      const payment = await appOrderService.repayOrder(order.orderNo, 'ALIPAY_PAGE');
+      if (!payment.paymentBillNo) {
+        throw new Error('当前订单未返回有效支付单号');
+      }
+      setActionHint(getPaymentBillReuseHint(payment.reusedPaymentBill));
+
+      if (payment.externalPayUrl) {
+        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      navigate(
+        `/payment/status?billNo=${encodeURIComponent(payment.paymentBillNo)}&orderNo=${encodeURIComponent(order.orderNo)}&source=order&reused=${payment.reusedPaymentBill ? '1' : '0'}`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : '继续支付失败，请稍后重试',
+      );
+    } finally {
+      setIsCancelling(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 pb-32">
@@ -110,6 +201,11 @@ export default function UserOrderDetail() {
         {error && (
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
+          </div>
+        )}
+        {actionHint && !error && (
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            {actionHint}
           </div>
         )}
 
@@ -177,14 +273,44 @@ export default function UserOrderDetail() {
                 </div>
               </div>
               <button
-                onClick={() => order?.orderNo && navigate(`/payment/status?billNo=&orderNo=${encodeURIComponent(order.orderNo)}`)}
-                className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container"
+                onClick={handleContinuePay}
+                disabled={!order?.orderNo || isCancelling}
+                className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
               >
-                查看支付状态
+                {isCancelling ? '处理中...' : '继续支付 / 查看支付状态'}
               </button>
+              <p className="relative z-10 mt-3 text-xs font-medium leading-relaxed text-slate-300">
+                继续支付时会先尝试复用仍有效的支付单，若支付单已关闭、失败或过期，则自动新建。
+              </p>
+              {canRepurchase && (
+                <button
+                  onClick={handleRepurchase}
+                  disabled={isCancelling}
+                  className="relative z-10 mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 py-4 text-sm font-black text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <RotateCcw size={16} /> 重新购买同款商品
+                </button>
+              )}
+              {canCancel && (
+                <button
+                  onClick={handleCancelOrder}
+                  disabled={isCancelling}
+                  className="relative z-10 mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/10 py-4 text-sm font-black text-white transition-all hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Ban size={16} /> {isCancelling ? '取消中...' : '取消订单'}
+                </button>
+              )}
             </section>
 
             <div className="flex flex-col gap-4 rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
+              {canRepurchase && (
+                <button
+                  onClick={handleRepurchase}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:opacity-95"
+                >
+                  <RotateCcw size={16} /> 重新加入购物车
+                </button>
+              )}
               <button className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-100 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:border-primary hover:text-primary">
                 <MessageCircle size={16} /> 联系商户
               </button>

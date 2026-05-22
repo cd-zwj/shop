@@ -9,7 +9,9 @@ import com.payment.dto.V1MerchantSessionVO;
 import com.payment.dto.V1MerchantTenantVO;
 import com.payment.entity.PlatformUser;
 import com.payment.entity.TenantEmployee;
+import com.payment.service.AuthCaptchaService;
 import com.payment.service.PlatformIdentityService;
+import com.payment.service.login.PlatformLoginRequest;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
@@ -23,12 +25,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class V1MerchantAuthController {
 
+    private final AuthCaptchaService authCaptchaService;
     private final PlatformIdentityService platformIdentityService;
     private final V1MerchantSupportService v1MerchantSupportService;
 
     @PostMapping("/login")
     public Result<V1MerchantSessionVO> login(@Valid @RequestBody V1MerchantLoginDTO dto) {
-        String token = platformIdentityService.login(toPlatformLogin(dto));
+        authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());
+        String token = platformIdentityService.login(PlatformLoginRequest.password(dto.getUsername(), dto.getPassword()));
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         PlatformUser currentUser = platformIdentityService.getCurrentUser();
 
@@ -88,13 +92,6 @@ public class V1MerchantAuthController {
     public Result<Void> logout() {
         StpUtil.logout();
         return Result.success();
-    }
-
-    private com.payment.dto.PlatformLoginDTO toPlatformLogin(V1MerchantLoginDTO dto) {
-        com.payment.dto.PlatformLoginDTO loginDTO = new com.payment.dto.PlatformLoginDTO();
-        loginDTO.setUsername(dto.getUsername());
-        loginDTO.setPassword(dto.getPassword());
-        return loginDTO;
     }
 
     private Long sessionLong(String key) {

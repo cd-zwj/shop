@@ -7,6 +7,7 @@ import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public interface PaymentBillV1Service {
     PaymentBill createBill(String bizType,
@@ -22,7 +23,13 @@ public interface PaymentBillV1Service {
 
     void markBizClosed(String bizType, String bizNo, PaymentStatusReasonEnum statusReason);
 
+    void markBillClosed(String billNo, PaymentStatusReasonEnum statusReason);
+
     PaymentBill getByBillNo(String billNo);
+
+    PaymentBill getLatestByBizTypeAndBizNo(String bizType, String bizNo);
+
+    List<PaymentBill> listByBizTypeAndBizNo(String bizType, String bizNo);
 
     PaymentBill syncBillStatus(String billNo);
 }
