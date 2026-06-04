@@ -68,7 +68,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Result<?> handleException(Exception e) {
         log.error("系统异常", e);
-        return Result.error("系统异常：" + e.getMessage());
+        return Result.error("系统异常，请稍后重试");
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -94,7 +94,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     public Result<?> handleConstraintViolationException(ConstraintViolationException e) {
         Set<ConstraintViolation<?>> violations = e.getConstraintViolations();
-        String message = violations.iterator().next().getMessage();
+        String message = violations.isEmpty() ? "参数校验失败" : violations.iterator().next().getMessage();
         return Result.error(ResultCode.PARAM_ERROR.getCode(), message);
     }
 }

@@ -3,6 +3,7 @@ package com.payment.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -46,7 +47,10 @@ public class UserBalance implements Serializable {
     private BigDecimal totalConsume;
     
     private Integer deleted;
-    
+
+    @Version
+    private Integer version;
+
     private LocalDateTime createTime;
     
     private LocalDateTime updateTime;

@@ -158,12 +158,32 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             balance.setDeleted(0);
             balance.setCreateTime(LocalDateTime.now());
             balance.setUpdateTime(LocalDateTime.now());
-            merchantBalanceMapper.insert(balance);
+            try {
+                merchantBalanceMapper.insert(balance);
+            } catch (Exception e) {
+                // 并发创建 → DuplicateKeyException → 回退到重试更新
+                log.warn("商家余额并发创建冲突，转为更新，tenantId={}", tenantId);
+                balance = getMerchantBalance(tenantId);
+                if (balance == null) throw new BusinessException("创建商家余额失败");
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    balance.setBalance(balance.getBalance().add(amount));
+                    balance.setTotalIncome(balance.getTotalIncome().add(amount));
+                    balance.setUpdateTime(LocalDateTime.now());
+                    if (merchantBalanceMapper.updateById(balance) > 0) break;
+                    balance = merchantBalanceMapper.selectById(balance.getId());
+                    if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+                }
+            }
         } else {
-            balance.setBalance(balance.getBalance().add(amount));
-            balance.setTotalIncome(balance.getTotalIncome().add(amount));
-            balance.setUpdateTime(LocalDateTime.now());
-            merchantBalanceMapper.updateById(balance);
+            // 更新余额（乐观锁重试）
+            for (int attempt = 0; attempt < 3; attempt++) {
+                balance.setBalance(balance.getBalance().add(amount));
+                balance.setTotalIncome(balance.getTotalIncome().add(amount));
+                balance.setUpdateTime(LocalDateTime.now());
+                if (merchantBalanceMapper.updateById(balance) > 0) break;
+                balance = merchantBalanceMapper.selectById(balance.getId());
+                if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            }
         }
 
         log.info("增加商家余额成功 tenantId={}, amount={}, balance={}, orderNo={}",
@@ -185,9 +205,17 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new BusinessException("商家余额不足");
         }
 
-        balance.setBalance(balance.getBalance().subtract(amount));
-        balance.setUpdateTime(LocalDateTime.now());
-        merchantBalanceMapper.updateById(balance);
+        // 扣减余额（乐观锁重试）
+        for (int attempt = 0; attempt < 3; attempt++) {
+            balance.setBalance(balance.getBalance().subtract(amount));
+            balance.setUpdateTime(LocalDateTime.now());
+            if (merchantBalanceMapper.updateById(balance) > 0) break;
+            balance = merchantBalanceMapper.selectById(balance.getId());
+            if (balance == null || balance.getBalance().compareTo(amount) < 0) {
+                throw new BusinessException("商家余额不足");
+            }
+            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+        }
 
         log.info("扣减商家余额成功 tenantId={}, amount={}, balance={}",
                 tenantId, amount, balance.getBalance());

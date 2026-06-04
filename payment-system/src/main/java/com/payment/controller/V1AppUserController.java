@@ -2,7 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
-import com.payment.entity.PlatformUser;
+import com.payment.dto.AppUserVO;
 import com.payment.service.PlatformIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ public class V1AppUserController {
 
     @SaCheckLogin
     @GetMapping("/me")
-    public Result<PlatformUser> getCurrentUser() {
-        return Result.success(platformIdentityService.getCurrentUser());
+    public Result<AppUserVO> getCurrentUser() {
+        return Result.success(AppUserVO.toVO(platformIdentityService.getCurrentUser()));
     }
 }

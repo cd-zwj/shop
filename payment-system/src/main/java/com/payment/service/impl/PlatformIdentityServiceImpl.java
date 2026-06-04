@@ -12,7 +12,7 @@ import com.payment.service.login.PlatformLoginHandler;
 import com.payment.service.login.PlatformLoginRequest;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,11 +28,11 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
 
     private final PlatformUserMapper platformUserMapper;
     private final Map<PlatformLoginTypeEnum, PlatformLoginHandler> loginHandlerMap;
+    private final PasswordEncoder passwordEncoder;
 
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
-
-    public PlatformIdentityServiceImpl(PlatformUserMapper platformUserMapper, List<PlatformLoginHandler> loginHandlers) {
+    public PlatformIdentityServiceImpl(PlatformUserMapper platformUserMapper, List<PlatformLoginHandler> loginHandlers, PasswordEncoder passwordEncoder) {
         this.platformUserMapper = platformUserMapper;
+        this.passwordEncoder = passwordEncoder;
         Map<PlatformLoginTypeEnum, PlatformLoginHandler> handlerMap = new EnumMap<>(PlatformLoginTypeEnum.class);
         for (PlatformLoginHandler loginHandler : loginHandlers) {
             handlerMap.put(loginHandler.supports(), loginHandler);

@@ -137,13 +137,37 @@ public class PointsServiceImpl implements PointsService {
             userPoints.setDeleted(0);
             userPoints.setCreateTime(LocalDateTime.now());
             userPoints.setUpdateTime(LocalDateTime.now());
-            userPointsMapper.insert(userPoints);
+            try {
+                userPointsMapper.insert(userPoints);
+            } catch (Exception e) {
+                // 并发创建时 DuplicateKeyException → 回退到重试更新
+                log.warn("积分记录并发创建冲突，转为更新，userId={}", userId);
+                userPoints = userPointsMapper.selectOne(
+                        new LambdaQueryWrapper<UserPoints>()
+                                .eq(UserPoints::getUserId, userId)
+                                .eq(UserPoints::getTenantId, tenantId)
+                                .eq(UserPoints::getDeleted, 0));
+                if (userPoints == null) {
+                    throw new BusinessException("创建积分记录失败");
+                }
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    userPoints.setPoints(userPoints.getPoints() + points);
+                    userPoints.setTotalEarned(userPoints.getTotalEarned() + points);
+                    userPoints.setUpdateTime(LocalDateTime.now());
+                    if (userPointsMapper.updateById(userPoints) > 0) break;
+                    userPoints = userPointsMapper.selectById(userPoints.getId());
+                }
+            }
         } else {
-            // 更新用户积分
-            userPoints.setPoints(userPoints.getPoints() + points);
-            userPoints.setTotalEarned(userPoints.getTotalEarned() + points);
-            userPoints.setUpdateTime(LocalDateTime.now());
-            userPointsMapper.updateById(userPoints);
+            // 更新用户积分（乐观锁重试）
+            for (int attempt = 0; attempt < 3; attempt++) {
+                userPoints.setPoints(userPoints.getPoints() + points);
+                userPoints.setTotalEarned(userPoints.getTotalEarned() + points);
+                userPoints.setUpdateTime(LocalDateTime.now());
+                if (userPointsMapper.updateById(userPoints) > 0) break;
+                userPoints = userPointsMapper.selectById(userPoints.getId());
+                if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            }
         }
         
         // 记录积分明细
@@ -187,11 +211,18 @@ public class PointsServiceImpl implements PointsService {
             throw new BusinessException("积分余额不足");
         }
         
-        // 扣减积分
-        userPoints.setPoints(userPoints.getPoints() - points);
-        userPoints.setTotalUsed(userPoints.getTotalUsed() + points);
-        userPoints.setUpdateTime(LocalDateTime.now());
-        userPointsMapper.updateById(userPoints);
+        // 扣减积分（乐观锁重试）
+        for (int attempt = 0; attempt < 3; attempt++) {
+            userPoints.setPoints(userPoints.getPoints() - points);
+            userPoints.setTotalUsed(userPoints.getTotalUsed() + points);
+            userPoints.setUpdateTime(LocalDateTime.now());
+            if (userPointsMapper.updateById(userPoints) > 0) break;
+            userPoints = userPointsMapper.selectById(userPoints.getId());
+            if (userPoints == null || userPoints.getPoints() < points) {
+                throw new BusinessException("积分余额不足");
+            }
+            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+        }
         
         // 记录积分明细
         PointsLog log = new PointsLog();

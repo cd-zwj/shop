@@ -1,5 +1,6 @@
 package com.payment.controller;
 
+import com.payment.dto.BillStatusVO;
 import com.payment.util.JsonUtils;
 import com.payment.common.Result;
 import com.payment.dto.PaymentCallbackDTO;
@@ -8,6 +9,7 @@ import com.payment.service.PaymentBillV1Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.util.HtmlUtils;
 
 import java.util.Map;
 
@@ -50,8 +52,12 @@ public class V1OpenPaymentController {
     }
 
     @GetMapping("/bills/{billNo}/status")
-    public Result<PaymentBill> syncBillStatus(@PathVariable String billNo) {
-        return Result.success(paymentBillV1Service.syncBillStatus(billNo));
+    public Result<BillStatusVO> syncBillStatus(@PathVariable String billNo) {
+        PaymentBill bill = paymentBillV1Service.syncBillStatus(billNo);
+        BillStatusVO vo = new BillStatusVO();
+        vo.setBillNo(bill.getBillNo());
+        vo.setPayStatus(bill.getPayStatus());
+        return Result.success(vo);
     }
 
     @GetMapping(value = "/returns/alipay-page", produces = MediaType.TEXT_HTML_VALUE)
@@ -99,7 +105,7 @@ public class V1OpenPaymentController {
     }
 
     private String safe(String value) {
-        return value == null ? "" : value;
+        return value == null ? "" : HtmlUtils.htmlEscape(value);
     }
 }
 

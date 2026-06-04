@@ -3,6 +3,7 @@ package com.payment.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -45,7 +46,10 @@ public class UserPoints implements Serializable {
     private Integer totalUsed;
     
     private Integer deleted;
-    
+
+    @Version
+    private Integer version;
+
     private LocalDateTime createTime;
     
     private LocalDateTime updateTime;

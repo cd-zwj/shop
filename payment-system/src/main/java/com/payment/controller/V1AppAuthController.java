@@ -1,7 +1,9 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.payment.annotation.RateLimit;
 import com.payment.common.Result;
+import com.payment.dto.AppUserVO;
 import com.payment.dto.PlatformLoginDTO;
 import com.payment.dto.PlatformRegisterDTO;
 import com.payment.entity.PlatformUser;
@@ -23,9 +25,10 @@ public class V1AppAuthController {
     private final AuthCaptchaService authCaptchaService;
     private final PlatformIdentityService platformIdentityService;
 
+    @RateLimit(prefix = "auth:register", window = 3600, maxRequests = 5, includeIp = true, message = "注册过于频繁，请稍后再试")
     @PostMapping("/register")
-    public Result<PlatformUser> register(@Valid @RequestBody PlatformRegisterDTO dto) {
-        return Result.success(platformIdentityService.register(dto));
+    public Result<AppUserVO> register(@Valid @RequestBody PlatformRegisterDTO dto) {
+        return Result.success(AppUserVO.toVO(platformIdentityService.register(dto)));
     }
 
     @PostMapping("/login/password")

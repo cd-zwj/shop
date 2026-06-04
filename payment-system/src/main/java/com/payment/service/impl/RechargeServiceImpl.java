@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.BusinessException;
 import com.payment.common.TenantContextHolder;
 import com.payment.dto.RechargeRuleDTO;
 import com.payment.entity.BalanceLog;
@@ -102,13 +103,13 @@ public class RechargeServiceImpl implements RechargeService {
         // 查询充值规则
         RechargeRule rule = rechargeRuleMapper.selectById(ruleId);
         if (rule == null || rule.getDeleted() == 1) {
-            throw new RuntimeException("充值规则不存在");
+            throw new BusinessException("充值规则不存在");
         }
         if (!rule.getTenantId().equals(tenantId)) {
-            throw new RuntimeException("充值规则不属于当前商家");
+            throw new BusinessException("充值规则不属于当前商家");
         }
         if (rule.getEnabled() == 0) {
-            throw new RuntimeException("充值规则已禁用");
+            throw new BusinessException("充值规则已禁用");
         }
         
         // 创建充值订单
@@ -150,30 +151,27 @@ public class RechargeServiceImpl implements RechargeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleRechargeCallback(String orderNo) {
-        // 查询充值订单
-        LambdaQueryWrapper<RechargeOrder> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(RechargeOrder::getOrderNo, orderNo)
-                .eq(RechargeOrder::getDeleted, 0);
-        RechargeOrder order = rechargeOrderMapper.selectOne(wrapper);
-        
-        if (order == null) {
-            throw new RuntimeException("充值订单不存在");
-        }
-        
-        if (order.getPayStatus() == 1) {
-            log.warn("充值订单 {} 已支付，忽略回调", orderNo);
+        // 幂等：原子地将 pay_status 从 0 更新为 1，只有首个线程 affectedRows == 1
+        int affected = rechargeOrderMapper.update(null, new LambdaQueryWrapper<RechargeOrder>()
+                .eq(RechargeOrder::getOrderNo, orderNo)
+                .eq(RechargeOrder::getPayStatus, 0)
+                .set(RechargeOrder::getPayStatus, 1)
+                .set(RechargeOrder::getPayTime, LocalDateTime.now()));
+        if (affected == 0) {
+            RechargeOrder existing = rechargeOrderMapper.selectOne(new LambdaQueryWrapper<RechargeOrder>()
+                    .eq(RechargeOrder::getOrderNo, orderNo));
+            if (existing == null) {
+                throw new BusinessException("充值订单不存在");
+            }
+            log.warn("充值订单 {} 已处理，忽略重复回调", orderNo);
             return;
         }
-        
-        // 更新订单状态
-        order.setPayStatus(1);
-        order.setPayTime(LocalDateTime.now());
-        rechargeOrderMapper.updateById(order);
-        
-        // 增加用户余额
+
+        // 查询订单用于入账
+        RechargeOrder order = rechargeOrderMapper.selectOne(new LambdaQueryWrapper<RechargeOrder>()
+                .eq(RechargeOrder::getOrderNo, orderNo));
         BigDecimal totalAmount = order.getRechargeAmount().add(order.getBonusAmount());
         addUserBalance(order.getUserId(), order.getTenantId(), totalAmount, "RECHARGE", "充值", orderNo);
-        
         log.info("充值订单 {} 支付成功，用户 {} 余额增加 {}", orderNo, order.getUserId(), totalAmount);
     }
     
@@ -192,7 +190,7 @@ public class RechargeServiceImpl implements RechargeService {
     @Transactional(rollbackFor = Exception.class)
     public void payWithBalance(Long userId, Long tenantId, String orderNo, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("支付金额必须大于0");
+            throw new BusinessException("支付金额必须大于0");
         }
         
         // 查询用户余额
@@ -203,14 +201,24 @@ public class RechargeServiceImpl implements RechargeService {
         UserBalance userBalance = userBalanceMapper.selectOne(wrapper);
         
         if (userBalance == null || userBalance.getBalance().compareTo(amount) < 0) {
-            throw new RuntimeException("余额不足");
+            throw new BusinessException("余额不足");
         }
         
-        // 扣减余额
-        userBalance.setBalance(userBalance.getBalance().subtract(amount));
-        userBalance.setTotalConsume(userBalance.getTotalConsume().add(amount));
-        userBalance.setUpdateTime(LocalDateTime.now());
-        userBalanceMapper.updateById(userBalance);
+        // 扣减余额（乐观锁重试）
+        for (int attempt = 0; attempt < 3; attempt++) {
+            userBalance.setBalance(userBalance.getBalance().subtract(amount));
+            userBalance.setTotalConsume(userBalance.getTotalConsume().add(amount));
+            userBalance.setUpdateTime(LocalDateTime.now());
+            if (userBalanceMapper.updateById(userBalance) > 0) break;
+            userBalance = userBalanceMapper.selectOne(new LambdaQueryWrapper<UserBalance>()
+                    .eq(UserBalance::getUserId, userId)
+                    .eq(UserBalance::getTenantId, tenantId)
+                    .eq(UserBalance::getDeleted, 0));
+            if (userBalance == null || userBalance.getBalance().compareTo(amount) < 0) {
+                throw new BusinessException("余额不足");
+            }
+            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+        }
         
         // 记录余额变动
         BalanceLog log = new BalanceLog();

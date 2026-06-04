@@ -1,0 +1,342 @@
+- generic [active] [ref=e1]:
+  - button "开启读屏标签" [ref=e2]
+  - generic: 读屏标签已关闭
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - link [ref=e7] [cursor=pointer]:
+        - /url: //www.douyin.com/jingxuan
+      - generic [ref=e13]:
+        - generic [ref=e15]:
+          - link "精选" [ref=e19] [cursor=pointer]:
+            - /url: https://www.douyin.com/jingxuan?from_nav=1
+            - generic [ref=e22]: 精选
+          - link "推荐" [ref=e27] [cursor=pointer]:
+            - /url: https://www.douyin.com/?recommend=1&from_nav=1
+            - generic [ref=e30]: 推荐
+          - link "搜索" [ref=e35] [cursor=pointer]:
+            - /url: https://www.douyin.com/aisearch?from_nav=1
+            - generic [ref=e38]: 搜索
+          - link "关注" [ref=e44] [cursor=pointer]:
+            - /url: https://www.douyin.com/follow?from_nav=1
+            - generic [ref=e47]: 关注
+          - link "朋友" [ref=e52] [cursor=pointer]:
+            - /url: https://www.douyin.com/friend?from_nav=1
+            - generic [ref=e55]: 朋友
+          - link "我的" [ref=e60] [cursor=pointer]:
+            - /url: https://www.douyin.com/user/self?from_nav=1
+            - generic [ref=e63]: 我的
+          - link "直播" [ref=e69] [cursor=pointer]:
+            - /url: https://live.douyin.com/?from_nav=1
+            - generic [ref=e72]: 直播
+          - link "放映厅" [ref=e77] [cursor=pointer]:
+            - /url: https://www.douyin.com/vs?from_nav=1
+            - generic [ref=e80]: 放映厅
+          - link "短剧" [ref=e85] [cursor=pointer]:
+            - /url: https://www.douyin.com/series?from_nav=1
+            - generic [ref=e88]: 短剧
+          - link "小游戏" [ref=e93] [cursor=pointer]:
+            - /url: https://www.douyin.com/microgame?from_nav=1
+            - generic [ref=e96]: 小游戏
+        - generic [ref=e99]:
+          - img [ref=e102]
+          - img [ref=e106]
+          - img [ref=e110]
+    - generic [ref=e113]:
+      - banner [ref=e116]:
+        - generic [ref=e118]:
+          - generic [ref=e122]:
+            - textbox "搜索你感兴趣的内容" [ref=e124]
+            - button "搜索" [ref=e126] [cursor=pointer]:
+              - img [ref=e127]
+              - generic [ref=e129]: 搜索
+          - generic [ref=e133]:
+            - generic [ref=e135] [cursor=pointer]:
+              - img [ref=e137]:
+                - img [ref=e138]
+              - paragraph [ref=e140]: 充钻石
+            - link "客户端" [ref=e145] [cursor=pointer]:
+              - /url: ""
+              - generic [ref=e147]:
+                - img [ref=e149]:
+                  - img [ref=e150]
+                - paragraph [ref=e153]: 客户端
+            - generic [ref=e155] [cursor=pointer]:
+              - img [ref=e157]:
+                - img [ref=e158]
+              - paragraph [ref=e160]: 壁纸
+            - list [ref=e161]:
+              - generic [ref=e165] [cursor=pointer]:
+                - img [ref=e167]:
+                  - img [ref=e168]
+                - paragraph [ref=e171]: 通知
+            - list [ref=e172]:
+              - generic [ref=e176] [cursor=pointer]:
+                - img [ref=e178]:
+                  - img [ref=e179]
+                - paragraph [ref=e183]: 私信
+            - generic [ref=e187] [cursor=pointer]:
+              - img [ref=e189]:
+                - img [ref=e190]
+              - paragraph [ref=e192]: 投稿
+            - button "登录" [ref=e196] [cursor=pointer]:
+              - paragraph [ref=e198]: 登录
+      - generic [ref=e200]:
+        - tablist [ref=e201]:
+          - tab "全部" [selected] [ref=e202]
+          - tab "公开课" [ref=e203] [cursor=pointer]
+          - tab "游戏" [ref=e204] [cursor=pointer]
+          - tab "二次元" [ref=e205] [cursor=pointer]
+          - tab "音乐" [ref=e206] [cursor=pointer]
+          - tab "影视" [ref=e207] [cursor=pointer]
+          - tab "美食" [ref=e208] [cursor=pointer]
+          - tab "知识" [ref=e209] [cursor=pointer]
+          - tab "小剧场" [ref=e210] [cursor=pointer]
+          - tab "生活vlog" [ref=e211] [cursor=pointer]
+          - tab "体育" [ref=e212] [cursor=pointer]
+          - tab "旅行" [ref=e213] [cursor=pointer]
+          - tab "亲子" [ref=e214] [cursor=pointer]
+          - tab "动物" [ref=e215] [cursor=pointer]
+          - tab "三农" [ref=e216] [cursor=pointer]
+          - tab "汽车" [ref=e217] [cursor=pointer]
+          - tab "美妆穿搭" [ref=e218] [cursor=pointer]
+        - tabpanel "全部" [ref=e220]:
+          - generic [ref=e226]:
+            - generic [ref=e231] [cursor=pointer]:
+              - 'img "《寻找格桑先生》预告 #ENEMY 主创最新作品。（不是电影宣发！老师们注意辨别！）#夏天煎饼" [ref=e233]'
+              - generic [ref=e236]:
+                - generic [ref=e237]: 02:19
+                - generic [ref=e239]: 572.7万
+            - generic [ref=e242] [cursor=pointer]:
+              - generic [ref=e244]:
+                - 'img "听说昂贵的澳龙在新西兰泛滥了，帅小伙带女友火速前往。。 #潘婷胜肽泡弹发膜" [ref=e246]'
+                - generic [ref=e249]:
+                  - generic [ref=e250]: 14:15
+                  - generic [ref=e252]: 89.7万
+              - generic [ref=e254]:
+                - generic [ref=e255]: "听说昂贵的澳龙在新西兰泛滥了，帅小伙带女友火速前往。。 #潘婷胜肽泡弹发膜"
+                - generic [ref=e257]:
+                  - generic [ref=e258]: "@大豪夫妇"
+                  - generic [ref=e259]: · 4月1日
+            - generic [ref=e262] [cursor=pointer]:
+              - generic [ref=e264]:
+                - img "来！不开心就来看快乐女孩上班的快乐 在自家小卖部上班的快乐你想象不到" [ref=e266]
+                - generic [ref=e269]:
+                  - generic [ref=e270]: 04:47
+                  - generic [ref=e272]: 6.7万
+              - generic [ref=e274]:
+                - generic [ref=e275]: 来！不开心就来看快乐女孩上班的快乐 在自家小卖部上班的快乐你想象不到
+                - generic [ref=e277]:
+                  - generic [ref=e278]: "@狂野大公牛"
+                  - generic [ref=e279]: · 18小时前
+            - generic [ref=e282] [cursor=pointer]:
+              - generic [ref=e284]:
+                - 'img "单局2700W 清图猛炫两队勇敢者 #三角洲行动 #我们三角洲玩家猛攻就是这样 #猛攻猛攻还是猛攻 #三角洲s9回声新赛季 #三角洲行动猛攻剧场" [ref=e286]'
+                - generic [ref=e289]:
+                  - generic [ref=e290]: 09:13
+                  - generic [ref=e292]: 27.5万
+              - generic [ref=e294]:
+                - generic [ref=e295]: "单局2700W 清图猛炫两队勇敢者 #三角洲行动 #我们三角洲玩家猛攻就是这样 #猛攻猛攻还是猛攻 #三角洲s9回声新赛季 #三角洲行动猛攻剧场"
+                - generic [ref=e297]:
+                  - generic [ref=e298]: "@林树（三角洲行动）"
+                  - generic [ref=e299]: · 2天前
+            - generic [ref=e302] [cursor=pointer]:
+              - generic [ref=e304]:
+                - 'img "24年过去，这部限制级喜剧电影，依然是我心中最好的青春片#电影解说 #色即是空 #经典影视 #校园青春 #青年创作者成长计划" [ref=e306]'
+                - generic [ref=e309]:
+                  - generic [ref=e310]: 12:55
+                  - generic [ref=e312]: 2.6万
+              - generic [ref=e314]:
+                - generic [ref=e315]: "24年过去，这部限制级喜剧电影，依然是我心中最好的青春片#电影解说 #色即是空 #经典影视 #校园青春 #青年创作者成长计划"
+                - generic [ref=e317]:
+                  - generic [ref=e318]: "@昌大人探影"
+                  - generic [ref=e319]: · 3月7日
+            - generic [ref=e322] [cursor=pointer]:
+              - generic [ref=e324]:
+                - 'img "高中生在校爽吃过程#高中生vlog #校园vlog #爽吃 #抖音精选高考应援联盟 #2026高考" [ref=e326]'
+                - generic [ref=e329]:
+                  - generic [ref=e330]: 05:55
+                  - generic [ref=e332]: 185.6万
+              - generic [ref=e334]:
+                - generic [ref=e335]: "高中生在校爽吃过程#高中生vlog #校园vlog #爽吃 #抖音精选高考应援联盟 #2026高考"
+                - generic [ref=e337]:
+                  - generic [ref=e338]: "@笑笑易"
+                  - generic [ref=e339]: · 5月15日
+            - generic [ref=e342] [cursor=pointer]:
+              - generic [ref=e344]:
+                - 'img "机甲8888万！冲击一个亿！ #武子弈 #大吉大利和平年 #和平精英地铁逃生 #地铁逃生炽焰灼心" [ref=e346]'
+                - generic [ref=e349]:
+                  - generic [ref=e350]: 06:17
+                  - generic [ref=e352]: 13.2万
+              - generic [ref=e354]:
+                - generic [ref=e355]: "机甲8888万！冲击一个亿！ #武子弈 #大吉大利和平年 #和平精英地铁逃生 #地铁逃生炽焰灼心"
+                - generic [ref=e357]:
+                  - generic [ref=e358]: "@武子弈（五子棋）"
+                  - generic [ref=e359]: · 3月2日
+            - generic [ref=e362] [cursor=pointer]:
+              - generic [ref=e364]:
+                - 'img "杯鼻龙——行走在二叠纪的植物收割机 #杯鼻龙 #二叠纪 #远古生物 #神奇动物在抖音 #科普一下" [ref=e366]'
+                - generic [ref=e369]:
+                  - generic [ref=e370]: 07:26
+                  - generic [ref=e372]: 4.4万
+              - generic [ref=e374]:
+                - generic [ref=e375]: "杯鼻龙——行走在二叠纪的植物收割机 #杯鼻龙 #二叠纪 #远古生物 #神奇动物在抖音 #科普一下"
+                - generic [ref=e377]:
+                  - generic [ref=e378]: "@科普新纪元"
+                  - generic [ref=e379]: · 4月29日
+            - generic [ref=e382] [cursor=pointer]:
+              - generic [ref=e384]:
+                - 'img "别 欺 负 天 津 小 学 生 #搞笑配音 #一本正经飚方言 #万万想不到 #天津话 #搞笑" [ref=e386]'
+                - generic [ref=e389]:
+                  - generic [ref=e390]: 03:02
+                  - generic [ref=e392]: 653.5万
+              - generic [ref=e394]:
+                - generic [ref=e395]: "别 欺 负 天 津 小 学 生 #搞笑配音 #一本正经飚方言 #万万想不到 #天津话 #搞笑"
+                - generic [ref=e397]:
+                  - generic [ref=e398]: "@肥龙和老西"
+                  - generic [ref=e399]: · 3月26日
+            - generic [ref=e402] [cursor=pointer]:
+              - generic [ref=e404]:
+                - 'img "一口气看完超猛恐怖片《狂犬病》 #惊悚 #恐怖片 #抖音午夜放映厅 #电影解说" [ref=e406]'
+                - generic [ref=e409]:
+                  - generic [ref=e410]: 11:30
+                  - generic [ref=e412]: 1.5万
+              - generic [ref=e414]:
+                - generic [ref=e415]: "一口气看完超猛恐怖片《狂犬病》 #惊悚 #恐怖片 #抖音午夜放映厅 #电影解说"
+                - generic [ref=e417]:
+                  - generic [ref=e418]: "@香猪探影"
+                  - generic [ref=e419]: · 4月24日
+  - generic [ref=e423]:
+    - tablist [ref=e424]:
+      - tab "全部" [selected] [ref=e425]
+      - tab "公开课" [ref=e426] [cursor=pointer]
+      - tab "游戏" [ref=e427] [cursor=pointer]
+      - tab "二次元" [ref=e428] [cursor=pointer]
+      - tab "音乐" [ref=e429] [cursor=pointer]
+      - tab "影视" [ref=e430] [cursor=pointer]
+      - tab "美食" [ref=e431] [cursor=pointer]
+      - tab "知识" [ref=e432] [cursor=pointer]
+      - tab "小剧场" [ref=e433] [cursor=pointer]
+      - tab "生活vlog" [ref=e434] [cursor=pointer]
+      - tab "体育" [ref=e435] [cursor=pointer]
+      - tab "旅行" [ref=e436] [cursor=pointer]
+      - tab "亲子" [ref=e437] [cursor=pointer]
+      - tab "动物" [ref=e438] [cursor=pointer]
+      - tab "三农" [ref=e439] [cursor=pointer]
+      - tab "汽车" [ref=e440] [cursor=pointer]
+      - tab "美妆穿搭" [ref=e441] [cursor=pointer]
+    - tabpanel "全部" [ref=e443]:
+      - generic [ref=e449]:
+        - generic [ref=e454] [cursor=pointer]:
+          - 'img "《寻找格桑先生》预告 #ENEMY 主创最新作品。（不是电影宣发！老师们注意辨别！）#夏天煎饼" [ref=e456]'
+          - generic [ref=e459]:
+            - generic [ref=e460]: 02:19
+            - generic [ref=e462]: 572.7万
+          - generic [ref=e469]:
+            - generic [ref=e470]:
+              - img [ref=e473]:
+                - img [ref=e474]
+              - generic [ref=e477]:
+                - generic [ref=e478]: 00:02
+                - generic [ref=e479]: /
+                - generic [ref=e480]: 02:19
+            - img [ref=e485]:
+              - img [ref=e486]
+        - generic [ref=e490] [cursor=pointer]:
+          - generic [ref=e492]:
+            - 'img "听说昂贵的澳龙在新西兰泛滥了，帅小伙带女友火速前往。。 #潘婷胜肽泡弹发膜" [ref=e494]'
+            - generic [ref=e497]:
+              - generic [ref=e498]: 14:15
+              - generic [ref=e500]: 89.7万
+          - generic [ref=e502]:
+            - generic [ref=e503]: "听说昂贵的澳龙在新西兰泛滥了，帅小伙带女友火速前往。。 #潘婷胜肽泡弹发膜"
+            - generic [ref=e505]:
+              - generic [ref=e506]: "@大豪夫妇"
+              - generic [ref=e507]: · 4月1日
+        - generic [ref=e510] [cursor=pointer]:
+          - generic [ref=e512]:
+            - img "来！不开心就来看快乐女孩上班的快乐 在自家小卖部上班的快乐你想象不到" [ref=e514]
+            - generic [ref=e517]:
+              - generic [ref=e518]: 04:47
+              - generic [ref=e520]: 6.7万
+          - generic [ref=e522]:
+            - generic [ref=e523]: 来！不开心就来看快乐女孩上班的快乐 在自家小卖部上班的快乐你想象不到
+            - generic [ref=e525]:
+              - generic [ref=e526]: "@狂野大公牛"
+              - generic [ref=e527]: · 18小时前
+        - generic [ref=e530] [cursor=pointer]:
+          - generic [ref=e532]:
+            - 'img "单局2700W 清图猛炫两队勇敢者 #三角洲行动 #我们三角洲玩家猛攻就是这样 #猛攻猛攻还是猛攻 #三角洲s9回声新赛季 #三角洲行动猛攻剧场" [ref=e534]'
+            - generic [ref=e537]:
+              - generic [ref=e538]: 09:13
+              - generic [ref=e540]: 27.5万
+          - generic [ref=e542]:
+            - generic [ref=e543]: "单局2700W 清图猛炫两队勇敢者 #三角洲行动 #我们三角洲玩家猛攻就是这样 #猛攻猛攻还是猛攻 #三角洲s9回声新赛季 #三角洲行动猛攻剧场"
+            - generic [ref=e545]:
+              - generic [ref=e546]: "@林树（三角洲行动）"
+              - generic [ref=e547]: · 2天前
+        - generic [ref=e550] [cursor=pointer]:
+          - generic [ref=e552]:
+            - 'img "24年过去，这部限制级喜剧电影，依然是我心中最好的青春片#电影解说 #色即是空 #经典影视 #校园青春 #青年创作者成长计划" [ref=e554]'
+            - generic [ref=e557]:
+              - generic [ref=e558]: 12:55
+              - generic [ref=e560]: 2.6万
+          - generic [ref=e562]:
+            - generic [ref=e563]: "24年过去，这部限制级喜剧电影，依然是我心中最好的青春片#电影解说 #色即是空 #经典影视 #校园青春 #青年创作者成长计划"
+            - generic [ref=e565]:
+              - generic [ref=e566]: "@昌大人探影"
+              - generic [ref=e567]: · 3月7日
+        - generic [ref=e570] [cursor=pointer]:
+          - generic [ref=e572]:
+            - 'img "高中生在校爽吃过程#高中生vlog #校园vlog #爽吃 #抖音精选高考应援联盟 #2026高考" [ref=e574]'
+            - generic [ref=e577]:
+              - generic [ref=e578]: 05:55
+              - generic [ref=e580]: 185.6万
+          - generic [ref=e582]:
+            - generic [ref=e583]: "高中生在校爽吃过程#高中生vlog #校园vlog #爽吃 #抖音精选高考应援联盟 #2026高考"
+            - generic [ref=e585]:
+              - generic [ref=e586]: "@笑笑易"
+              - generic [ref=e587]: · 5月15日
+        - generic [ref=e590] [cursor=pointer]:
+          - generic [ref=e592]:
+            - 'img "机甲8888万！冲击一个亿！ #武子弈 #大吉大利和平年 #和平精英地铁逃生 #地铁逃生炽焰灼心" [ref=e594]'
+            - generic [ref=e597]:
+              - generic [ref=e598]: 06:17
+              - generic [ref=e600]: 13.2万
+          - generic [ref=e602]:
+            - generic [ref=e603]: "机甲8888万！冲击一个亿！ #武子弈 #大吉大利和平年 #和平精英地铁逃生 #地铁逃生炽焰灼心"
+            - generic [ref=e605]:
+              - generic [ref=e606]: "@武子弈（五子棋）"
+              - generic [ref=e607]: · 3月2日
+        - generic [ref=e610] [cursor=pointer]:
+          - generic [ref=e612]:
+            - 'img "杯鼻龙——行走在二叠纪的植物收割机 #杯鼻龙 #二叠纪 #远古生物 #神奇动物在抖音 #科普一下" [ref=e614]'
+            - generic [ref=e617]:
+              - generic [ref=e618]: 07:26
+              - generic [ref=e620]: 4.4万
+          - generic [ref=e622]:
+            - generic [ref=e623]: "杯鼻龙——行走在二叠纪的植物收割机 #杯鼻龙 #二叠纪 #远古生物 #神奇动物在抖音 #科普一下"
+            - generic [ref=e625]:
+              - generic [ref=e626]: "@科普新纪元"
+              - generic [ref=e627]: · 4月29日
+        - generic [ref=e630] [cursor=pointer]:
+          - generic [ref=e632]:
+            - 'img "别 欺 负 天 津 小 学 生 #搞笑配音 #一本正经飚方言 #万万想不到 #天津话 #搞笑" [ref=e634]'
+            - generic [ref=e637]:
+              - generic [ref=e638]: 03:02
+              - generic [ref=e640]: 653.5万
+          - generic [ref=e642]:
+            - generic [ref=e643]: "别 欺 负 天 津 小 学 生 #搞笑配音 #一本正经飚方言 #万万想不到 #天津话 #搞笑"
+            - generic [ref=e645]:
+              - generic [ref=e646]: "@肥龙和老西"
+              - generic [ref=e647]: · 3月26日
+        - generic [ref=e650] [cursor=pointer]:
+          - generic [ref=e652]:
+            - 'img "一口气看完超猛恐怖片《狂犬病》 #惊悚 #恐怖片 #抖音午夜放映厅 #电影解说" [ref=e654]'
+            - generic [ref=e657]:
+              - generic [ref=e658]: 11:30
+              - generic [ref=e660]: 1.5万
+          - generic [ref=e662]:
+            - generic [ref=e663]: "一口气看完超猛恐怖片《狂犬病》 #惊悚 #恐怖片 #抖音午夜放映厅 #电影解说"
+            - generic [ref=e665]:
+              - generic [ref=e666]: "@香猪探影"
+              - generic [ref=e667]: · 4月24日

@@ -8,7 +8,7 @@ import com.payment.mapper.PlatformUserMapper;
 import com.payment.service.login.PlatformLoginHandler;
 import com.payment.service.login.PlatformLoginRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,8 +16,7 @@ import org.springframework.stereotype.Component;
 public class PasswordPlatformLoginHandler implements PlatformLoginHandler {
 
     private final PlatformUserMapper platformUserMapper;
-
-    private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public PlatformLoginTypeEnum supports() {
