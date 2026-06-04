@@ -2,8 +2,10 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.BusinessException;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
+import com.payment.enums.PointsDeductStatusEnum;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
 import com.payment.service.MemberPointsAccountService;
@@ -11,8 +13,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 /**
- * 商户会员积分服务。
+ * 会员积分账户服务实现类，用于实现会员积分账户相关业务逻辑。
  */
 @Service
 @RequiredArgsConstructor
@@ -21,6 +25,9 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     private final MemberPointsAccountMapper accountMapper;
     private final MemberPointsLogMapper logMapper;
 
+    /**
+     * 获取账号。
+     */
     @Override
     public MemberPointsAccount getAccount(Long tenantId, Long platformUserId) {
         MemberPointsAccount account = accountMapper.selectOne(new LambdaQueryWrapper<MemberPointsAccount>()
@@ -42,6 +49,9 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         return newAccount;
     }
 
+    /**
+     * 查询流水。
+     */
     @Override
     public Page<MemberPointsLog> listLogs(Long tenantId, Long platformUserId, Integer current, Integer size) {
         return logMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<MemberPointsLog>()
@@ -50,6 +60,9 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
                 .orderByDesc(MemberPointsLog::getCreateTime));
     }
 
+    /**
+     * 处理grant积分。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void grantPoints(Long tenantId, Long platformUserId, Integer points, String bizType, String bizNo, String remark) {
@@ -59,12 +72,14 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
         Integer before = account.getPoints();
-        Integer after = before + points;
+        Integer after = Math.addExact(before, points);
 
         account.setPoints(after);
-        account.setTotalEarned(account.getTotalEarned() + points);
-        account.setVersion(account.getVersion() + 1);
-        accountMapper.updateById(account);
+        account.setTotalEarned(Math.addExact(account.getTotalEarned(), points));
+        int affected = accountMapper.updateById(account);
+        if (affected == 0) {
+            throw new BusinessException("积分发放失败，请重试");
+        }
 
         MemberPointsLog log = new MemberPointsLog();
         log.setTenantId(tenantId);
@@ -74,7 +89,97 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setChangePoints(points);
         log.setPointsBefore(before);
         log.setPointsAfter(after);
+        log.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
         log.setRemark(remark);
         logMapper.insert(log);
+    }
+
+    /**
+     * 预占积分。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public MemberPointsLog holdPoints(Long tenantId, Long platformUserId, Integer points, String bizType, String bizNo, String remark) {
+        if (points == null || points <= 0) {
+            throw new BusinessException("预占积分必须大于0");
+        }
+
+        MemberPointsAccount account = getAccount(tenantId, platformUserId);
+        if (account.getPoints() < points) {
+            throw new BusinessException("会员积分不足");
+        }
+
+        Integer before = account.getPoints();
+        Integer after = Math.subtractExact(before, points);
+
+        account.setPoints(after);
+        account.setTotalUsed(Math.addExact(account.getTotalUsed(), points));
+        int affected = accountMapper.updateById(account);
+        if (affected == 0) {
+            throw new BusinessException("积分预占失败，请重试");
+        }
+
+        MemberPointsLog log = new MemberPointsLog();
+        log.setTenantId(tenantId);
+        log.setPlatformUserId(platformUserId);
+        log.setBizType(bizType);
+        log.setBizNo(bizNo);
+        log.setChangePoints(-points);
+        log.setPointsBefore(before);
+        log.setPointsAfter(after);
+        log.setStatus(PointsDeductStatusEnum.PRE_HOLD.name());
+        log.setRemark(remark);
+        logMapper.insert(log);
+        return log;
+    }
+
+    /**
+     * 确认积分预占。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void confirmPointsHold(Long tenantId, Long platformUserId, String bizType, String bizNo) {
+        MemberPointsLog log = getPreHoldLog(tenantId, platformUserId, bizType, bizNo);
+        if (log == null) {
+            return;
+        }
+        log.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
+        log.setConfirmTime(LocalDateTime.now());
+        logMapper.updateById(log);
+    }
+
+    /**
+     * 释放积分预占。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void releasePointsHold(Long tenantId, Long platformUserId, String bizType, String bizNo, String releaseReason) {
+        MemberPointsLog log = getPreHoldLog(tenantId, platformUserId, bizType, bizNo);
+        if (log == null) {
+            return;
+        }
+
+        MemberPointsAccount account = getAccount(tenantId, platformUserId);
+        Integer holdPoints = Math.abs(log.getChangePoints());
+        account.setPoints(Math.addExact(account.getPoints(), holdPoints));
+        account.setTotalUsed(Math.max(0, account.getTotalUsed() - holdPoints));
+        int affected = accountMapper.updateById(account);
+        if (affected == 0) {
+            throw new BusinessException("积分释放失败，请重试");
+        }
+
+        log.setStatus(PointsDeductStatusEnum.RELEASED.name());
+        log.setReleaseTime(LocalDateTime.now());
+        log.setReleaseReason(releaseReason);
+        logMapper.updateById(log);
+    }
+
+    private MemberPointsLog getPreHoldLog(Long tenantId, Long platformUserId, String bizType, String bizNo) {
+        return logMapper.selectOne(new LambdaQueryWrapper<MemberPointsLog>()
+                .eq(MemberPointsLog::getTenantId, tenantId)
+                .eq(MemberPointsLog::getPlatformUserId, platformUserId)
+                .eq(MemberPointsLog::getBizType, bizType)
+                .eq(MemberPointsLog::getBizNo, bizNo)
+                .eq(MemberPointsLog::getStatus, PointsDeductStatusEnum.PRE_HOLD.name()));
     }
 }

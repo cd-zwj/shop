@@ -5,9 +5,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.AppCreateOrderItemDTO;
+import com.payment.dto.pricing.DiscountSnapshotPlanVO;
+import com.payment.dto.pricing.OrderPricingItemDTO;
+import com.payment.dto.pricing.OrderPricingRequestDTO;
+import com.payment.dto.pricing.OrderPricingResultVO;
 import com.payment.dto.OrderPaymentVO;
 import com.payment.dto.PayResponseDTO;
 import com.payment.dto.SalesOrderDetailVO;
+import com.payment.entity.MemberPointsAccount;
+import com.payment.entity.OrderDiscountSnapshot;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PointsRule;
 import com.payment.entity.Product;
@@ -20,16 +26,21 @@ import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentBizTypeEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
+import com.payment.enums.DiscountSourceEnum;
 import com.payment.mapper.PointsRuleMapper;
 import com.payment.mapper.ProductMapper;
+import com.payment.mapper.OrderDiscountSnapshotMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.service.AppOrderService;
+import com.payment.service.CouponService;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantWalletService;
+import com.payment.service.OrderPricingService;
 import com.payment.service.PaymentBillV1Service;
+import com.payment.service.PromotionService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
@@ -49,9 +60,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 用户端订单服务。
- *
- * 本次按商品明细重算订单金额，并把订单头、订单明细和钱包扣款放在同一条链路里。
+ * 用户端订单服务实现类，用于实现用户端订单相关业务逻辑。
  */
 @Service
 @RequiredArgsConstructor
@@ -68,16 +77,23 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final WithdrawalService withdrawalService;
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsRuleMapper pointsRuleMapper;
+    private final OrderPricingService orderPricingService;
+    private final CouponService couponService;
+    private final PromotionService promotionService;
+    private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
 
+    /**
+     * 创建订单。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderPaymentVO createOrder(Long platformUserId, AppCreateOrderDTO dto) {
         List<OrderLine> orderLines = buildOrderLines(dto);
         ensureTenantMember(dto.getTenantId(), platformUserId);
 
-        BigDecimal totalAmount = calculateTotalAmount(orderLines);
-        WalletSplit split = calculateWalletSplit(platformUserId, dto, totalAmount);
         String orderNo = BizNoGenerator.generate("SO");
+        OrderPricingResultVO pricingResult = orderPricingService.calculate(buildPricingRequest(platformUserId, dto, orderLines, orderNo));
+        WalletSplit split = calculateWalletSplit(platformUserId, dto, pricingResult.getPayableAmount());
 
         SalesOrder salesOrder = new SalesOrder();
         salesOrder.setOrderNo(orderNo);
@@ -87,13 +103,14 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setPayStatus(split.externalPayAmount.compareTo(BigDecimal.ZERO) == 0
                 ? PayStatusEnum.SUCCESS.name()
                 : PayStatusEnum.WAIT_PAY.name());
-        salesOrder.setTotalAmount(totalAmount);
-        salesOrder.setDiscountAmount(BigDecimal.ZERO);
+        salesOrder.setTotalAmount(pricingResult.getTotalAmount());
+        salesOrder.setDiscountAmount(pricingResult.getActivityDiscountAmount().add(pricingResult.getCouponDiscountAmount()));
+        salesOrder.setPointsDeductAmount(pricingResult.getPointsDeductAmount());
         salesOrder.setWalletDeductAmount(split.unifiedWalletAmount.add(split.merchantWalletAmount));
         salesOrder.setUnifiedWalletDeductAmount(split.unifiedWalletAmount);
         salesOrder.setMerchantWalletDeductAmount(split.merchantWalletAmount);
         salesOrder.setExternalPayAmount(split.externalPayAmount);
-        salesOrder.setPayableAmount(totalAmount);
+        salesOrder.setPayableAmount(pricingResult.getPayableAmount());
         salesOrder.setSubject(resolveSubject(dto.getSubject(), orderLines));
         salesOrder.setSource(dto.getSource());
         salesOrder.setWalletStrategy(dto.getWalletStrategy().name());
@@ -102,6 +119,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrderMapper.insert(salesOrder);
 
         insertOrderItems(salesOrder, orderLines);
+        insertDiscountSnapshots(salesOrder, pricingResult.getDiscountSnapshots());
+        lockCouponIfNeeded(dto, salesOrder, pricingResult);
+        holdPointsIfNeeded(salesOrder, pricingResult);
 
         // 钱包金额在下单时直接扣减，取消订单时再按原路径回补。
         if (split.unifiedWalletAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -136,6 +156,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         return result;
     }
 
+    /**
+     * 查询订单。
+     */
     @Override
     public Page<SalesOrder> listOrders(Long platformUserId, Integer current, Integer size) {
         return salesOrderMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<SalesOrder>()
@@ -144,6 +167,9 @@ public class AppOrderServiceImpl implements AppOrderService {
                 .orderByDesc(SalesOrder::getCreateTime));
     }
 
+    /**
+     * 获取订单No。
+     */
     @Override
     public SalesOrder getByOrderNo(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
@@ -156,12 +182,18 @@ public class AppOrderServiceImpl implements AppOrderService {
         return salesOrder;
     }
 
+    /**
+     * 获取订单Detail。
+     */
     @Override
     public SalesOrderDetailVO getOrderDetail(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
         return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
     }
 
+    /**
+     * 获取商家端订单Detail。
+     */
     @Override
     public SalesOrderDetailVO getMerchantOrderDetail(Long tenantId, Long platformUserId, String orderNo) {
         TenantEmployee tenantEmployee = tenantEmployeeMapper.selectOne(new LambdaQueryWrapper<TenantEmployee>()
@@ -183,6 +215,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
     }
 
+    /**
+     * 查询商家端订单。
+     */
     @Override
     public Page<SalesOrder> listMerchantOrders(Long tenantId, Integer current, Integer size, String orderStatus, String payStatus, String keyword) {
         return salesOrderMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<SalesOrder>()
@@ -196,12 +231,18 @@ public class AppOrderServiceImpl implements AppOrderService {
                 .orderByDesc(SalesOrder::getCreateTime));
     }
 
+    /**
+     * 查询订单Item。
+     */
     @Override
     public List<SalesOrderItem> listOrderItems(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
         return salesOrderItemMapper.selectByOrderId(salesOrder.getId());
     }
 
+    /**
+     * 处理repay订单。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderPaymentVO repayOrder(Long platformUserId, String orderNo, PaymentChannelCodeEnum paymentChannelCode) {
@@ -249,6 +290,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         return result;
     }
 
+    /**
+     * 判断是否可以cel订单。
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long platformUserId, String orderNo) {
@@ -266,6 +310,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         if (salesOrder.getMerchantWalletDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
             merchantWalletService.credit(salesOrder.getTenantId(), platformUserId, salesOrder.getMerchantWalletDeductAmount(), "ORDER_CANCEL_REFUND", orderNo, "取消订单回退");
         }
+        releaseDiscountAssets(salesOrder, "订单取消");
 
         salesOrder.setOrderStatus(OrderStatusEnum.CANCELLED.name());
         salesOrder.setPayStatus(PayStatusEnum.CLOSED.name());
@@ -289,6 +334,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
     }
 
+    /**
+     * 构建订单Line。
+     */
     private List<OrderLine> buildOrderLines(AppCreateOrderDTO dto) {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
             throw new BusinessException("订单商品明细不能为空");
@@ -338,12 +386,100 @@ public class AppOrderServiceImpl implements AppOrderService {
         return orderLines;
     }
 
+    /**
+     * 处理calculateTotalAmount。
+     */
     private BigDecimal calculateTotalAmount(List<OrderLine> orderLines) {
         return orderLines.stream()
                 .map(OrderLine::subtotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    private OrderPricingRequestDTO buildPricingRequest(Long platformUserId,
+                                                       AppCreateOrderDTO dto,
+                                                       List<OrderLine> orderLines,
+                                                       String orderNo) {
+        OrderPricingRequestDTO request = new OrderPricingRequestDTO();
+        request.setTenantId(dto.getTenantId());
+        request.setPlatformUserId(platformUserId);
+        request.setOrderNo(orderNo);
+        List<OrderPricingItemDTO> pricingItems = orderLines.stream().map(this::toPricingItem).collect(Collectors.toList());
+        request.setItems(pricingItems);
+        request.setPromotionCandidates(promotionService.matchPromotions(dto.getTenantId(), pricingItems));
+        request.setSelectedCoupon(couponService.resolveCouponCandidate(
+                dto.getSelectedUserCouponId(),
+                dto.getTenantId(),
+                platformUserId,
+                pricingItems
+        ));
+        request.setRequestedPoints(dto.getRequestedPoints());
+        MemberPointsAccount pointsAccount = memberPointsAccountService.getAccount(dto.getTenantId(), platformUserId);
+        request.setAvailablePoints(pointsAccount == null ? 0 : pointsAccount.getPoints());
+        request.setPointAmount(new BigDecimal("0.01"));
+        return request;
+    }
+
+    private OrderPricingItemDTO toPricingItem(OrderLine orderLine) {
+        OrderPricingItemDTO item = new OrderPricingItemDTO();
+        item.setProductId(orderLine.product().getId());
+        item.setCategory(orderLine.product().getCategory());
+        item.setUnitPrice(orderLine.product().getPrice());
+        item.setQuantity(orderLine.quantity());
+        return item;
+    }
+
+    private void insertDiscountSnapshots(SalesOrder salesOrder, List<DiscountSnapshotPlanVO> snapshots) {
+        if (snapshots == null || snapshots.isEmpty()) {
+            return;
+        }
+        for (DiscountSnapshotPlanVO snapshot : snapshots) {
+            OrderDiscountSnapshot entity = new OrderDiscountSnapshot();
+            entity.setOrderId(salesOrder.getId());
+            entity.setOrderNo(salesOrder.getOrderNo());
+            entity.setTenantId(salesOrder.getTenantId());
+            entity.setActivityId(snapshot.getActivityId());
+            entity.setActivityRuleId(snapshot.getActivityRuleId());
+            entity.setUserCouponId(snapshot.getUserCouponId());
+            entity.setCouponTemplateId(snapshot.getCouponTemplateId());
+            entity.setDiscountSource(snapshot.getDiscountSource());
+            entity.setDiscountType(snapshot.getDiscountType());
+            entity.setDiscountAmount(snapshot.getDiscountAmount());
+            entity.setRuleSnapshotJson(snapshot.getRuleSnapshotJson());
+            orderDiscountSnapshotMapper.insert(entity);
+        }
+    }
+
+    private void lockCouponIfNeeded(AppCreateOrderDTO dto, SalesOrder salesOrder, OrderPricingResultVO pricingResult) {
+        if (dto.getSelectedUserCouponId() == null || pricingResult.getCouponDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        couponService.lockCoupon(
+                dto.getSelectedUserCouponId(),
+                salesOrder.getTenantId(),
+                salesOrder.getPlatformUserId(),
+                salesOrder.getId(),
+                salesOrder.getOrderNo(),
+                salesOrder.getOrderNo()
+        );
+    }
+
+    private void holdPointsIfNeeded(SalesOrder salesOrder, OrderPricingResultVO pricingResult) {
+        if (pricingResult.getPointsPlan() == null || !Boolean.TRUE.equals(pricingResult.getPointsPlan().getNeedHold())) {
+            return;
+        }
+        memberPointsAccountService.holdPoints(
+                salesOrder.getTenantId(),
+                salesOrder.getPlatformUserId(),
+                pricingResult.getPointsPlan().getHoldPoints(),
+                "ORDER_DEDUCT",
+                salesOrder.getOrderNo(),
+                "订单积分预占"
+        );
+    }
+
+    /**
+     * 新增订单Item。
+     */
     private void insertOrderItems(SalesOrder salesOrder, List<OrderLine> orderLines) {
         for (OrderLine orderLine : orderLines) {
             SalesOrderItem orderItem = new SalesOrderItem();
@@ -359,6 +495,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
     }
 
+    /**
+     * 处理ensure租户会员。
+     */
     private void ensureTenantMember(Long tenantId, Long platformUserId) {
         TenantMember tenantMember = tenantMemberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
                 .eq(TenantMember::getTenantId, tenantId)
@@ -376,6 +515,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         tenantMemberMapper.insert(newTenantMember);
     }
 
+    /**
+     * 解析Subject。
+     */
     private String resolveSubject(String subject, List<OrderLine> orderLines) {
         if (StringUtils.hasText(subject)) {
             return subject.trim();
@@ -388,6 +530,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         return firstLine.product().getName() + "等" + orderLines.size() + "件商品";
     }
 
+    /**
+     * 处理calculate钱包Split。
+     */
     private WalletSplit calculateWalletSplit(Long platformUserId, AppCreateOrderDTO dto, BigDecimal totalAmount) {
         BigDecimal unifiedBalance = unifiedWalletService.getWallet(platformUserId).getAvailableAmount();
         BigDecimal merchantBalance = merchantWalletService.getWallet(dto.getTenantId(), platformUserId).getAvailableAmount();
@@ -403,6 +548,9 @@ public class AppOrderServiceImpl implements AppOrderService {
         };
     }
 
+    /**
+     * 处理calculateSingle钱包。
+     */
     private WalletSplit calculateSingleWallet(BigDecimal totalAmount,
                                               BigDecimal balance,
                                               boolean allowFallback,
@@ -413,9 +561,15 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
 
         BigDecimal external = totalAmount.subtract(used);
+        /**
+         * 处理钱包Split。
+         */
         return unifiedFirst
                 ? new WalletSplit(used, BigDecimal.ZERO, external)
                 : new WalletSplit(BigDecimal.ZERO, used, external);
+    /**
+     * 处理calculateChained钱包。
+     */
     }
 
     private WalletSplit calculateChainedWallet(BigDecimal totalAmount,
@@ -476,7 +630,8 @@ public class AppOrderServiceImpl implements AppOrderService {
      * 纯钱包支付没有外部回调，直接在本地事务里完成结算。
      */
     private void settlePaidOrder(SalesOrder salesOrder) {
-        BigDecimal settlementAmount = salesOrder.getTotalAmount().subtract(salesOrder.getMerchantWalletDeductAmount());
+        confirmDiscountAssets(salesOrder);
+        BigDecimal settlementAmount = salesOrder.getPayableAmount().subtract(salesOrder.getMerchantWalletDeductAmount());
         if (settlementAmount.compareTo(BigDecimal.ZERO) > 0) {
             withdrawalService.addMerchantBalance(salesOrder.getTenantId(), settlementAmount, salesOrder.getOrderNo());
         }
@@ -504,10 +659,68 @@ public class AppOrderServiceImpl implements AppOrderService {
         vo.setOrderStatus(salesOrder.getOrderStatus());
         vo.setPayStatus(salesOrder.getPayStatus());
         vo.setTotalAmount(salesOrder.getTotalAmount());
+        vo.setDiscountAmount(salesOrder.getDiscountAmount());
+        vo.setPointsDeductAmount(salesOrder.getPointsDeductAmount());
+        vo.setPayableAmount(salesOrder.getPayableAmount());
         vo.setUnifiedWalletDeductAmount(salesOrder.getUnifiedWalletDeductAmount());
         vo.setMerchantWalletDeductAmount(salesOrder.getMerchantWalletDeductAmount());
         vo.setExternalPayAmount(salesOrder.getExternalPayAmount());
         return vo;
+    }
+
+    private void confirmDiscountAssets(SalesOrder salesOrder) {
+        List<OrderDiscountSnapshot> snapshots = listDiscountSnapshots(salesOrder.getOrderNo());
+        for (OrderDiscountSnapshot snapshot : snapshots) {
+            if (DiscountSourceEnum.COUPON.name().equals(snapshot.getDiscountSource()) && snapshot.getUserCouponId() != null) {
+                couponService.writeOffCoupon(
+                        snapshot.getUserCouponId(),
+                        salesOrder.getTenantId(),
+                        salesOrder.getId(),
+                        salesOrder.getOrderNo(),
+                        salesOrder.getOrderNo(),
+                        snapshot.getDiscountAmount()
+                );
+            }
+        }
+        if (salesOrder.getPointsDeductAmount() != null && salesOrder.getPointsDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
+            memberPointsAccountService.confirmPointsHold(
+                    salesOrder.getTenantId(),
+                    salesOrder.getPlatformUserId(),
+                    "ORDER_DEDUCT",
+                    salesOrder.getOrderNo()
+            );
+        }
+    }
+
+    private void releaseDiscountAssets(SalesOrder salesOrder, String releaseReason) {
+        List<OrderDiscountSnapshot> snapshots = listDiscountSnapshots(salesOrder.getOrderNo());
+        for (OrderDiscountSnapshot snapshot : snapshots) {
+            if (DiscountSourceEnum.COUPON.name().equals(snapshot.getDiscountSource()) && snapshot.getUserCouponId() != null) {
+                couponService.releaseCoupon(
+                        snapshot.getUserCouponId(),
+                        salesOrder.getTenantId(),
+                        salesOrder.getPlatformUserId(),
+                        salesOrder.getId(),
+                        salesOrder.getOrderNo(),
+                        salesOrder.getOrderNo(),
+                        releaseReason
+                );
+            }
+        }
+        if (salesOrder.getPointsDeductAmount() != null && salesOrder.getPointsDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
+            memberPointsAccountService.releasePointsHold(
+                    salesOrder.getTenantId(),
+                    salesOrder.getPlatformUserId(),
+                    "ORDER_DEDUCT",
+                    salesOrder.getOrderNo(),
+                    releaseReason
+            );
+        }
+    }
+
+    private List<OrderDiscountSnapshot> listDiscountSnapshots(String orderNo) {
+        return orderDiscountSnapshotMapper.selectList(new LambdaQueryWrapper<OrderDiscountSnapshot>()
+                .eq(OrderDiscountSnapshot::getOrderNo, orderNo));
     }
 
     private PaymentBill resolveReusablePaymentBill(List<PaymentBill> paymentBills, SalesOrder salesOrder) {

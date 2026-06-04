@@ -6,14 +6,16 @@ server:
 spring:
   application:
     name: payment-system
-  
-  # 数据源配置
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # 数据源配置（敏感信息由 application-{profile}.yml 或环境变量提供）
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/payment_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    url: ${DB_URL:jdbc:mysql://localhost:3306/payment_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
     druid:
       initial-size: 5
       min-idle: 5
@@ -29,9 +31,9 @@ spring:
   # Redis配置
   data:
     redis:
-      host: 39.108.175.183
-      port: 6379
-      password: # 如果Redis设置了密码，请在此填写
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       database: 0
       timeout: 5000ms
       jedis:
@@ -43,10 +45,10 @@ spring:
 
   # RabbitMQ配置
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:}
+    password: ${RABBITMQ_PASSWORD:}
     virtual-host: /
     publisher-returns: true
     listener:
@@ -59,9 +61,25 @@ spring:
 
   # Elasticsearch配置
   elasticsearch:
-    uris: http://8.148.252.193/:9200
-    username: 
-    password: 
+    uris: ${ES_URIS:http://localhost:9200}
+    username: ${ES_USERNAME:}
+    password: ${ES_PASSWORD:}
+
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 # MyBatis Plus配置
 mybatis-plus:
@@ -78,89 +96,95 @@ mybatis-plus:
 
 # 支付配置
 payment:
-  # 充值订单超时时间（分钟）
   recharge-order-timeout-minutes: 15
   wechat:
-    app-id: your-wechat-appid
-    mch-id: your-wechat-mch-id
-    api-v3-key: your-wechat-api-v3-key
-    cert-path: classpath:cert/wechat/apiclient_cert.pem # 商户API证书路径
-    key-path: classpath:cert/wechat/apiclient_key.pem   # 商户API私钥路径
-    notify-url: http://your-domain.com/api/payment/wechat/notify
-    # 商户API证书序列号（从商户平台获取）
-    merchant-serial-number: your-merchant-serial-number
-    # 私钥内容（可选，如果不使用key-path文件方式）
-    private-key:
+    app-id: ${WECHAT_APP_ID:}
+    mch-id: ${WECHAT_MCH_ID:}
+    api-v3-key: ${WECHAT_API_V3_KEY:}
+    cert-path: classpath:cert/wechat/apiclient_cert.pem
+    key-path: classpath:cert/wechat/apiclient_key.pem
+    notify-url: ${WECHAT_NOTIFY_URL:http://your-domain.com/api/payment/wechat/notify}
+    merchant-serial-number: ${WECHAT_MERCHANT_SERIAL:}
+    private-key: ${WECHAT_PRIVATE_KEY:}
   alipay:
-    app-id: your-alipay-appid
-    private-key: your-alipay-private-key
-    public-key: your-alipay-public-key
+    app-id: ${ALIPAY_APP_ID:}
+    private-key: ${ALIPAY_PRIVATE_KEY:}
+    public-key: ${ALIPAY_PUBLIC_KEY:}
     gateway-url: https://openapi.alipay.com/gateway.do
-    notify-url: http://your-domain.com/api/v1/open/payments/callbacks/alipay-page
-    return-url: http://your-domain.com/api/v1/open/payments/returns/alipay-page
+    notify-url: ${ALIPAY_NOTIFY_URL:http://your-domain.com/api/v1/open/payments/callbacks/alipay-page}
+    return-url: ${ALIPAY_RETURN_URL:http://your-domain.com/api/v1/open/payments/returns/alipay-page}
   ext-provider:
-    base-url: https://pay.myzfw.com
-    merchant-id:
-    merchant-key:
-    notify-url: http://your-domain.com/api/v1/open/payments/callbacks/ext-provider
-    return-url: http://your-domain.com/pay/return
+    base-url: ${EXT_PAY_BASE_URL:https://pay.myzfw.com}
+    merchant-id: ${EXT_PAY_MERCHANT_ID:}
+    merchant-key: ${EXT_PAY_MERCHANT_KEY:}
+    notify-url: ${EXT_PAY_NOTIFY_URL:http://your-domain.com/api/v1/open/payments/callbacks/ext-provider}
+    return-url: ${EXT_PAY_RETURN_URL:http://your-domain.com/pay/return}
     default-pay-type: alipay
     default-device: pc
     client-ip: 127.0.0.1
 
-# AI模块配置
+# AI模块配置（API Key 由 profile 或环境变量提供）
 langchain4j:
   community:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   open-ai:
     embedding-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${AI_API_KEY:}
       model-name: text-embedding-v3
       log-requests: true
       log-responses: true
     streaming-chat-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${AI_API_KEY:}
       model-name: qwen-plus
       log-requests: true
       log-responses: true
     chat-model:
-      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api-key: sk-bc948e95ccd54c90922f48a42fd0a530
+      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${AI_API_KEY:}
       model-name: qwen-plus
       log-requests: true
       log-responses: true
 
 sa-token:
   token-name: Authorization
-  timeout: 86400          # token有效期(秒) = 24小时
-  active-timeout: -1      # token临时有效期
-  is-concurrent: true     # 是否允许同账号并发登录
-  is-share: true          # 多账号共享token
-  token-style: uuid       # token风格
-  is-log: true            # 是否输出日志
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: true
 
 # JWT配置
 jwt:
-  # 随机生成的256位安全密钥（请勿在生产环境中使用此示例密钥）
-  secret: 7K9mP2nQ5rT8wX1zA4bC6dE9fH2jK5mN8pR1sU4vW7yZ0aB3cD6eF9gH2iJ5kL8n
-  expiration: 86400000 # 24小时
+  secret: ${JWT_SECRET:}
+  expiration: 86400000
 
 # 文件上传配置
 file:
   upload-path: /uploads
-  max-size: 10485760 # 10MB
+  max-size: 10485760
+
+app:
+  auth:
+    email:
+      enabled: ${MAIL_ENABLED:false}
+      from: ${MAIL_FROM:}
+      subject-prefix: ${MAIL_SUBJECT_PREFIX:[SalesSystem]}
+      code-ttl-minutes: ${MAIL_CODE_TTL_MINUTES:10}
+      send-cooldown-seconds: ${MAIL_SEND_COOLDOWN_SECONDS:60}
+      max-daily-send-count: ${MAIL_MAX_DAILY_SEND_COUNT:20}
 
 minio:
-  endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin
-  bucket-name: payment-system
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:}
+  secret-key: ${MINIO_SECRET_KEY:}
+  bucket-name: ${MINIO_BUCKET:payment-system}
   path-prefix: uploads/
-  url-expiry-days: 7  # 预签名URL有效期（天）
+  url-expiry-days: 7
 
 # Netty配置
 netty:
@@ -168,4 +192,3 @@ netty:
     port: 8888
     boss-threads: 1
     worker-threads: 4
-
