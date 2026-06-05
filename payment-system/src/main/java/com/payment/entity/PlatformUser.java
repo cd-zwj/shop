@@ -20,6 +20,7 @@ public class PlatformUser implements Serializable {
     private String phone;
     private String email;
     private String passwordHash;
+    private Integer emailVerified;
     private Integer status;
     private Integer deleted;
     private LocalDateTime createTime;

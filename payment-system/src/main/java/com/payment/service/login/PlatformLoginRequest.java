@@ -25,4 +25,8 @@ public record PlatformLoginRequest(
     public static PlatformLoginRequest thirdParty(String authType, String authKey) {
         return new PlatformLoginRequest(PlatformLoginTypeEnum.THIRD_PARTY, authType, authKey);
     }
+
+    public static PlatformLoginRequest email(String email, String code) {
+        return new PlatformLoginRequest(PlatformLoginTypeEnum.EMAIL, email, code);
+    }
 }

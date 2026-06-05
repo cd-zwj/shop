@@ -21,9 +21,13 @@ import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
+import com.payment.mapper.OrderDiscountSnapshotMapper;
+import com.payment.service.CouponService;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantWalletService;
+import com.payment.service.OrderPricingService;
 import com.payment.service.PaymentBillV1Service;
+import com.payment.service.PromotionService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.WithdrawalService;
 import org.junit.jupiter.api.Test;
@@ -61,6 +65,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -73,7 +81,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
@@ -141,6 +153,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -153,7 +169,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
@@ -195,6 +215,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -207,7 +231,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(1L, 10L, "别家商品", "9.90")));
@@ -234,6 +262,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -246,7 +278,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         when(tenantEmployeeMapper.selectOne(any())).thenReturn(null);
@@ -267,6 +303,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -279,7 +319,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         SalesOrder salesOrder = new SalesOrder();
@@ -337,6 +381,10 @@ class AppOrderServiceImplTest {
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -349,7 +397,11 @@ class AppOrderServiceImplTest {
                 paymentBillV1Service,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper
         );
 
         SalesOrder salesOrder = new SalesOrder();

@@ -3,6 +3,7 @@ package com.payment.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
@@ -35,7 +36,7 @@ public class V1MerchantProductController {
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
     @GetMapping
-    public Result<Page<V1MerchantProductVO>> listProducts(@PathVariable Long tenantId,
+    public Result<PageResult<V1MerchantProductVO>> listProducts(@PathVariable Long tenantId,
                                                           @RequestParam(defaultValue = "1") Integer current,
                                                           @RequestParam(defaultValue = "10") Integer size,
                                                           @RequestParam(required = false) String search,
@@ -60,9 +61,7 @@ public class V1MerchantProductController {
                 .filter(item -> !"out_of_stock".equalsIgnoreCase(status) || item.getStock() == 0)
                 .toList();
 
-        Page<V1MerchantProductVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
-        result.setRecords(records);
-        return Result.success(result);
+        return Result.success(new PageResult<>(records, page.getTotal(), (int) page.getCurrent(), (int) page.getSize()));
     }
 
     @GetMapping("/{productId}")

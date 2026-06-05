@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.SalesOrder;
@@ -26,18 +27,17 @@ public class V1MerchantOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<Page<SalesOrder>> listOrders(@PathVariable Long tenantId,
-                                               @RequestParam(defaultValue = "1") Integer current,
-                                               @RequestParam(defaultValue = "10") Integer size,
-                                               @RequestParam(required = false) String orderStatus,
-                                               @RequestParam(required = false) String payStatus,
-                                               @RequestParam(required = false) String keyword) {
+    public Result<PageResult<SalesOrder>> listOrders(@PathVariable Long tenantId,
+                                                      @RequestParam(defaultValue = "1") Integer current,
+                                                      @RequestParam(defaultValue = "10") Integer size,
+                                                      @RequestParam(required = false) String orderStatus,
+                                                      @RequestParam(required = false) String payStatus,
+                                                      @RequestParam(required = false) String keyword) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
 
-        Page<SalesOrder> page = new Page<>(current, size);
         Page<SalesOrder> result = appOrderService.listMerchantOrders(tenantId, current, size, orderStatus, payStatus, keyword);
-        return Result.success(result);
+        return Result.success(PageResult.from(result));
     }
 
     @SaCheckLogin

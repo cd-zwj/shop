@@ -24,6 +24,7 @@ public class SalesOrder implements Serializable {
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;
     private BigDecimal walletDeductAmount;
+    private BigDecimal pointsDeductAmount;
     private BigDecimal unifiedWalletDeductAmount;
     private BigDecimal merchantWalletDeductAmount;
     private BigDecimal externalPayAmount;

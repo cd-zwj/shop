@@ -1,15 +1,35 @@
 package com.payment.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Web配置类
- * Sa-Token的拦截器配置已移动到 SaTokenConfig.java
+ * Web 配置 -- 全局 CORS。
+ * 使用 CorsFilter（Servlet Filter 级别）而非 addCorsMappings（Interceptor 级别），
+ * 确保 OPTIONS 预检请求在 Sa-Token SaInterceptor 之前获得 CORS 响应头。
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    // 原有的 JwtAuthInterceptor 已移除，使用 Sa-Token 接管鉴权
+    @Bean
+    public CorsFilter corsFilter() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.addAllowedOrigin("http://localhost:5173");
+        config.addAllowedOrigin("http://localhost:3000");
+        config.setAllowCredentials(true);
+        config.addAllowedHeader("*");
+        config.addAllowedMethod("*");
+        config.addExposedHeader("Authorization");
+        config.addExposedHeader("Content-Disposition");
+        config.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return new CorsFilter(source);
+    }
 }
 

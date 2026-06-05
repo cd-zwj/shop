@@ -10,6 +10,7 @@ import { adminAuthService } from '../services/modules/adminAuth';
 import { appAuthService } from '../services/modules/appAuth';
 import { appUserService } from '../services/modules/appUser';
 import { merchantAuthService } from '../services/modules/merchantAuth';
+import { AUTH_TOKEN_CLEAR_EVENT } from '../services/http';
 import type {
   AdminSession,
   AuthRole,
@@ -54,6 +55,21 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** 统一清除本地认证状态（token + 会话缓存 + React state） */
+function resetLocalAuthState(
+  setCurrentRoleState: (role: AuthRole | null) => void,
+  setCurrentUser: (user: PlatformUser | null) => void,
+  setMerchantSessionState: (session: MerchantSession | null) => void,
+  setAdminSessionState: (session: AdminSession | null) => void,
+) {
+  clearAllTokens();
+  clearAllAuthSessions();
+  setCurrentRoleState(null);
+  setCurrentUser(null);
+  setMerchantSessionState(null);
+  setAdminSessionState(null);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentRole, setCurrentRoleState] = useState<AuthRole | null>(() => getCurrentAuthRole());
   const [currentUser, setCurrentUser] = useState<PlatformUser | null>(() => getPlatformUserProfile());
@@ -62,6 +78,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [adminSession, setAdminSessionState] = useState<AdminSession | null>(() => getAdminSession());
   const [isReady, setIsReady] = useState(false);
+
+  // 监听 401 事件：http.ts 响应拦截器在收到 401 时分发此事件
+  useEffect(() => {
+    function handleTokenClear() {
+      resetLocalAuthState(setCurrentRoleState, setCurrentUser, setMerchantSessionState, setAdminSessionState);
+    }
+
+    window.addEventListener(AUTH_TOKEN_CLEAR_EVENT, handleTokenClear);
+    return () => {
+      window.removeEventListener(AUTH_TOKEN_CLEAR_EVENT, handleTokenClear);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -89,13 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAdminSessionState(session);
         }
       } catch {
-        clearAllTokens();
-        clearAllAuthSessions();
         if (!isMounted) return;
-        setCurrentRoleState(null);
-        setCurrentUser(null);
-        setMerchantSessionState(null);
-        setAdminSessionState(null);
+        resetLocalAuthState(setCurrentRoleState, setCurrentUser, setMerchantSessionState, setAdminSessionState);
       } finally {
         if (isMounted) {
           setIsReady(true);

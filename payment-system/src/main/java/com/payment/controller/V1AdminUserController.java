@@ -3,6 +3,7 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaMode;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.AdminPlatformUserVO;
 import com.payment.dto.UserPermissionDTO;
@@ -27,11 +28,12 @@ public class V1AdminUserController {
 
     @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/users")
-    public Result<Page<AdminPlatformUserVO>> listUsers(@RequestParam(defaultValue = "1") Integer current,
-                                                       @RequestParam(defaultValue = "10") Integer size,
-                                                       @RequestParam(required = false) String keyword,
-                                                       @RequestParam(required = false) Integer status) {
-        return Result.success(v1AdminService.listPlatformUsers(current, size, keyword, status));
+    public Result<PageResult<AdminPlatformUserVO>> listUsers(@RequestParam(defaultValue = "1") Integer current,
+                                                              @RequestParam(defaultValue = "10") Integer size,
+                                                              @RequestParam(required = false) String keyword,
+                                                              @RequestParam(required = false) Integer status) {
+        Page<AdminPlatformUserVO> page = v1AdminService.listPlatformUsers(current, size, keyword, status);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)

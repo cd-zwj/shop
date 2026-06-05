@@ -2,44 +2,69 @@ package com.payment.controller;
 
 import com.payment.dto.BillStatusVO;
 import com.payment.util.JsonUtils;
+import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.PaymentBill;
 import com.payment.service.PaymentBillV1Service;
+import com.payment.service.PaymentSignatureVerifier;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.util.HtmlUtils;
 
 import java.util.Map;
 
+/**
+ * v1 开放支付回调接口（无需登录，需验签）。
+ */
+@Slf4j
 @RestController
 @RequestMapping("/v1/open/payments")
 @RequiredArgsConstructor
 public class V1OpenPaymentController {
 
     private final PaymentBillV1Service paymentBillV1Service;
+    private final PaymentSignatureVerifier signatureVerifier;
 
     @PostMapping("/callbacks/{channelCode}")
-    public Result<Void> handleCallback(@PathVariable String channelCode, @RequestBody PaymentCallbackDTO dto) {
+    public Result<Void> handleCallback(@PathVariable String channelCode,
+                                       @RequestBody PaymentCallbackDTO dto,
+                                       @RequestHeader Map<String, String> headers) {
+        verifySignature(channelCode, dto, headers);
+        log.info("支付回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
         paymentBillV1Service.handleCallback(channelCode, dto);
         return Result.success();
     }
 
     @PostMapping("/callbacks/{channelCode}/recharge")
-    public Result<Void> handleRechargeCallback(@PathVariable String channelCode, @RequestBody PaymentCallbackDTO dto) {
+    public Result<Void> handleRechargeCallback(@PathVariable String channelCode,
+                                               @RequestBody PaymentCallbackDTO dto,
+                                               @RequestHeader Map<String, String> headers) {
+        verifySignature(channelCode, dto, headers);
+        log.info("充值回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
         paymentBillV1Service.handleCallback(channelCode, dto);
         return Result.success();
     }
 
     @PostMapping("/callbacks/{channelCode}/order")
-    public Result<Void> handleOrderCallback(@PathVariable String channelCode, @RequestBody PaymentCallbackDTO dto) {
+    public Result<Void> handleOrderCallback(@PathVariable String channelCode,
+                                            @RequestBody PaymentCallbackDTO dto,
+                                            @RequestHeader Map<String, String> headers) {
+        verifySignature(channelCode, dto, headers);
+        log.info("订单回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
         paymentBillV1Service.handleCallback(channelCode, dto);
         return Result.success();
     }
 
     @PostMapping("/callbacks/alipay-page")
     public String handleAlipayPageCallback(@RequestParam Map<String, String> params) {
+        // 支付宝页面回调验签
+        if (!signatureVerifier.verifyAlipayCallback(params)) {
+            log.warn("支付宝回调验签失败, params={}", params);
+            throw new BusinessException("回调验签失败");
+        }
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo(params.get("out_trade_no"));
         dto.setCallbackRequestId(params.get("notify_id"));
@@ -100,8 +125,22 @@ public class V1OpenPaymentController {
         dto.setThirdPartyBillNo(params.get("trade_no"));
         dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status")));
         dto.setRawBody(JsonUtils.toJson(params));
+
+        // 第三方渠道回调验签
+        if (!signatureVerifier.verify("EXT_PROVIDER", dto, params)) {
+            log.warn("第三方渠道回调验签失败, billNo={}", dto.getBillNo());
+            throw new BusinessException("回调验签失败");
+        }
         paymentBillV1Service.handleCallback("EXT_PROVIDER", dto);
         return "success";
+    }
+
+    private void verifySignature(String channelCode, PaymentCallbackDTO dto, Map<String, String> headers) {
+        boolean valid = signatureVerifier.verify(channelCode, dto, headers);
+        if (!valid) {
+            log.warn("支付回调验签失败, channel={}, billNo={}", channelCode, dto.getBillNo());
+            throw new BusinessException("回调验签失败");
+        }
     }
 
     private String safe(String value) {

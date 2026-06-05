@@ -36,4 +36,7 @@ public class AppCreateOrderDTO {
     private BigDecimal unifiedWalletAmount;
     private BigDecimal merchantWalletAmount;
     private Boolean allowExternalPayFallback;
+    private Long selectedUserCouponId;
+    private Integer usedPoints;
+    private Integer requestedPoints;
 }

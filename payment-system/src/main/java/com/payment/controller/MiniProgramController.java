@@ -121,6 +121,13 @@ public class MiniProgramController {
     @SaCheckLogin
     public Result<PaymentOrder> getOrderDetail(@PathVariable String orderNo) {
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
+        if (order == null) {
+            throw new com.payment.common.BusinessException("订单不存在");
+        }
+        Long userId = UserContext.getCurrentUserId();
+        if (!order.getUserId().equals(userId)) {
+            throw new com.payment.common.BusinessException(403, "无权访问该订单");
+        }
         return Result.success(order);
     }
     
@@ -141,6 +148,13 @@ public class MiniProgramController {
     @SaCheckLogin
     public Result<String> getPaymentStatus(@RequestParam String orderNo) {
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
+        if (order == null) {
+            throw new com.payment.common.BusinessException("订单不存在");
+        }
+        Long userId = UserContext.getCurrentUserId();
+        if (!order.getUserId().equals(userId)) {
+            throw new com.payment.common.BusinessException(403, "无权访问该订单");
+        }
         return Result.success(order.getPayStatus());
     }
     

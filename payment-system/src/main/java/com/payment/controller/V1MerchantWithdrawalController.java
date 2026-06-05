@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.V1MerchantBalanceVO;
 import com.payment.dto.WithdrawalApplyDTO;
@@ -10,6 +11,7 @@ import com.payment.entity.Withdrawal;
 import com.payment.service.WithdrawalService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +21,7 @@ import java.math.BigDecimal;
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/withdrawals")
 @RequiredArgsConstructor
+@SaCheckLogin
 public class V1MerchantWithdrawalController {
 
     private final V1MerchantSupportService v1MerchantSupportService;
@@ -38,17 +41,18 @@ public class V1MerchantWithdrawalController {
     }
 
     @GetMapping
-    public Result<Page<Withdrawal>> listWithdrawals(@PathVariable Long tenantId,
-                                                    @RequestParam(defaultValue = "1") Integer current,
-                                                    @RequestParam(defaultValue = "10") Integer size,
-                                                    @RequestParam(required = false) Integer status) {
+    public Result<PageResult<Withdrawal>> listWithdrawals(@PathVariable Long tenantId,
+                                                           @RequestParam(defaultValue = "1") Integer current,
+                                                           @RequestParam(defaultValue = "10") Integer size,
+                                                           @RequestParam(required = false) Integer status) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         WithdrawalQueryDTO queryDTO = new WithdrawalQueryDTO();
         queryDTO.setTenantId(tenantId);
         queryDTO.setStatus(status);
         queryDTO.setPageNum(current);
         queryDTO.setPageSize(size);
-        return Result.success(withdrawalService.listWithdrawals(queryDTO));
+        Page<Withdrawal> page = withdrawalService.listWithdrawals(queryDTO);
+        return Result.success(PageResult.from(page));
     }
 
     @PostMapping

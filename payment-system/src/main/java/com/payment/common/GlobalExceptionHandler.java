@@ -48,21 +48,21 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Sa-Token 无权限异常
+     * Sa-Token 无权限异常（不暴露内部权限码）
      */
     @ExceptionHandler(NotPermissionException.class)
     public Result<?> handleNotPermissionException(NotPermissionException e) {
-        log.warn("权限不足: {}", e.getPermission());
-        return Result.error(403, "无此权限：" + e.getPermission());
+        log.warn("权限不足，权限码: {}", e.getPermission());
+        return Result.error(403, "无权限访问");
     }
 
     /**
-     * Sa-Token 无角色异常
+     * Sa-Token 无角色异常（不暴露内部角色名）
      */
     @ExceptionHandler(NotRoleException.class)
     public Result<?> handleNotRoleException(NotRoleException e) {
-        log.warn("角色权限不足: {}", e.getRole());
-        return Result.error(403, "无此角色权限：" + e.getRole());
+        log.warn("角色权限不足，角色: {}", e.getRole());
+        return Result.error(403, "无权限访问");
     }
 
     @ExceptionHandler(Exception.class)

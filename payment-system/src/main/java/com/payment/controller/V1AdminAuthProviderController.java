@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.PlatformAuthProviderDTO;
 import com.payment.dto.PlatformAuthProviderVO;
@@ -20,22 +21,14 @@ public class V1AdminAuthProviderController {
 
     private final PlatformAuthProviderAdminService platformAuthProviderAdminService;
 
-    /**
-     * 查询渠道。
-     */
     @SaCheckPermission("admin:auth-provider:list")
     @GetMapping
-    public Result<Page<PlatformAuthProviderVO>> listProviders(@RequestParam(defaultValue = "1") Integer current,
-        /**
-         * 构建成功结果。
-         */
-                                                              @RequestParam(defaultValue = "10") Integer size,
-                                                              @RequestParam(required = false) String keyword,
-                                                              @RequestParam(required = false) Integer status) {
-        return Result.success(platformAuthProviderAdminService.listProviders(current, size, keyword, status));
-    /**
-     * 处理SaCheck权限。
-     */
+    public Result<PageResult<PlatformAuthProviderVO>> listProviders(@RequestParam(defaultValue = "1") Integer current,
+                                                                     @RequestParam(defaultValue = "10") Integer size,
+                                                                     @RequestParam(required = false) String keyword,
+                                                                     @RequestParam(required = false) Integer status) {
+        Page<PlatformAuthProviderVO> page = platformAuthProviderAdminService.listProviders(current, size, keyword, status);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission("admin:auth-provider:detail")

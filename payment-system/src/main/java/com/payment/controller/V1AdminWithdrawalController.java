@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.WithdrawalVO;
 import com.payment.service.V1AdminService;
@@ -22,13 +23,14 @@ public class V1AdminWithdrawalController {
 
     @SaCheckPermission("admin:withdrawal:list")
     @GetMapping
-    public Result<Page<WithdrawalVO>> listWithdrawals(@RequestParam(defaultValue = "1") Integer current,
-                                                      @RequestParam(defaultValue = "10") Integer size,
-                                                      @RequestParam(required = false) String merchantName,
-                                                      @RequestParam(required = false) Integer status,
-                                                      @RequestParam(required = false) String startDate,
-                                                      @RequestParam(required = false) String endDate) {
-        return Result.success(v1AdminService.listWithdrawals(current, size, merchantName, status, startDate, endDate));
+    public Result<PageResult<WithdrawalVO>> listWithdrawals(@RequestParam(defaultValue = "1") Integer current,
+                                                             @RequestParam(defaultValue = "10") Integer size,
+                                                             @RequestParam(required = false) String merchantName,
+                                                             @RequestParam(required = false) Integer status,
+                                                             @RequestParam(required = false) String startDate,
+                                                             @RequestParam(required = false) String endDate) {
+        Page<WithdrawalVO> page = v1AdminService.listWithdrawals(current, size, merchantName, status, startDate, endDate);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission("admin:withdrawal:approve")

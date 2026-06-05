@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.common.TenantContextHolder;
@@ -152,7 +153,7 @@ public class RechargeServiceImpl implements RechargeService {
     @Transactional(rollbackFor = Exception.class)
     public void handleRechargeCallback(String orderNo) {
         // 幂等：原子地将 pay_status 从 0 更新为 1，只有首个线程 affectedRows == 1
-        int affected = rechargeOrderMapper.update(null, new LambdaQueryWrapper<RechargeOrder>()
+        int affected = rechargeOrderMapper.update(null, new LambdaUpdateWrapper<RechargeOrder>()
                 .eq(RechargeOrder::getOrderNo, orderNo)
                 .eq(RechargeOrder::getPayStatus, 0)
                 .set(RechargeOrder::getPayStatus, 1)

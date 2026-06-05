@@ -4,6 +4,27 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  # 禁用外部中间件自动配置
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.redisson.spring.starter.RedissonAutoConfiguration
+
+# 禁用 Sa-Token Redis 存储，使用内存模式
+sa-token:
+  token-name: Authorization
+  timeout: 86400
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: uuid
+  is-log: false
+
+# 禁用 Sa-Token Redis Jackson 自动配置
+spring.redis.enabled: false
 
 mybatis-plus:
   configuration:
@@ -17,4 +38,5 @@ mybatis-plus:
 
 logging:
   level:
-    com.payment.mapper: DEBUG
+    com.payment: WARN
+    cn.dev33.satoken: WARN

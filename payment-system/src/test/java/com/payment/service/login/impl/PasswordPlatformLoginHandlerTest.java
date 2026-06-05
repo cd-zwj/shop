@@ -33,7 +33,7 @@ class PasswordPlatformLoginHandlerTest {
 
         when(platformUserMapper.selectOne(any())).thenReturn(user);
 
-        PasswordPlatformLoginHandler handler = new PasswordPlatformLoginHandler(platformUserMapper);
+        PasswordPlatformLoginHandler handler = new PasswordPlatformLoginHandler(platformUserMapper, passwordEncoder);
 
         PlatformUser result = handler.authenticate(PlatformLoginRequest.password("alice", "123456"));
 
@@ -51,7 +51,7 @@ class PasswordPlatformLoginHandlerTest {
 
         when(platformUserMapper.selectOne(any())).thenReturn(user);
 
-        PasswordPlatformLoginHandler handler = new PasswordPlatformLoginHandler(platformUserMapper);
+        PasswordPlatformLoginHandler handler = new PasswordPlatformLoginHandler(platformUserMapper, passwordEncoder);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,

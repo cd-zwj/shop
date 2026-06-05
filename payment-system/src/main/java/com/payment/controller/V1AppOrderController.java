@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.OrderPaymentVO;
@@ -32,9 +33,10 @@ public class V1AppOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<Page<SalesOrder>> listOrders(@RequestParam(defaultValue = "1") Integer current,
-                                               @RequestParam(defaultValue = "10") Integer size) {
-        return Result.success(appOrderService.listOrders(PlatformSessionHelper.getPlatformUserId(), current, size));
+    public Result<PageResult<SalesOrder>> listOrders(@RequestParam(defaultValue = "1") Integer current,
+                                                      @RequestParam(defaultValue = "10") Integer size) {
+        Page<SalesOrder> page = appOrderService.listOrders(PlatformSessionHelper.getPlatformUserId(), current, size);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckLogin

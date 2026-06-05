@@ -5,6 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
+import com.payment.annotation.RateLimit;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.dto.LoginDTO;
@@ -29,14 +30,16 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
+import jakarta.validation.Valid;
 
 /**
- * 平台管理员控制器
+ * 平台管理员控制器（旧版，部分接口已废弃）。
+ * 登录接口请使用 {@link V1AdminAuthController}。
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/admin")
-
+@Deprecated
 public class AdminController {
     
     @Autowired
@@ -55,16 +58,14 @@ public class AdminController {
 
     /**
      * 管理员登录
+     * @deprecated 使用 {@link V1AdminAuthController#login}
      */
+    @Deprecated
     @PostMapping("/login")
-    public Result<String> login(@RequestBody Map<String, String> loginData) {
-        String username = loginData.get("username");
-        String password = loginData.get("password");
-        LoginDTO loginDTO = new LoginDTO();
-        loginDTO.setUsername(username);
-        loginDTO.setPassword(password);
+    @RateLimit(prefix = "rate:admin:login", key = "#loginDTO.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请5分钟后再试")
+    public Result<String> login(@Valid @RequestBody LoginDTO loginDTO) {
         String loginadmin = userService.loginadmin(loginDTO);
-        log.info("管理员登录，username: {}", username);
+        log.info("管理员登录，username: {}", loginDTO.getUsername());
         return Result.success(loginadmin);
     }
 
@@ -246,12 +247,10 @@ public class AdminController {
     @SaCheckPermission("admin:withdrawal:reject")
     @PutMapping("/withdrawal/{id}/reject")
     public Result<Void> rejectWithdrawal(@PathVariable Long id,
-            @RequestBody Map<String, String> data) {
-        String reason = data.get("reason");
+            @RequestBody java.util.Map<String, String> data) {
+        String reason = data.getOrDefault("reason", "");
         log.info("拒绝提现申请，id: {}, reason: {}", id, reason);
-
         withdrawalService.rejectWithdrawal(id, reason);
-
         return Result.success();
     }
 
@@ -282,7 +281,7 @@ public class AdminController {
      */
     @SaCheckPermission("admin:user:permission")
     @PostMapping("/user/{userId}/permissions")
-    public Result<Void> setUserPermissions(@PathVariable Long userId, @RequestBody UserPermissionDTO dto) {
+    public Result<Void> setUserPermissions(@PathVariable Long userId, @Valid @RequestBody UserPermissionDTO dto) {
         userPermissionService.setUserPermissions(userId, dto.getPermissionIds());
         return Result.success();
     }

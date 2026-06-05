@@ -19,6 +19,7 @@ public class TenantMember implements Serializable {
     private Long platformUserId;
     private String memberNo;
     private Integer memberStatus;
+    private Integer memberLevel;
     private String registerSource;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

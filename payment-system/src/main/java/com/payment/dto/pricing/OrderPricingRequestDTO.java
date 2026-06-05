@@ -2,6 +2,7 @@ package com.payment.dto.pricing;
 
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,4 +19,5 @@ public class OrderPricingRequestDTO {
     private CouponDiscountCandidateDTO selectedCoupon;
     private Integer availablePoints;
     private Integer requestedPoints;
+    private BigDecimal pointAmount;
 }

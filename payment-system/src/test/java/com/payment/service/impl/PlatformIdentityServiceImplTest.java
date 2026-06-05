@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.util.List;
 
@@ -36,7 +37,7 @@ class PlatformIdentityServiceImplTest {
         when(passwordLoginHandler.supports()).thenReturn(PlatformLoginTypeEnum.PASSWORD);
         when(passwordLoginHandler.authenticate(any(PlatformLoginRequest.class))).thenReturn(user);
 
-        PlatformIdentityServiceImpl service = spy(new PlatformIdentityServiceImpl(platformUserMapper, List.of(passwordLoginHandler)));
+        PlatformIdentityServiceImpl service = spy(new PlatformIdentityServiceImpl(platformUserMapper, List.of(passwordLoginHandler), new BCryptPasswordEncoder()));
         doReturn("test-token").when(service).createLoginSession(user);
 
         String token = service.login(PlatformLoginRequest.password("demo-user", "secret"));

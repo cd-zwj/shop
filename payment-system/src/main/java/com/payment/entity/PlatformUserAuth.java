@@ -18,6 +18,7 @@ public class PlatformUserAuth implements Serializable {
     private Long platformUserId;
     private String authType;
     private String authKey;
+    private Long providerId;
     private String authUnionKey;
     private String extraJson;
     private LocalDateTime createTime;

@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.*;
 import com.payment.entity.MemberPointsAccount;
@@ -41,9 +42,10 @@ public class V1AppWalletController {
 
     @SaCheckLogin
     @GetMapping("/wallets/unified/logs")
-    public Result<Page<WalletLogVO>> getUnifiedWalletLogs(@RequestParam(defaultValue = "1") Integer current,
-                                                          @RequestParam(defaultValue = "10") Integer size) {
-        return Result.success(unifiedWalletService.listLogs(PlatformSessionHelper.getPlatformUserId(), current, size));
+    public Result<PageResult<WalletLogVO>> getUnifiedWalletLogs(@RequestParam(defaultValue = "1") Integer current,
+                                                                 @RequestParam(defaultValue = "10") Integer size) {
+        Page<WalletLogVO> page = unifiedWalletService.listLogs(PlatformSessionHelper.getPlatformUserId(), current, size);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckLogin
@@ -60,10 +62,11 @@ public class V1AppWalletController {
 
     @SaCheckLogin
     @GetMapping("/tenants/{tenantId}/wallet/logs")
-    public Result<Page<WalletLogVO>> getMerchantWalletLogs(@PathVariable Long tenantId,
-                                                           @RequestParam(defaultValue = "1") Integer current,
-                                                           @RequestParam(defaultValue = "10") Integer size) {
-        return Result.success(merchantWalletService.listLogs(tenantId, PlatformSessionHelper.getPlatformUserId(), current, size));
+    public Result<PageResult<WalletLogVO>> getMerchantWalletLogs(@PathVariable Long tenantId,
+                                                                  @RequestParam(defaultValue = "1") Integer current,
+                                                                  @RequestParam(defaultValue = "10") Integer size) {
+        Page<WalletLogVO> page = merchantWalletService.listLogs(tenantId, PlatformSessionHelper.getPlatformUserId(), current, size);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckLogin
@@ -87,9 +90,10 @@ public class V1AppWalletController {
 
     @SaCheckLogin
     @GetMapping("/tenants/{tenantId}/points/logs")
-    public Result<Page<MemberPointsLog>> listPointsLogs(@PathVariable Long tenantId,
-                                                        @RequestParam(defaultValue = "1") Integer current,
-                                                        @RequestParam(defaultValue = "10") Integer size) {
-        return Result.success(memberPointsAccountService.listLogs(tenantId, PlatformSessionHelper.getPlatformUserId(), current, size));
+    public Result<PageResult<MemberPointsLog>> listPointsLogs(@PathVariable Long tenantId,
+                                                               @RequestParam(defaultValue = "1") Integer current,
+                                                               @RequestParam(defaultValue = "10") Integer size) {
+        Page<MemberPointsLog> page = memberPointsAccountService.listLogs(tenantId, PlatformSessionHelper.getPlatformUserId(), current, size);
+        return Result.success(PageResult.from(page));
     }
 }

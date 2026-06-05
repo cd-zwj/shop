@@ -3,6 +3,7 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaMode;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.AdminOrderListVO;
 import com.payment.dto.AdminPaymentBillVO;
@@ -31,13 +32,14 @@ public class V1AdminTradeController {
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/orders")
-    public Result<Page<AdminOrderListVO>> listOrders(@RequestParam(defaultValue = "1") Integer current,
-                                                     @RequestParam(defaultValue = "10") Integer size,
-                                                     @RequestParam(required = false) String orderNo,
-                                                     @RequestParam(required = false) String orderStatus,
-                                                     @RequestParam(required = false) String payStatus,
-                                                     @RequestParam(required = false) Long tenantId) {
-        return Result.success(v1AdminService.listOrders(current, size, orderNo, orderStatus, payStatus, tenantId));
+    public Result<PageResult<AdminOrderListVO>> listOrders(@RequestParam(defaultValue = "1") Integer current,
+                                                            @RequestParam(defaultValue = "10") Integer size,
+                                                            @RequestParam(required = false) String orderNo,
+                                                            @RequestParam(required = false) String orderStatus,
+                                                            @RequestParam(required = false) String payStatus,
+                                                            @RequestParam(required = false) Long tenantId) {
+        Page<AdminOrderListVO> page = v1AdminService.listOrders(current, size, orderNo, orderStatus, payStatus, tenantId);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission(value = {"admin:trade:detail", "admin:dashboard"}, mode = SaMode.OR)
@@ -48,21 +50,23 @@ public class V1AdminTradeController {
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/payment-bills")
-    public Result<Page<AdminPaymentBillVO>> listPaymentBills(@RequestParam(defaultValue = "1") Integer current,
-                                                             @RequestParam(defaultValue = "10") Integer size,
-                                                             @RequestParam(required = false) String bizType,
-                                                             @RequestParam(required = false) String payStatus,
-                                                             @RequestParam(required = false) String channelCode) {
-        return Result.success(v1AdminService.listPaymentBills(current, size, bizType, payStatus, channelCode));
+    public Result<PageResult<AdminPaymentBillVO>> listPaymentBills(@RequestParam(defaultValue = "1") Integer current,
+                                                                    @RequestParam(defaultValue = "10") Integer size,
+                                                                    @RequestParam(required = false) String bizType,
+                                                                    @RequestParam(required = false) String payStatus,
+                                                                    @RequestParam(required = false) String channelCode) {
+        Page<AdminPaymentBillVO> page = v1AdminService.listPaymentBills(current, size, bizType, payStatus, channelCode);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/recharge-orders")
-    public Result<Page<AdminRechargeOrderVO>> listRechargeOrders(@RequestParam(defaultValue = "1") Integer current,
-                                                                 @RequestParam(defaultValue = "10") Integer size,
-                                                                 @RequestParam(required = false) String walletType,
-                                                                 @RequestParam(required = false) String bizStatus,
-                                                                 @RequestParam(required = false) Long tenantId) {
-        return Result.success(v1AdminService.listRechargeOrders(current, size, walletType, bizStatus, tenantId));
+    public Result<PageResult<AdminRechargeOrderVO>> listRechargeOrders(@RequestParam(defaultValue = "1") Integer current,
+                                                                        @RequestParam(defaultValue = "10") Integer size,
+                                                                        @RequestParam(required = false) String walletType,
+                                                                        @RequestParam(required = false) String bizStatus,
+                                                                        @RequestParam(required = false) Long tenantId) {
+        Page<AdminRechargeOrderVO> page = v1AdminService.listRechargeOrders(current, size, walletType, bizStatus, tenantId);
+        return Result.success(PageResult.from(page));
     }
 }

@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.MerchantDTO;
 import com.payment.dto.MerchantDetailVO;
@@ -24,11 +25,12 @@ public class V1AdminMerchantController {
 
     @SaCheckPermission("admin:merchant:list")
     @GetMapping
-    public Result<Page<MerchantListVO>> listMerchants(@RequestParam(defaultValue = "1") Integer current,
-                                                      @RequestParam(defaultValue = "10") Integer size,
-                                                      @RequestParam(required = false) String name,
-                                                      @RequestParam(required = false) Integer status) {
-        return Result.success(v1AdminService.listMerchants(current, size, name, status));
+    public Result<PageResult<MerchantListVO>> listMerchants(@RequestParam(defaultValue = "1") Integer current,
+                                                             @RequestParam(defaultValue = "10") Integer size,
+                                                             @RequestParam(required = false) String name,
+                                                             @RequestParam(required = false) Integer status) {
+        Page<MerchantListVO> page = v1AdminService.listMerchants(current, size, name, status);
+        return Result.success(PageResult.from(page));
     }
 
     @SaCheckPermission("admin:merchant:detail")
