@@ -347,7 +347,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         } catch (Exception e) {
             log.error("处理扫码请求失败", e);
             response.setStatus("ERROR");
-            response.setMessage("处理失败：" + e.getMessage());
+            response.setMessage("处理失败，请稍后重试");
             saveScanRecord(request, null, "ERROR", e.getMessage());
         }
 

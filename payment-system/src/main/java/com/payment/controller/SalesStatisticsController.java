@@ -101,7 +101,7 @@ public class SalesStatisticsController {
             salesStatisticsService.exportSalesReport(tenantId, query, response);
         } catch (Exception e) {
             log.error("导出销售报表失败", e);
-            throw new RuntimeException("导出销售报表失败: " + e.getMessage());
+            throw new RuntimeException("导出销售报表失败，请稍后重试");
         }
     }
 }

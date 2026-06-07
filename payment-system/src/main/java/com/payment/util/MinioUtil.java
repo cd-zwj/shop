@@ -63,7 +63,7 @@ public class MinioUtil {
             return getPresignedUrl(objectName, minioConfig.getUrlExpiryDays());
         } catch (Exception e) {
             log.error("上传文件到MinIO失败", e);
-            throw new RuntimeException("上传文件失败：" + e.getMessage());
+            throw new RuntimeException("上传文件失败，请稍后重试");
         }
     }
 
@@ -136,7 +136,7 @@ public class MinioUtil {
             );
         } catch (Exception e) {
             log.error("生成预签名URL失败: objectName={}", objectName, e);
-            throw new RuntimeException("生成预签名URL失败：" + e.getMessage());
+            throw new RuntimeException("生成预签名URL失败，请稍后重试");
         }
     }
 
@@ -196,7 +196,7 @@ public class MinioUtil {
             return response;
         } catch (Exception e) {
             log.error("上传文件分片失败: fileId={}, chunkNumber={}", fileId, chunkNumber, e);
-            throw new RuntimeException("上传文件分片失败：" + e.getMessage());
+            throw new RuntimeException("上传文件分片失败，请稍后重试");
         }
     }
 
@@ -249,7 +249,7 @@ public class MinioUtil {
                             redisUtils.delete(progressKey, totalChunksKey, md5Key);
                         } catch (Exception e) {
                             log.error("合并文件分片失败: fileId={}", fileId, e);
-                            throw new RuntimeException("合并文件分片失败：" + e.getMessage());
+                            throw new RuntimeException("合并文件分片失败，请稍后重试");
                         }
                     }
                 } finally {
@@ -262,10 +262,10 @@ public class MinioUtil {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("获取上传进度锁被中断: fileId={}", fileId, e);
-            throw new RuntimeException("更新上传进度失败：" + e.getMessage());
+            throw new RuntimeException("更新上传进度失败", e);
         } catch (Exception e) {
             log.error("更新上传进度失败: fileId={}", fileId, e);
-            throw new RuntimeException("更新上传进度失败：" + e.getMessage());
+            throw new RuntimeException("更新上传进度失败", e);
         }
     }
 
@@ -419,7 +419,7 @@ public class MinioUtil {
             log.info("删除MinIO文件成功: {}", objectName);
         } catch (Exception e) {
             log.error("删除MinIO文件失败: {}", objectName, e);
-            throw new RuntimeException("删除文件失败：" + e.getMessage());
+            throw new RuntimeException("删除文件失败，请稍后重试");
         }
     }
 
@@ -450,7 +450,7 @@ public class MinioUtil {
             return url.replace(bucketPrefix, "");
         } catch (Exception e) {
             log.error("从URL提取对象名称失败: {}", presignedUrl, e);
-            throw new RuntimeException("从URL提取对象名称失败：" + e.getMessage());
+            throw new RuntimeException("从URL提取对象名称失败");
         }
     }
 
@@ -470,7 +470,7 @@ public class MinioUtil {
             }
         } catch (Exception e) {
             log.error("检查或创建bucket失败", e);
-            throw new RuntimeException("检查或创建bucket失败：" + e.getMessage());
+            throw new RuntimeException("检查或创建bucket失败", e);
         }
     }
 

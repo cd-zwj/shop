@@ -102,7 +102,7 @@ public class PaymentOrderServiceImpl extends ServiceImpl<PaymentOrderMapper, Pay
                 log.info("订单余额支付成功，orderNo={}, balanceAmount={}", orderNo, balanceAmount);
             } catch (Exception e) {
                 log.error("订单余额支付失败，orderNo={}", orderNo, e);
-                throw new BusinessException("余额支付失败：" + e.getMessage());
+                throw new BusinessException("余额支付失败，请稍后重试");
             }
         }
 

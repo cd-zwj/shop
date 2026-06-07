@@ -102,7 +102,7 @@ public class ScanServiceImpl implements ScanService {
         } catch (Exception e) {
             log.error("处理扫码请求失败", e);
             response.setStatus("ERROR");
-            response.setMessage("处理失败：" + e.getMessage());
+            response.setMessage("处理失败，请稍后重试");
         }
 
         return response;

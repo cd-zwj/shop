@@ -86,7 +86,7 @@ public class ScanConsumer {
                 // 发送错误响应到结果队列
                 ScanResponseDTO errorResponse = new ScanResponseDTO();
                 errorResponse.setStatus("ERROR");
-                errorResponse.setMessage("处理失败：" + e.getMessage());
+                errorResponse.setMessage("处理失败，请稍后重试");
                 rabbitTemplate.convertAndSend("payment.scan.result", JsonUtils.toJson(errorResponse));
                 
                 // 拒绝消息，不重新入队（避免死循环）

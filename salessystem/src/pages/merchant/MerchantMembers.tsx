@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users,
@@ -42,7 +42,7 @@ export default function MerchantMembers() {
   const [tagName, setTagName] = useState('');
   const [isTagSubmitting, setIsTagSubmitting] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
@@ -58,11 +58,11 @@ export default function MerchantMembers() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tenantId, activeTab, showToast]);
 
   useEffect(() => {
     void loadData();
-  }, [tenantId, activeTab]);
+  }, [loadData]);
 
   const handleCreateLevel = async (e: React.FormEvent) => {
     e.preventDefault();

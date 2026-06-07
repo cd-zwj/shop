@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
@@ -69,7 +69,7 @@ export default function MerchantActivities() {
     { id: 'DISABLED', label: '已下线' },
   ];
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
@@ -83,11 +83,11 @@ export default function MerchantActivities() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tenantId, activeTab, showToast]);
 
   useEffect(() => {
     void loadActivities();
-  }, [tenantId, activeTab]);
+  }, [loadActivities]);
 
   const loadRules = async (activityId: number) => {
     if (!tenantId) return;

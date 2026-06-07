@@ -172,7 +172,7 @@ public class NettyServer {
                 
             } catch (Exception e) {
                 log.error("处理扫码请求失败", e);
-                sendErrorResponse(ctx, "处理失败：" + e.getMessage());
+                sendErrorResponse(ctx, "处理失败，请稍后重试");
             } finally {
                 // 清除租户上下文
                 TenantContextHolder.clear();

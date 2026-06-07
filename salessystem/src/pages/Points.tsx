@@ -10,6 +10,8 @@ import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getImageUrl } from '../utils/display';
 
+type ProductWithTenant = Product & { tenantId: number };
+
 export default function Points() {
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -63,7 +65,7 @@ export default function Points() {
             missingProductIds.map((id) => appCatalogService.getProduct(id))
           );
           missingDetails.forEach((p) => {
-            if (p) resolvedDetails[p.id] = { ...p, tenantId: balanceData.tenantId } as any;
+            if (p) resolvedDetails[p.id] = { ...p, tenantId: balanceData.tenantId } as ProductWithTenant;
           });
         } catch (e) {
           console.warn('Failed to resolve missing product details', e);
@@ -182,7 +184,7 @@ export default function Points() {
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            onClick={() => setActiveTab(tab.key as 'logs' | 'exchange')}
             className={cn(
               'flex-1 text-center py-3.5 text-sm font-bold border-b-2 transition-all',
               activeTab === tab.key

@@ -239,7 +239,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         } catch (Exception e) {
             log.error("积分回退失败，refundNo={}, orderNo={}, points={}",
                     app.getRefundNo(), app.getOrderNo(), pointsToRefund, e);
-            throw new BusinessException("积分回退失败：" + e.getMessage());
+            throw new BusinessException("积分回退失败，请稍后重试");
         }
     }
 

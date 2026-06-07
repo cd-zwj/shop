@@ -9,6 +9,8 @@ import com.payment.service.RefundApplicationService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.RefundApplicationVO;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -41,7 +43,7 @@ public class V1MerchantRefundController {
     @PutMapping("/{refundId}/audit")
     public Result<Void> auditRefund(@PathVariable Long tenantId,
                                      @PathVariable Long refundId,
-                                     @RequestBody AuditRefundRequest request) {
+                                     @Valid @RequestBody AuditRefundRequest request) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
 
@@ -53,6 +55,7 @@ public class V1MerchantRefundController {
     @Data
     public static class AuditRefundRequest {
         private boolean approved;
+        @Size(max = 500, message = "拒绝原因不能超过500字")
         private String rejectReason;
     }
 }

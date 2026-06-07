@@ -50,7 +50,7 @@ public class FileUploadController {
             return Result.success(result);
         } catch (Exception e) {
             log.error("检查文件是否存在失败: fileMd5={}, fileName={}", fileMd5, fileName, e);
-            return Result.error("检查文件失败：" + e.getMessage());
+            return Result.error("检查文件失败，请稍后重试");
         }
     }
     
@@ -77,7 +77,7 @@ public class FileUploadController {
             return Result.success(fileUrl);
         } catch (Exception e) {
             log.error("文件上传失败", e);
-            return Result.error("文件上传失败：" + e.getMessage());
+            return Result.error("文件上传失败，请稍后重试");
         }
     }
     
@@ -102,7 +102,7 @@ public class FileUploadController {
             return Result.success(result);
         } catch (Exception e) {
             log.error("分片上传失败: fileId={}, chunkNumber={}", fileId, chunkNumber, e);
-            return Result.error("分片上传失败：" + e.getMessage());
+            return Result.error("分片上传失败，请稍后重试");
         }
     }
     
@@ -117,7 +117,7 @@ public class FileUploadController {
             return Result.success(progress);
         } catch (Exception e) {
             log.error("获取上传进度失败: fileId={}", fileId, e);
-            return Result.error("获取上传进度失败：" + e.getMessage());
+            return Result.error("获取上传进度失败，请稍后重试");
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.payment.service.impl;
 
+import com.payment.common.BusinessException;
 import com.payment.util.JsonUtils;
 import com.alipay.api.AlipayApiException;
 import com.alipay.api.AlipayClient;
@@ -64,7 +65,7 @@ public class PaymentServiceImpl implements PaymentService {
                 notificationParser = new NotificationParser((com.wechat.pay.java.core.notification.NotificationConfig) wechatConfig);
             } catch (Exception e) {
                 log.error("初始化微信支付配置失败", e);
-                throw new RuntimeException("初始化微信支付配置失败：" + e.getMessage());
+                throw new BusinessException("支付服务初始化失败，请稍后重试");
             }
         }
     }
@@ -152,7 +153,7 @@ public class PaymentServiceImpl implements PaymentService {
             return payResponse;
         } catch (Exception e) {
             log.error("创建微信JSAPI支付失败", e);
-            throw new RuntimeException("创建微信JSAPI支付失败：" + e.getMessage());
+            throw new BusinessException("支付操作失败，请稍后重试");
         }
     }
     
@@ -188,7 +189,7 @@ public class PaymentServiceImpl implements PaymentService {
             return payResponse;
         } catch (Exception e) {
             log.error("创建微信Native支付失败", e);
-            throw new RuntimeException("创建微信Native支付失败：" + e.getMessage());
+            throw new BusinessException("支付操作失败，请稍后重试");
         }
     }
     
@@ -231,7 +232,7 @@ public class PaymentServiceImpl implements PaymentService {
             return payResponse;
         } catch (AlipayApiException e) {
             log.error("创建支付宝支付失败", e);
-            throw new RuntimeException("创建支付宝支付失败：" + e.getMessage());
+            throw new BusinessException("支付操作失败，请稍后重试");
         }
     }
     
@@ -343,7 +344,7 @@ public class PaymentServiceImpl implements PaymentService {
         } catch (Exception e) {
             log.error("查询微信支付订单失败：{}", orderNo, e);
             result.put("status", "QUERY_FAILED");
-            result.put("error", e.getMessage());
+            result.put("error", "QUERY_FAILED");
         }
         return result;
     }

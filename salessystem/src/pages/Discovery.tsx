@@ -1,7 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
-  Filter,
   Heart,
   MapPin,
   Search,
@@ -19,34 +18,8 @@ export default function Discovery() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [stores, setStores] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState('全部分类');
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('keyword') || '');
   const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get('keyword') || '');
-
-  const categories = ['全部分类', '餐饮', '零售', '服务', '娱乐'];
-
-  // Helper to map query param to category tab
-  const mapQueryToCategory = (queryVal: string | null) => {
-    if (!queryVal) return '全部分类';
-    switch (queryVal.toLowerCase()) {
-      case 'waimaimeishi':
-        return '餐饮';
-      case 'jiankanggouyao':
-        return '零售';
-      case 'lvyouchuxing':
-        return '服务';
-      case 'dianyingyanchu':
-        return '娱乐';
-      default:
-        return '全部分类';
-    }
-  };
-
-  // Helper to assign mock category to tenants
-  const getStoreCategory = (storeId: number) => {
-    const cats = ['餐饮', '零售', '服务', '娱乐'];
-    return cats[storeId % cats.length];
-  };
 
   // Load stores once on mount
   useEffect(() => {
@@ -74,11 +47,8 @@ export default function Discovery() {
     };
   }, []);
 
-  // Sync category and search query from URL search parameters
+  // Sync search query from URL search parameters
   useEffect(() => {
-    const categoryParam = searchParams.get('category');
-    setActiveCategory(mapQueryToCategory(categoryParam));
-
     const keywordParam = searchParams.get('keyword') || '';
     if (keywordParam !== searchQuery) {
       setSearchQuery(keywordParam);
@@ -93,12 +63,13 @@ export default function Discovery() {
 
       const currentKeyword = searchParams.get('keyword') || '';
       if (searchQuery !== currentKeyword) {
+        const next = new URLSearchParams(searchParams);
         if (searchQuery) {
-          searchParams.set('keyword', searchQuery);
+          next.set('keyword', searchQuery);
         } else {
-          searchParams.delete('keyword');
+          next.delete('keyword');
         }
-        setSearchParams(searchParams);
+        setSearchParams(next);
       }
     }, 300);
 
@@ -107,34 +78,13 @@ export default function Discovery() {
     };
   }, [searchQuery, searchParams, setSearchParams]);
 
-  // Filter stores based on search query and active category tab
+  // Filter stores based on search query only
   const filteredStores = stores.filter((store) => {
-    const matchesSearch = store.name.toLowerCase().includes(debouncedQuery.toLowerCase()) || 
-                          (store.address || '').toLowerCase().includes(debouncedQuery.toLowerCase());
-    
-    const matchesCategory = activeCategory === '全部分类' || getStoreCategory(store.id) === activeCategory;
-
-    return matchesSearch && matchesCategory;
+    return store.name.toLowerCase().includes(debouncedQuery.toLowerCase()) ||
+           (store.address || '').toLowerCase().includes(debouncedQuery.toLowerCase());
   });
 
   const displayStores = isLoading ? Array.from({ length: 6 }) : filteredStores;
-
-  const handleCategoryChange = (cat: string) => {
-    setActiveCategory(cat);
-    // Sync with URL query parameter
-    if (cat === '全部分类') {
-      searchParams.delete('category');
-    } else {
-      const pinyinMap: Record<string, string> = {
-        '餐饮': 'waimaimeishi',
-        '零售': 'jiankanggouyao',
-        '服务': 'lvyouchuxing',
-        '娱乐': 'dianyingyanchu',
-      };
-      searchParams.set('category', pinyinMap[cat] || cat);
-    }
-    setSearchParams(searchParams);
-  };
 
   return (
     <div className="flex flex-col gap-6 pb-10 md:gap-8">
@@ -150,9 +100,6 @@ export default function Discovery() {
               className="w-full rounded-full border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
             />
           </div>
-          <button className="rounded-full p-2 text-slate-500 transition-colors hover:bg-slate-100">
-            <Filter className="h-5 w-5" />
-          </button>
         </div>
       </section>
 
@@ -170,38 +117,7 @@ export default function Discovery() {
                 className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base shadow-sm outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => handleCategoryChange(cat)}
-                  className={cn(
-                    'whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm transition-all',
-                    activeCategory === cat
-                      ? 'bg-primary text-white shadow-md shadow-primary/10'
-                      : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
-                  )}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
           </div>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-4 hide-scrollbar md:hidden">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => handleCategoryChange(cat)}
-              className={cn(
-                'whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold shadow-sm',
-                activeCategory === cat ? 'bg-primary text-white shadow-md shadow-primary/10' : 'border border-slate-200 bg-white text-slate-600',
-              )}
-            >
-              {cat}
-            </button>
-          ))}
         </div>
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
@@ -209,7 +125,7 @@ export default function Discovery() {
             <EmptyState
               icon={<Search className="w-12 h-12" />}
               title="没有找到匹配的门店"
-              subtitle="尝试更换其他分类，或调整你的搜索关键词再试一次吧~"
+              subtitle="尝试调整你的搜索关键词再试一次吧~"
             />
           ) : (
             displayStores.map((store, index) => {
@@ -233,7 +149,7 @@ export default function Discovery() {
                     )}
                     <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 shadow-md backdrop-blur-md">
                       <Star className="h-4 w-4 fill-current text-primary" />
-                      <span className="text-sm font-bold text-slate-800">{isData ? getStoreCategory(store.id) : '加载中'}</span>
+                      <span className="text-sm font-bold text-slate-800">{isData ? '平台商户' : '加载中'}</span>
                     </div>
                     <button className="absolute left-4 top-4 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/40">
                       <Heart className="h-5 w-5" />

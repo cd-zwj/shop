@@ -45,7 +45,7 @@ public class PosController {
             return Result.success( "商品已添加到购物车",null);
         } catch (Exception e) {
             log.error("添加商品到购物车失败", e);
-            return Result.error("添加商品失败：" + e.getMessage());
+            return Result.error("添加商品失败，请稍后重试");
         }
     }
     
@@ -62,7 +62,7 @@ public class PosController {
             return Result.success("商品已从购物车移除",null);
         } catch (Exception e) {
             log.error("移除购物车商品失败", e);
-            return Result.error("移除商品失败：" + e.getMessage());
+            return Result.error("移除商品失败，请稍后重试");
         }
     }
     
@@ -82,7 +82,7 @@ public class PosController {
             return Result.success("购物车已更新",null );
         } catch (Exception e) {
             log.error("更新购物车失败", e);
-            return Result.error("更新购物车失败：" + e.getMessage());
+            return Result.error("更新购物车失败，请稍后重试");
         }
     }
     
@@ -97,7 +97,7 @@ public class PosController {
             return Result.success(cart);
         } catch (Exception e) {
             log.error("查询购物车失败", e);
-            return Result.error("查询购物车失败：" + e.getMessage());
+            return Result.error("查询购物车失败，请稍后重试");
         }
     }
     
@@ -112,7 +112,7 @@ public class PosController {
             return Result.success("购物车已清空",null);
         } catch (Exception e) {
             log.error("清空购物车失败", e);
-            return Result.error("清空购物车失败：" + e.getMessage());
+            return Result.error("清空购物车失败，请稍后重试");
         }
     }
     
@@ -131,7 +131,7 @@ public class PosController {
             return Result.success("订单创建成功",order);
         } catch (Exception e) {
             log.error("结账失败", e);
-            return Result.error("结账失败：" + e.getMessage());
+            return Result.error("结账失败，请稍后重试");
         }
     }
 }

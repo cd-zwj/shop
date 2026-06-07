@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket,
@@ -68,7 +68,7 @@ export default function MerchantCoupons() {
     { id: 'DISABLED', label: '已下线' },
   ];
 
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
@@ -82,11 +82,11 @@ export default function MerchantCoupons() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tenantId, activeTab, showToast]);
 
   useEffect(() => {
     void loadTemplates();
-  }, [tenantId, activeTab]);
+  }, [loadTemplates]);
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();

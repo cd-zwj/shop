@@ -20,12 +20,14 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { Product, Tenant } from '../types/catalog';
+
+type ProductWithTenant = Product & { tenantId: number };
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
 
 export default function Home() {
   const navigate = useNavigate();
-  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<ProductWithTenant[]>([]);
   const [featuredMerchants, setFeaturedMerchants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -155,7 +157,7 @@ export default function Home() {
               <motion.div
                 key={isData ? product.id : index}
                 whileHover={{ y: -4 }}
-                onClick={() => isData && navigate(`/product/${product.id}?tenantId=${(product as any).tenantId}`)}
+                onClick={() => isData && navigate(`/product/${product.id}?tenantId=${product.tenantId}`)}
                 className="flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
               >
                 <div className="relative h-40 bg-slate-100">

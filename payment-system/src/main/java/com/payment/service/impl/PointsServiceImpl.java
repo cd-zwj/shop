@@ -447,12 +447,12 @@ public class PointsServiceImpl implements PointsService {
         );
 
         if (userPoints == null) {
-            // 积分记录不存在，创建一条新的
+            // 积分记录不存在，创建一条新的（退款回退不计入累计获得）
             userPoints = new UserPoints();
             userPoints.setUserId(userId);
             userPoints.setTenantId(tenantId);
             userPoints.setPoints(points);
-            userPoints.setTotalEarned(points);
+            userPoints.setTotalEarned(0);
             userPoints.setTotalUsed(0);
             userPoints.setDeleted(0);
             userPoints.setCreateTime(LocalDateTime.now());
@@ -462,10 +462,12 @@ public class PointsServiceImpl implements PointsService {
             // 回退积分（乐观锁重试）
             for (int attempt = 0; attempt < 3; attempt++) {
                 userPoints.setPoints(userPoints.getPoints() + points);
-                userPoints.setTotalEarned(userPoints.getTotalEarned() + points);
                 userPoints.setUpdateTime(LocalDateTime.now());
                 if (userPointsMapper.updateById(userPoints) > 0) break;
                 userPoints = userPointsMapper.selectById(userPoints.getId());
+                if (userPoints == null) {
+                    throw new BusinessException("积分账户不存在");
+                }
                 if (attempt == 2) throw new BusinessException("操作冲突，请重试");
             }
         }

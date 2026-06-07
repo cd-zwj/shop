@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ClipboardList, AlertCircle, Check, X, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -29,7 +29,7 @@ export default function MerchantRefunds() {
     { id: 'REJECTED', label: '已驳回' },
   ];
 
-  const loadRefunds = async () => {
+  const loadRefunds = useCallback(async () => {
     if (!tenantId) return;
     setIsLoading(true);
     try {
@@ -45,11 +45,11 @@ export default function MerchantRefunds() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tenantId, activeTab, showToast]);
 
   useEffect(() => {
     void loadRefunds();
-  }, [tenantId, activeTab]);
+  }, [loadRefunds]);
 
   const handleAuditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

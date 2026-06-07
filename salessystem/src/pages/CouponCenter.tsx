@@ -27,11 +27,13 @@ export default function CouponCenter() {
 
   // Load tenant list
   useEffect(() => {
+    let isMounted = true;
     async function loadTenants() {
       try {
         const list = await appCatalogService.listTenants();
+        if (!isMounted) return;
         setTenants(list);
-        
+
         // Determine active tenant from URL or default to first
         const urlTenantId = searchParams.get('tenantId');
         if (urlTenantId) {
@@ -45,10 +47,15 @@ export default function CouponCenter() {
           setActiveTenant(list[0]);
         }
       } catch (e) {
-        showToast('获取商户列表失败', 'error');
+        if (isMounted) {
+          showToast('获取商户列表失败', 'error');
+        }
       }
     }
     void loadTenants();
+    return () => {
+      isMounted = false;
+    };
   }, [searchParams]);
 
   // Load coupon data for active tenant
@@ -185,7 +192,7 @@ export default function CouponCenter() {
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as any)}
+            onClick={() => setActiveTab(tab.key as 'available' | 'my' | 'expired')}
             className={cn(
               'flex-1 text-center py-3.5 text-sm font-bold border-b-2 transition-all relative',
               activeTab === tab.key
