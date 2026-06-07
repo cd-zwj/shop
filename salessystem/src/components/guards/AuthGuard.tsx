@@ -1,31 +1,52 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { adminAuthService } from '../../services/modules/adminAuth';
+import { merchantAuthService } from '../../services/modules/merchantAuth';
 import { getToken } from '../../utils/token';
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
-  const { isReady, currentRole, currentUser, refreshCurrentUser, logout } = useAuth();
+  const { isReady, currentRole, currentUser, merchantSession, adminSession, refreshCurrentUser, logout } = useAuth();
   const location = useLocation();
   const [isRecovering, setIsRecovering] = useState(false);
+  const verificationDone = useRef(false);
 
-  // Check if token exists for the active role
   const tokenExists = currentRole ? !!getToken(currentRole) : false;
 
+  // Determine whether the server-confirmed session is present for the active role.
+  const hasSession =
+    (currentRole === 'user' && !!currentUser) ||
+    (currentRole === 'merchant' && !!merchantSession) ||
+    (currentRole === 'admin' && !!adminSession) ||
+    false;
+
   useEffect(() => {
-    async function recover() {
-      if (tokenExists && currentRole === 'user' && !currentUser && !isRecovering) {
-        setIsRecovering(true);
-        try {
+    // Only verify once per mount to avoid infinite loops when session objects are
+    // re-populated by AuthContext hydrate() and trigger this effect again.
+    if (!tokenExists || hasSession || isRecovering || verificationDone.current) {
+      return;
+    }
+    verificationDone.current = true;
+
+    async function verifySession() {
+      setIsRecovering(true);
+      try {
+        if (currentRole === 'user') {
           await refreshCurrentUser();
-        } catch (e: unknown) {
-          await logout();
-        } finally {
-          setIsRecovering(false);
+        } else if (currentRole === 'merchant') {
+          await merchantAuthService.getCurrentSession();
+        } else if (currentRole === 'admin') {
+          await adminAuthService.getCurrentSession();
         }
+      } catch {
+        await logout();
+      } finally {
+        setIsRecovering(false);
       }
     }
-    void recover();
-  }, [tokenExists, currentRole, currentUser, refreshCurrentUser, logout, isRecovering]);
+
+    void verifySession();
+  }, [tokenExists, hasSession, isRecovering, currentRole, refreshCurrentUser, logout]);
 
   if (!isReady || isRecovering) {
     return (
@@ -42,8 +63,8 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  // If role is user, we must have currentUser
-  if (currentRole === 'user' && !currentUser) {
+  // After verification, reject any role that still lacks a server-confirmed session.
+  if (!hasSession) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 

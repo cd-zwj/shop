@@ -34,6 +34,7 @@ public class V1AppAuthController {
         return Result.success(AppUserVO.toVO(platformIdentityService.register(dto)));
     }
 
+    @RateLimit(prefix = "auth:login", key = "#dto.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
     @PostMapping("/login/password")
     public Result<String> loginByPassword(@Valid @RequestBody PlatformLoginDTO dto,
                                           HttpServletRequest request) {
@@ -50,6 +51,7 @@ public class V1AppAuthController {
         }
     }
 
+    @RateLimit(prefix = "auth:login", key = "#dto.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
     @PostMapping("/login/sms")
     public Result<String> loginBySms(@Valid @RequestBody PlatformLoginDTO dto,
                                      HttpServletRequest request) {
@@ -66,6 +68,7 @@ public class V1AppAuthController {
         }
     }
 
+    @RateLimit(prefix = "auth:login", key = "#dto.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
     @PostMapping("/login/third-party")
     public Result<String> loginByThirdParty(@Valid @RequestBody PlatformLoginDTO dto,
                                             HttpServletRequest request) {

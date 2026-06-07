@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.entity.MemberAccountTag;
 import com.payment.entity.MemberLevel;
@@ -158,6 +159,7 @@ public class MemberServiceImpl implements MemberService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void checkAndAutoUpgrade(Long tenantId, Long platformUserId) {
         if (tenantId == null || platformUserId == null) {
             return;
@@ -169,15 +171,14 @@ public class MemberServiceImpl implements MemberService {
         if (member == null) {
             return;
         }
-        // 查询该用户在该租户下已支付订单的累计消费
-        List<SalesOrder> paidOrders = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getTenantId, tenantId)
-                .eq(SalesOrder::getPlatformUserId, platformUserId)
-                .eq(SalesOrder::getPayStatus, PayStatusEnum.SUCCESS.name())
-                .eq(SalesOrder::getDeleted, 0));
-        BigDecimal totalSpend = paidOrders.stream()
-                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 使用 SQL SUM 聚合代替全量查询，避免内存溢出
+        Object sumResult = salesOrderMapper.selectObjs(new QueryWrapper<SalesOrder>()
+                .eq("tenant_id", tenantId)
+                .eq("platform_user_id", platformUserId)
+                .eq("pay_status", PayStatusEnum.SUCCESS.name())
+                .eq("deleted", 0)
+                .select("COALESCE(SUM(total_amount), 0)")).stream().findFirst().orElse(BigDecimal.ZERO);
+        BigDecimal totalSpend = sumResult instanceof BigDecimal bd ? bd : new BigDecimal(sumResult.toString());
 
         // 查询该租户下所有已启用的等级，按门槛降序排列
         List<MemberLevel> levels = levelMapper.selectList(new LambdaQueryWrapper<MemberLevel>()

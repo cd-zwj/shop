@@ -17,6 +17,7 @@ import com.payment.service.RefundApplicationService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,18 +63,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         // 校验退款类型合法
         validateRefundType(dto.getRefundType());
 
-        // 检查是否已有进行中的退款申请
-        Long existingCount = refundApplicationMapper.selectCount(new LambdaQueryWrapper<RefundApplication>()
-                .eq(RefundApplication::getOrderNo, dto.getOrderNo())
-                .eq(dto.getOrderItemId() != null, RefundApplication::getOrderItemId, dto.getOrderItemId())
-                .in(RefundApplication::getRefundStatus,
-                        RefundApplicationStatus.PENDING.name(),
-                        RefundApplicationStatus.APPROVED.name(),
-                        RefundApplicationStatus.PROCESSING.name()));
-        if (existingCount > 0) {
-            throw new BusinessException("该订单已有进行中的退款申请");
-        }
-
+        // 先构建实体，通过 INSERT 唯一约束防止并发重复退款
         RefundApplication app = new RefundApplication();
         app.setRefundNo(BizNoGenerator.generate("RA"));
         app.setOrderNo(dto.getOrderNo());
@@ -86,7 +76,12 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         app.setReason(dto.getReason());
         app.setDescription(dto.getDescription());
 
-        refundApplicationMapper.insert(app);
+        try {
+            refundApplicationMapper.insert(app);
+        } catch (DuplicateKeyException e) {
+            throw new BusinessException("该订单已有进行中的退款申请");
+        }
+
         log.info("退款申请已创建: refundNo={}, orderNo={}, amount={}", app.getRefundNo(), app.getOrderNo(), app.getRefundAmount());
         return app;
     }

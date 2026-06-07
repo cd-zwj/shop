@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
+import com.payment.annotation.RateLimit;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.dto.V1MerchantLoginDTO;
@@ -29,6 +30,7 @@ public class V1MerchantAuthController {
     private final PlatformIdentityService platformIdentityService;
     private final V1MerchantSupportService v1MerchantSupportService;
 
+    @RateLimit(prefix = "auth:login", key = "#dto.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
     @PostMapping("/login")
     public Result<V1MerchantSessionVO> login(@Valid @RequestBody V1MerchantLoginDTO dto) {
         authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());

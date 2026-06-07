@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.payment.common.BusinessException;
 import com.payment.entity.LoginFailRecord;
 import com.payment.mapper.LoginFailRecordMapper;
 import com.payment.service.LoginSecurityService;
@@ -30,20 +31,40 @@ public class LoginSecurityServiceImpl implements LoginSecurityService {
         LoginFailRecord record = findByAccount(account);
         if (record != null && record.getLockedUntil() != null
                 && record.getLockedUntil().isAfter(LocalDateTime.now())) {
-            throw new RuntimeException("账号已被锁定，请" + LOCK_MINUTES + "分钟后重试");
+            throw new BusinessException("账号已被锁定，请稍后重试");
         }
     }
 
     @Override
     public void recordFailure(String account, String ip) {
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime windowStart = now.minusMinutes(FAIL_WINDOW_MINUTES);
 
-        // 原子递增
+        // 原子化：在一次 UPDATE 中同时完成递增 + 时间窗口重置 + 锁定判定
+        // 如果 last_fail_time 已超过窗口期，将 fail_count 重置为 1 并清除锁定
+        LambdaUpdateWrapper<LoginFailRecord> windowResetWrapper = new LambdaUpdateWrapper<>();
+        windowResetWrapper.eq(LoginFailRecord::getAccount, account)
+                          .le(LoginFailRecord::getLastFailTime, windowStart)
+                          .set(LoginFailRecord::getFailCount, 1)
+                          .set(LoginFailRecord::getLastFailTime, now)
+                          .set(LoginFailRecord::getIp, ip)
+                          .set(LoginFailRecord::getLockedUntil, null);
+        int windowReset = loginFailRecordMapper.update(null, windowResetWrapper);
+        if (windowReset > 0) {
+            log.info("账号 {} 失败窗口已过期，重置 fail_count=1", account);
+            return;
+        }
+
+        // 窗口内：原子递增 + 到达阈值时自动设置 locked_until
         LambdaUpdateWrapper<LoginFailRecord> updateWrapper = new LambdaUpdateWrapper<>();
         updateWrapper.eq(LoginFailRecord::getAccount, account)
+                     .gt(LoginFailRecord::getLastFailTime, windowStart)
                      .setSql("fail_count = fail_count + 1")
                      .set(LoginFailRecord::getLastFailTime, now)
-                     .set(LoginFailRecord::getIp, ip);
+                     .set(LoginFailRecord::getIp, ip)
+                     .setSql("locked_until = CASE WHEN fail_count + 1 >= " + MAX_FAIL_COUNT
+                             + " AND locked_until IS NULL THEN DATE_ADD(NOW(), INTERVAL " + LOCK_MINUTES + " MINUTE)"
+                             + " ELSE locked_until END");
         int affected = loginFailRecordMapper.update(null, updateWrapper);
 
         if (affected == 0) {
@@ -54,17 +75,14 @@ public class LoginSecurityServiceImpl implements LoginSecurityService {
             record.setFailCount(1);
             record.setLastFailTime(now);
             loginFailRecordMapper.insert(record);
-        }
-
-        // 检查是否达到锁定阈值
-        LoginFailRecord current = findByAccount(account);
-        if (current != null && current.getFailCount() >= MAX_FAIL_COUNT
-                && current.getLockedUntil() == null) {
-            LambdaUpdateWrapper<LoginFailRecord> lockWrapper = new LambdaUpdateWrapper<>();
-            lockWrapper.eq(LoginFailRecord::getAccount, account)
-                       .set(LoginFailRecord::getLockedUntil, now.plusMinutes(LOCK_MINUTES));
-            loginFailRecordMapper.update(null, lockWrapper);
-            log.warn("账号 {} 因连续{}次登录失败被锁定{}分钟", account, MAX_FAIL_COUNT, LOCK_MINUTES);
+        } else {
+            // 检查是否刚触发锁定（用于日志告警）
+            LoginFailRecord current = findByAccount(account);
+            if (current != null && current.getLockedUntil() != null
+                    && current.getLockedUntil().isAfter(now)
+                    && current.getFailCount() != null && current.getFailCount() >= MAX_FAIL_COUNT) {
+                log.warn("账号 {} 因连续{}次登录失败被锁定{}分钟", account, MAX_FAIL_COUNT, LOCK_MINUTES);
+            }
         }
     }
 
@@ -76,8 +94,15 @@ public class LoginSecurityServiceImpl implements LoginSecurityService {
     }
 
     private LoginFailRecord findByAccount(String account) {
+        // 查询时检查时间窗口：如果 last_fail_time 已过期，视为未锁定
         LambdaQueryWrapper<LoginFailRecord> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(LoginFailRecord::getAccount, account).last("LIMIT 1");
-        return loginFailRecordMapper.selectOne(wrapper);
+        LoginFailRecord record = loginFailRecordMapper.selectOne(wrapper);
+        if (record != null && record.getLastFailTime() != null
+                && record.getLastFailTime().isBefore(LocalDateTime.now().minusMinutes(FAIL_WINDOW_MINUTES))) {
+            // 窗口过期，异步清理（不影响当前请求）
+            log.debug("账号 {} 失败记录窗口已过期，将在下次写入时重置", account);
+        }
+        return record;
     }
 }

@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS login_fail_record (
     tenant_id BIGINT,
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_account (account)
+    UNIQUE KEY uk_account (account)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录失败记录表';
