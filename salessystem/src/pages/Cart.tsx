@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
@@ -7,21 +7,39 @@ import {
   ShoppingBag,
   Store,
   Trash2,
+  Ticket,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { useToast } from '../context/ToastContext';
 import { appCatalogService } from '../services/modules/appCatalog';
+import { appCouponService } from '../services/modules/appCoupon';
 import {
   createOrderForItems,
   getOrderCheckoutPath,
 } from '../services/orderCheckout';
 import { ApiError } from '../types/api';
+import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { formatCurrency, getImageUrl } from '../utils/display';
+
+const calculateDiscount = (coupon: { couponType: 'FIXED' | 'RATE'; discountAmount: number | null; discountRate: number | null; maxDiscountAmount: number | null }, subtotal: number) => {
+  if (coupon.couponType === 'FIXED') {
+    return coupon.discountAmount ?? 0;
+  } else {
+    const rate = coupon.discountRate ?? 1;
+    const discount = subtotal * (1 - rate);
+    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
+      return coupon.maxDiscountAmount;
+    }
+    return discount;
+  }
+};
 
 export default function Cart() {
   const navigate = useNavigate();
   const { currentRole } = useAuth();
+  const { showToast } = useToast();
   const {
     items,
     totalItems,
@@ -34,6 +52,22 @@ export default function Cart() {
     null,
   );
   const [error, setError] = useState('');
+
+  // Coupon states
+  const [couponsByTenant, setCouponsByTenant] = useState<Record<number, {
+    availableTemplates: CouponTemplate[];
+    myUsableCoupons: UserCoupon[];
+    isLoading: boolean;
+  }>>({});
+
+  const [selectedCouponByTenant, setSelectedCouponByTenant] = useState<Record<number, {
+    key: string;
+    type: 'TEMPLATE' | 'OWNED';
+    id: number;
+    name: string;
+  } | null>>({});
+
+  const loadedTenantsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const tenantIds = [...new Set<number>(items.map((item) => item.tenantId))].filter(
@@ -75,6 +109,158 @@ export default function Cart() {
     };
   }, [items, tenantNames]);
 
+  // Fetch coupons for all merchants in the cart
+  useEffect(() => {
+    const activeTenantIds = [...new Set<number>(items.map((item) => item.tenantId))];
+    
+    // Sync loadedTenantsRef with active tenants to allow refetching if removed and re-added
+    const activeSet = new Set(activeTenantIds);
+    Array.from(loadedTenantsRef.current).forEach((id: number) => {
+      if (!activeSet.has(id)) {
+        loadedTenantsRef.current.delete(id);
+      }
+    });
+
+    const tenantsToLoad = activeTenantIds.filter((id) => !loadedTenantsRef.current.has(id));
+
+    if (tenantsToLoad.length === 0) return;
+
+    tenantsToLoad.forEach((id) => loadedTenantsRef.current.add(id));
+
+    setCouponsByTenant((prev) => {
+      const next = { ...prev };
+      tenantsToLoad.forEach((id) => {
+        next[id] = { availableTemplates: [], myUsableCoupons: [], isLoading: true };
+      });
+      return next;
+    });
+
+    let isMounted = true;
+
+    async function loadCoupons() {
+      await Promise.all(
+        tenantsToLoad.map(async (tenantId) => {
+          try {
+            const [available, myCoupons] = await Promise.all([
+              appCouponService.getAvailableCoupons(tenantId),
+              appCouponService.getMyCoupons(tenantId, 'USABLE'),
+            ]);
+            if (!isMounted) return;
+            setCouponsByTenant((prev) => ({
+              ...prev,
+              [tenantId]: { availableTemplates: available, myUsableCoupons: myCoupons, isLoading: false },
+            }));
+          } catch (e) {
+            loadedTenantsRef.current.delete(tenantId);
+            if (!isMounted) return;
+            setCouponsByTenant((prev) => ({
+              ...prev,
+              [tenantId]: { availableTemplates: [], myUsableCoupons: [], isLoading: false },
+            }));
+          }
+        })
+      );
+    }
+
+    void loadCoupons();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [items]);
+
+  const getSelectableCoupons = useCallback((tenantId: number, subtotal: number) => {
+    const data = couponsByTenant[tenantId];
+    if (!data) return [];
+
+    const options: Array<{
+      key: string;
+      id: number;
+      type: 'OWNED' | 'TEMPLATE';
+      name: string;
+      desc: string;
+      discountAmount: number;
+      thresholdAmount: number;
+      isUsable: boolean;
+      reason?: string;
+    }> = [];
+
+    // 1. Add owned coupons
+    data.myUsableCoupons.forEach((coupon) => {
+      const isUsable = subtotal >= coupon.thresholdAmount;
+      const discount = calculateDiscount(coupon, subtotal);
+      
+      options.push({
+        key: `owned-${coupon.id}`,
+        id: coupon.id,
+        type: 'OWNED',
+        name: coupon.name,
+        desc: coupon.couponType === 'FIXED' 
+          ? `满 ¥${coupon.thresholdAmount} 减 ¥${coupon.discountAmount}`
+          : `满 ¥${coupon.thresholdAmount} 打 ${(coupon.discountRate ?? 1) * 10} 折`,
+        discountAmount: discount,
+        thresholdAmount: coupon.thresholdAmount,
+        isUsable,
+        reason: isUsable ? undefined : `还差 ¥${(coupon.thresholdAmount - subtotal).toFixed(2)}`
+      });
+    });
+
+    // 2. Add available templates to claim
+    data.availableTemplates.forEach((template) => {
+      const hasOwnedUsable = data.myUsableCoupons.some((c) => c.couponTemplateId === template.id);
+      if (hasOwnedUsable) return;
+
+      const isUsable = subtotal >= template.thresholdAmount && template.receivable && template.remainingStock > 0;
+      const discount = calculateDiscount(template, subtotal);
+
+      let reason = undefined;
+      if (subtotal < template.thresholdAmount) {
+        reason = `还差 ¥${(template.thresholdAmount - subtotal).toFixed(2)}`;
+      } else if (!template.receivable) {
+        reason = '已领超限';
+      } else if (template.remainingStock <= 0) {
+        reason = '无库存';
+      }
+
+      options.push({
+        key: `template-${template.id}`,
+        id: template.id,
+        type: 'TEMPLATE',
+        name: `${template.name} (可领用)`,
+        desc: template.couponType === 'FIXED' 
+          ? `满 ¥${template.thresholdAmount} 减 ¥${template.discountAmount}`
+          : `满 ¥${template.thresholdAmount} 打 ${(template.discountRate ?? 1) * 10} 折`,
+        discountAmount: discount,
+        thresholdAmount: template.thresholdAmount,
+        isUsable,
+        reason
+      });
+    });
+
+    return options.sort((a, b) => {
+      if (a.isUsable && !b.isUsable) return -1;
+      if (!a.isUsable && b.isUsable) return 1;
+      return b.discountAmount - a.discountAmount;
+    });
+  }, [couponsByTenant]);
+
+  const getSelectedCouponDiscount = useCallback((tenantId: number, subtotal: number) => {
+    const sel = selectedCouponByTenant[tenantId];
+    if (!sel) return 0;
+    const data = couponsByTenant[tenantId];
+    if (!data) return 0;
+
+    if (sel.type === 'OWNED') {
+      const coupon = data.myUsableCoupons.find((c) => c.id === sel.id);
+      if (!coupon || subtotal < coupon.thresholdAmount) return 0;
+      return calculateDiscount(coupon, subtotal);
+    } else {
+      const template = data.availableTemplates.find((t) => t.id === sel.id);
+      if (!template || subtotal < template.thresholdAmount) return 0;
+      return calculateDiscount(template, subtotal);
+    }
+  }, [selectedCouponByTenant, couponsByTenant]);
+
   const groupedItems = useMemo(() => {
     const groups = new Map<
       number,
@@ -104,6 +290,12 @@ export default function Cart() {
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
+  const totalDiscount = useMemo(() => {
+    return groupedItems.reduce((sum, group) => {
+      return sum + getSelectedCouponDiscount(group.tenantId, group.subtotal);
+    }, 0);
+  }, [groupedItems, getSelectedCouponDiscount]);
+
   async function handleCheckoutByTenant(tenantId: number) {
     const tenantItems = items.filter((item) => item.tenantId === tenantId);
 
@@ -120,7 +312,30 @@ export default function Cart() {
     setIsSubmittingTenantId(tenantId);
 
     try {
-      const payment = await createOrderForItems(tenantItems, 'APP_CART');
+      let finalCouponId: number | undefined = undefined;
+      const selectedCoupon = selectedCouponByTenant[tenantId];
+      
+      if (selectedCoupon) {
+        const tenantSubtotal = tenantItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const discount = getSelectedCouponDiscount(tenantId, tenantSubtotal);
+        
+        if (discount > 0) {
+          if (selectedCoupon.type === 'OWNED') {
+            finalCouponId = selectedCoupon.id;
+          } else if (selectedCoupon.type === 'TEMPLATE') {
+            showToast('正在为您领取并绑定优惠券...', 'info');
+            const claimResult = await appCouponService.claimCoupon(tenantId, selectedCoupon.id);
+            finalCouponId = claimResult.userCouponId;
+            showToast('优惠券领用成功！', 'success');
+          }
+        } else {
+          showToast('所选优惠券不满足门槛条件或已失效', 'error');
+          setIsSubmittingTenantId(null);
+          return;
+        }
+      }
+
+      const payment = await createOrderForItems(tenantItems, 'APP_CART', finalCouponId);
       clearTenantItems(tenantId);
 
       if (payment.externalPayUrl) {
@@ -271,13 +486,74 @@ export default function Cart() {
                   ))}
                 </div>
 
+                {/* Coupon Selector Section */}
+                <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/20 px-5 py-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                      <Ticket className="h-4 w-4 text-orange-500" />
+                      优惠券
+                    </span>
+                    <select
+                      value={selectedCouponByTenant[group.tenantId]?.key || ''}
+                      onChange={(e) => {
+                        const key = e.target.value;
+                        if (!key) {
+                          setSelectedCouponByTenant((prev) => ({ ...prev, [group.tenantId]: null }));
+                          return;
+                        }
+                        const coupon = getSelectableCoupons(group.tenantId, group.subtotal).find(c => c.key === key);
+                        if (coupon) {
+                          setSelectedCouponByTenant((prev) => ({
+                            ...prev,
+                            [group.tenantId]: {
+                              key,
+                              type: coupon.type,
+                              id: coupon.id,
+                              name: coupon.name,
+                            }
+                          }));
+                        }
+                      }}
+                      className="w-full sm:w-64 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">不使用优惠券</option>
+                      {getSelectableCoupons(group.tenantId, group.subtotal).map((opt) => (
+                        <option
+                          key={opt.key}
+                          value={opt.key}
+                          disabled={!opt.isUsable}
+                        >
+                          {opt.name} - {opt.desc} {opt.reason ? `(${opt.reason})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {selectedCouponByTenant[group.tenantId] && getSelectedCouponDiscount(group.tenantId, group.subtotal) > 0 && (
+                    <div className="flex items-center justify-between text-xs text-orange-600 font-bold bg-orange-50/50 p-2.5 rounded-xl border border-orange-100">
+                      <span>已选: {selectedCouponByTenant[group.tenantId]?.name}</span>
+                      <span>优惠: -{formatCurrency(getSelectedCouponDiscount(group.tenantId, group.subtotal))}</span>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/60 p-5 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400">
                       商户小计
                     </p>
                     <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-                      {formatCurrency(group.subtotal)}
+                      {selectedCouponByTenant[group.tenantId] && getSelectedCouponDiscount(group.tenantId, group.subtotal) > 0 ? (
+                        <span className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-400 line-through">
+                            {formatCurrency(group.subtotal)}
+                          </span>
+                          <span className="text-primary">
+                            {formatCurrency(Math.max(0, group.subtotal - getSelectedCouponDiscount(group.tenantId, group.subtotal)))}
+                          </span>
+                        </span>
+                      ) : (
+                        formatCurrency(group.subtotal)
+                      )}
                     </p>
                   </div>
                   <button
@@ -306,9 +582,23 @@ export default function Cart() {
               总计 ({totalItems} 件商品 / {groupedItems.length} 个商户)
             </span>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="text-3xl font-black tracking-tight text-slate-900">
-                {formatCurrency(subtotal)}
-              </span>
+              {totalDiscount > 0 ? (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-sm font-semibold text-slate-400 line-through">
+                    {formatCurrency(subtotal)}
+                  </span>
+                  <span className="text-3xl font-black tracking-tight text-primary">
+                    {formatCurrency(Math.max(0, subtotal - totalDiscount))}
+                  </span>
+                  <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md ml-1">
+                    已省 {formatCurrency(totalDiscount)}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-3xl font-black tracking-tight text-slate-900">
+                  {formatCurrency(subtotal)}
+                </span>
+              )}
             </div>
           </div>
 

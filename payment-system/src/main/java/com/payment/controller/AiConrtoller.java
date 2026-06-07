@@ -20,7 +20,7 @@ public class AiConrtoller {
     }
 
     @SaCheckPermission("ai:chat")
-    @GetMapping("/recommend/products")
+    @GetMapping("/recommend/products/{userId}/{limit}/{scene}")
     public Flux<String> recommendProducts(@PathVariable("userId") Long userId, @PathVariable("limit") Integer limit, @PathVariable("scene") String scene){
         log.info("用户"+userId+"的"+scene+"场景下的商品推荐开始");
         return Flux.just("{\"type\":\"disabled\",\"data\":\"AI商品推荐功能暂时关闭\"}");

@@ -26,7 +26,10 @@ import {
   Package,
   Users,
   ShoppingBag,
-  Settings2
+  Settings2,
+  Sparkles,
+  Ticket,
+  HeartHandshake
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
@@ -77,6 +80,13 @@ import GuestGuard from './components/guards/GuestGuard';
 import CouponCenter from './pages/CouponCenter';
 import Points from './pages/Points';
 import { ToastProvider } from './context/ToastContext';
+
+import ApplyRefund from './pages/ApplyRefund';
+import MerchantRefunds from './pages/merchant/MerchantRefunds';
+import MerchantCoupons from './pages/merchant/MerchantCoupons';
+import MerchantActivities from './pages/merchant/MerchantActivities';
+import MerchantMembers from './pages/merchant/MerchantMembers';
+import AdminMarketing from './pages/AdminMarketing';
 
 // --- Components ---
 
@@ -190,6 +200,7 @@ const Sidebar = () => {
     { icon: Wallet, label: '充值监管', path: '/admin/recharges' },
     { icon: ShieldCheck, label: '用户安全治理', path: '/admin/users' },
     { icon: ArrowUpRight, label: '提现审批中心', path: '/admin/withdrawals' },
+    { icon: Sparkles, label: '平台营销运营', path: '/admin/marketing' },
   ];
 
   const merchantMenu = [
@@ -197,6 +208,10 @@ const Sidebar = () => {
     { icon: Package, label: '我的商品', path: '/merchant/products' },
     { icon: ShoppingBag, label: '订单管理', path: '/merchant/orders' },
     { icon: Wallet, label: '财务结算', path: '/merchant/finance' },
+    { icon: Ticket, label: '优惠券管理', path: '/merchant/marketing/coupons' },
+    { icon: Sparkles, label: '促销活动管理', path: '/merchant/marketing/activities' },
+    { icon: Users, label: '会员等级标签', path: '/merchant/marketing/members' },
+    { icon: HeartHandshake, label: '售后退款审核', path: '/merchant/refunds' },
     { icon: Settings2, label: '规则配置', path: '/merchant/rules' },
     { icon: ArrowUpRight, label: '提现中心', path: '/merchant/withdrawals' },
   ];
@@ -304,6 +319,7 @@ function AppContent() {
             <Route path="/history" element={<AuthGuard><ConsumptionHistory /></AuthGuard>} />
             <Route path="/orders" element={<AuthGuard><UserOrders /></AuthGuard>} />
             <Route path="/order/:id" element={<AuthGuard><UserOrderDetail /></AuthGuard>} />
+            <Route path="/orders/:orderNo/refund" element={<AuthGuard><ApplyRefund /></AuthGuard>} />
             <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
             <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />
             <Route path="/ai" element={<AuthGuard><AIAssistant /></AuthGuard>} />
@@ -329,6 +345,7 @@ function AppContent() {
             <Route path="/admin/user/:id/permissions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminUserPermissions /></RoleGuard></AuthGuard>} />
             <Route path="/admin/permissions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminPermissions /></RoleGuard></AuthGuard>} />
             <Route path="/admin/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminWithdrawals /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/marketing" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMarketing /></RoleGuard></AuthGuard>} />
             
             {/* --- Merchant routes (merchant role required) --- */}
             <Route path="/merchant" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantDashboard /></RoleGuard></AuthGuard>} />
@@ -339,6 +356,10 @@ function AppContent() {
             <Route path="/merchant/orders" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrders /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/order/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrderDetail /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/finance" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantFinance /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/marketing/coupons" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantCoupons /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/marketing/activities" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantActivities /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/marketing/members" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantMembers /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/refunds" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRefunds /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/rules" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRules /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantWithdraw /></RoleGuard></AuthGuard>} />
           </Routes>

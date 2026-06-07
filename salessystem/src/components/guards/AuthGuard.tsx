@@ -18,10 +18,6 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
         try {
           await refreshCurrentUser();
         } catch (e: unknown) {
-          console.error('Failed to recover user profile', e);
-          if (e instanceof Error) {
-            console.error('Error message:', e.message);
-          }
           await logout();
         } finally {
           setIsRecovering(false);

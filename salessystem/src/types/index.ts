@@ -96,3 +96,24 @@ export type {
   AdminWithdrawal,
   FileExistsResult,
 } from './admin';
+
+// 优惠券与积分类型
+export type { CouponTemplate, UserCoupon, CouponReceiveResult } from './coupon';
+export type { PointsBalance, PointsLog, ExchangeProduct } from './points';
+
+// 营销与会员类型
+export type {
+  MerchantCouponTemplate,
+  CouponTemplateCreatePayload,
+  CouponScope,
+  CouponScopeCreatePayload,
+  PromotionActivity,
+  ActivityRule,
+  ActivityRuleCreatePayload,
+  MemberLevel,
+  MemberTag,
+} from './marketing';
+
+// 退款类型
+export type { RefundCreateDTO, Refund } from './refund';
+

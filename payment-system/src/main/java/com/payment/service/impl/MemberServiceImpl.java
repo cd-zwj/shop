@@ -5,13 +5,17 @@ import com.payment.common.BusinessException;
 import com.payment.entity.MemberAccountTag;
 import com.payment.entity.MemberLevel;
 import com.payment.entity.MemberTag;
+import com.payment.entity.SalesOrder;
 import com.payment.entity.TenantMember;
+import com.payment.enums.PayStatusEnum;
 import com.payment.mapper.MemberAccountTagMapper;
 import com.payment.mapper.MemberLevelMapper;
 import com.payment.mapper.MemberTagMapper;
+import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.service.MemberService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +25,7 @@ import java.util.List;
 /**
  * 会员运营服务实现。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class MemberServiceImpl implements MemberService {
@@ -31,6 +36,7 @@ public class MemberServiceImpl implements MemberService {
     private final MemberTagMapper tagMapper;
     private final MemberAccountTagMapper accountTagMapper;
     private final TenantMemberMapper memberMapper;
+    private final SalesOrderMapper salesOrderMapper;
 
     @Override
     public List<MemberLevel> listLevels(Long tenantId) {
@@ -149,6 +155,48 @@ public class MemberServiceImpl implements MemberService {
         accountTagMapper.delete(new LambdaQueryWrapper<MemberAccountTag>()
                 .eq(MemberAccountTag::getMemberId, memberId)
                 .eq(MemberAccountTag::getTagId, tagId));
+    }
+
+    @Override
+    public void checkAndAutoUpgrade(Long tenantId, Long platformUserId) {
+        if (tenantId == null || platformUserId == null) {
+            return;
+        }
+        // 查找该用户的会员记录
+        TenantMember member = memberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
+                .eq(TenantMember::getTenantId, tenantId)
+                .eq(TenantMember::getPlatformUserId, platformUserId));
+        if (member == null) {
+            return;
+        }
+        // 查询该用户在该租户下已支付订单的累计消费
+        List<SalesOrder> paidOrders = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getTenantId, tenantId)
+                .eq(SalesOrder::getPlatformUserId, platformUserId)
+                .eq(SalesOrder::getPayStatus, PayStatusEnum.SUCCESS.name())
+                .eq(SalesOrder::getDeleted, 0));
+        BigDecimal totalSpend = paidOrders.stream()
+                .map(o -> o.getTotalAmount() != null ? o.getTotalAmount() : BigDecimal.ZERO)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 查询该租户下所有已启用的等级，按门槛降序排列
+        List<MemberLevel> levels = levelMapper.selectList(new LambdaQueryWrapper<MemberLevel>()
+                .eq(MemberLevel::getTenantId, tenantId)
+                .eq(MemberLevel::getStatus, ENABLED)
+                .orderByDesc(MemberLevel::getThresholdAmount));
+        // 从最高门槛开始匹配，找到第一个达标等级
+        for (MemberLevel lv : levels) {
+            if (lv.getThresholdAmount() != null && totalSpend.compareTo(lv.getThresholdAmount()) >= 0) {
+                // 如果目标等级高于当前等级才升级
+                if (member.getMemberLevel() == null || lv.getLevel() > member.getMemberLevel()) {
+                    member.setMemberLevel(lv.getLevel());
+                    memberMapper.updateById(member);
+                    log.info("会员自动升级: tenantId={}, userId={}, newLevel={}, totalSpend={}",
+                            tenantId, platformUserId, lv.getLevel(), totalSpend);
+                }
+                break;
+            }
+        }
     }
 
     private void ensureLevelNotExists(Long tenantId, Integer level, String name) {

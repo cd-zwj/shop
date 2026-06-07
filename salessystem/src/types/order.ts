@@ -25,6 +25,7 @@ export interface AppCreateOrderPayload {
   unifiedWalletAmount?: number;
   merchantWalletAmount?: number;
   allowExternalPayFallback?: boolean;
+  selectedUserCouponId?: number;
 }
 
 export interface OrderPayment {

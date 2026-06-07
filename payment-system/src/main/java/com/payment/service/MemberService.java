@@ -24,4 +24,13 @@ public interface MemberService {
     void assignTag(Long tenantId, Long memberId, Long tagId);
 
     void removeTag(Long tenantId, Long memberId, Long tagId);
+
+    /**
+     * 根据用户累计消费金额自动检查并升级会员等级。
+     * 如果累计消费达到更高等级门槛，则自动升级。
+     *
+     * @param tenantId     租户ID
+     * @param platformUserId 平台用户ID
+     */
+    void checkAndAutoUpgrade(Long tenantId, Long platformUserId);
 }

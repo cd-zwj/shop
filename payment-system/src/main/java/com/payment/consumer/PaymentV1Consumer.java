@@ -13,6 +13,7 @@ import com.payment.mapper.PointsRuleMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
+import com.payment.service.MemberService;
 import com.payment.service.ProductInventoryService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
@@ -43,6 +44,7 @@ public class PaymentV1Consumer {
     private final WithdrawalService withdrawalService;
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsRuleMapper pointsRuleMapper;
+    private final MemberService memberService;
 
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
@@ -106,6 +108,13 @@ public class PaymentV1Consumer {
                     orderNo,
                     "消费赠送积分"
             );
+        }
+
+        // 订单支付成功后自动检查会员等级升级
+        try {
+            memberService.checkAndAutoUpgrade(salesOrder.getTenantId(), salesOrder.getPlatformUserId());
+        } catch (Exception e) {
+            log.warn("会员自动升级检查失败, orderNo={}, userId={}", orderNo, salesOrder.getPlatformUserId(), e);
         }
     }
 }
