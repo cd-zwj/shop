@@ -8,6 +8,7 @@ import com.payment.mapper.PointsRuleMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
+import com.payment.service.MemberService;
 import com.payment.service.ProductInventoryService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
@@ -33,6 +34,7 @@ class PaymentV1ConsumerTest {
         ProductInventoryService productInventoryService = mock(ProductInventoryService.class);
         WithdrawalService withdrawalService = mock(WithdrawalService.class);
         MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        MemberService memberService = mock(MemberService.class);
         PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
 
         PaymentV1Consumer consumer = new PaymentV1Consumer(
@@ -42,7 +44,8 @@ class PaymentV1ConsumerTest {
                 productInventoryService,
                 withdrawalService,
                 memberPointsAccountService,
-                pointsRuleMapper
+                pointsRuleMapper,
+                memberService
         );
 
         SalesOrder salesOrder = new SalesOrder();

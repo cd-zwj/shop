@@ -8,6 +8,7 @@ import com.payment.entity.TenantMember;
 import com.payment.mapper.MemberAccountTagMapper;
 import com.payment.mapper.MemberLevelMapper;
 import com.payment.mapper.MemberTagMapper;
+import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantMemberMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -139,7 +140,7 @@ class MemberServiceImplTest {
                                       MemberTagMapper tagMapper,
                                       MemberAccountTagMapper accountTagMapper,
                                       TenantMemberMapper memberMapper) {
-        return new MemberServiceImpl(levelMapper, tagMapper, accountTagMapper, memberMapper);
+        return new MemberServiceImpl(levelMapper, tagMapper, accountTagMapper, memberMapper, mock(SalesOrderMapper.class));
     }
 
     private MemberLevel level(Long tenantId, Integer level, String name) {
