@@ -139,7 +139,7 @@ export default function PublicMerchantDetail() {
               <motion.div
                 key={product.id}
                 whileHover={{ y: -8 }}
-                onClick={() => navigate(`/product/${product.id}`)}
+                onClick={() => navigate(`/product/${product.id}?tenantId=${tenantId}`)}
                 className="group flex cursor-pointer flex-col gap-4 rounded-[32px] border border-slate-50 p-3 transition-all hover:shadow-2xl hover:shadow-slate-200/50 md:gap-5 md:rounded-[40px] md:p-4"
               >
                 <div className="aspect-square overflow-hidden rounded-[24px] bg-slate-100 md:rounded-[32px]">

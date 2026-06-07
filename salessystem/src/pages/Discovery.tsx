@@ -8,7 +8,7 @@ import {
   Smartphone,
   Star,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { Tenant } from '../types/catalog';
 import { cn } from '../lib/utils';
@@ -16,10 +16,36 @@ import { getImageUrl } from '../utils/display';
 
 export default function Discovery() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [stores, setStores] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState('全部分类');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const categories = ['全部分类', '餐饮', '零售', '服务', '娱乐'];
+
+  // Helper to map query param to category tab
+  const mapQueryToCategory = (queryVal: string | null) => {
+    if (!queryVal) return '全部分类';
+    switch (queryVal.toLowerCase()) {
+      case 'waimaimeishi':
+        return '餐饮';
+      case 'jiankanggouyao':
+        return '零售';
+      case 'lvyouchuxing':
+        return '服务';
+      case 'dianyingyanchu':
+        return '娱乐';
+      default:
+        return '全部分类';
+    }
+  };
+
+  // Helper to assign mock category to tenants
+  const getStoreCategory = (storeId: number) => {
+    const cats = ['餐饮', '零售', '服务', '娱乐'];
+    return cats[storeId % cats.length];
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -29,6 +55,12 @@ export default function Discovery() {
         const tenants = await appCatalogService.listTenants();
         if (!isMounted) return;
         setStores(tenants);
+
+        // Read query param and set active tab
+        const categoryParam = searchParams.get('category');
+        if (categoryParam) {
+          setActiveCategory(mapQueryToCategory(categoryParam));
+        }
       } catch {
         if (!isMounted) return;
         setStores([]);
@@ -44,9 +76,36 @@ export default function Discovery() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [searchParams]);
 
-  const displayStores = isLoading ? Array.from({ length: 6 }) : stores;
+  // Filter stores based on search query and active category tab
+  const filteredStores = stores.filter((store) => {
+    const matchesSearch = store.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (store.address || '').toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesCategory = activeCategory === '全部分类' || getStoreCategory(store.id) === activeCategory;
+
+    return matchesSearch && matchesCategory;
+  });
+
+  const displayStores = isLoading ? Array.from({ length: 6 }) : filteredStores;
+
+  const handleCategoryChange = (cat: string) => {
+    setActiveCategory(cat);
+    // Sync with URL query parameter
+    if (cat === '全部分类') {
+      searchParams.delete('category');
+    } else {
+      const pinyinMap: Record<string, string> = {
+        '餐饮': 'waimaimeishi',
+        '零售': 'jiankanggouyao',
+        '服务': 'lvyouchuxing',
+        '娱乐': 'dianyingyanchu',
+      };
+      searchParams.set('category', pinyinMap[cat] || cat);
+    }
+    setSearchParams(searchParams);
+  };
 
   return (
     <div className="flex flex-col gap-6 pb-10 md:gap-8">
@@ -57,6 +116,8 @@ export default function Discovery() {
             <input
               type="text"
               placeholder="搜索门店..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-full border-none bg-slate-100 py-2 pl-10 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20"
             />
           </div>
@@ -75,17 +136,20 @@ export default function Discovery() {
               <input
                 type="text"
                 placeholder="搜索餐饮、零售、服务..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-base shadow-sm outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10"
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-              {categories.map((cat, index) => (
+              {categories.map((cat) => (
                 <button
                   key={cat}
+                  onClick={() => handleCategoryChange(cat)}
                   className={cn(
                     'whitespace-nowrap rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm transition-all',
-                    index === 0
-                      ? 'bg-primary text-white'
+                    activeCategory === cat
+                      ? 'bg-primary text-white shadow-md shadow-primary/10'
                       : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
                   )}
                 >
@@ -97,12 +161,13 @@ export default function Discovery() {
         </div>
 
         <div className="flex gap-2 overflow-x-auto pb-4 hide-scrollbar md:hidden">
-          {categories.map((cat, index) => (
+          {categories.map((cat) => (
             <button
               key={cat}
+              onClick={() => handleCategoryChange(cat)}
               className={cn(
                 'whitespace-nowrap rounded-full px-5 py-2 text-sm font-semibold shadow-sm',
-                index === 0 ? 'bg-primary text-white' : 'border border-slate-200 bg-white text-slate-600',
+                activeCategory === cat ? 'bg-primary text-white shadow-md shadow-primary/10' : 'border border-slate-200 bg-white text-slate-600',
               )}
             >
               {cat}
@@ -132,7 +197,7 @@ export default function Discovery() {
                   )}
                   <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 shadow-md backdrop-blur-md">
                     <Star className="h-4 w-4 fill-current text-primary" />
-                    <span className="text-sm font-bold text-slate-800">{isData ? '已接入' : '加载中'}</span>
+                    <span className="text-sm font-bold text-slate-800">{isData ? getStoreCategory(store.id) : '加载中'}</span>
                   </div>
                   <button className="absolute left-4 top-4 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/40">
                     <Heart className="h-5 w-5" />

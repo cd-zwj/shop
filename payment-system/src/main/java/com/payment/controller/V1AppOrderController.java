@@ -6,11 +6,12 @@ import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.OrderPaymentVO;
-import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.SalesOrder;
 import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.service.AppOrderService;
 import com.payment.util.PlatformSessionHelper;
+import com.payment.vo.SalesOrderDetailVO;
+import com.payment.vo.SalesOrderListVO;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -33,16 +34,17 @@ public class V1AppOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<SalesOrder>> listOrders(@RequestParam(defaultValue = "1") Integer current,
+    public Result<PageResult<SalesOrderListVO>> listOrders(@RequestParam(defaultValue = "1") Integer current,
                                                       @RequestParam(defaultValue = "10") Integer size) {
         Page<SalesOrder> page = appOrderService.listOrders(PlatformSessionHelper.getPlatformUserId(), current, size);
-        return Result.success(PageResult.from(page));
+        return Result.success(PageResult.from(page, SalesOrderListVO::from));
     }
 
     @SaCheckLogin
     @GetMapping("/{orderNo}")
     public Result<SalesOrderDetailVO> getOrder(@PathVariable String orderNo) {
-        return Result.success(appOrderService.getOrderDetail(PlatformSessionHelper.getPlatformUserId(), orderNo));
+        com.payment.dto.SalesOrderDetailVO detailVO = appOrderService.getOrderDetail(PlatformSessionHelper.getPlatformUserId(), orderNo);
+        return Result.success(SalesOrderDetailVO.from(detailVO));
     }
 
     @SaCheckLogin

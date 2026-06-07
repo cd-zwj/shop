@@ -6,6 +6,8 @@ import lombok.Data;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * 统一分页返回结构，对应前端期望的格式：
@@ -42,6 +44,19 @@ public class PageResult<T> implements Serializable {
         this.total = total;
         this.page = page;
         this.size = size;
+    }
+
+    /**
+     * 从 MyBatis-Plus {@link Page} 转换为统一的 {@link PageResult}，并对每条记录应用映射函数。
+     */
+    public static <S, T> PageResult<T> from(Page<S> page, Function<S, T> converter) {
+        if (page == null) {
+            return new PageResult<>();
+        }
+        List<T> records = page.getRecords() != null
+                ? page.getRecords().stream().map(converter).collect(Collectors.toList())
+                : Collections.emptyList();
+        return new PageResult<>(records, page.getTotal(), (int) page.getCurrent(), (int) page.getSize());
     }
 
     /**

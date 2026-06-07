@@ -30,14 +30,14 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
 
   const categories = [
-    { icon: Smartphone, label: '手机充值', color: 'bg-blue-50 text-blue-600' },
-    { icon: Ticket, label: '领券中心', color: 'bg-orange-50 text-orange-500' },
-    { icon: StoreIcon, label: '附近门店', color: 'bg-green-50 text-green-600' },
-    { icon: FastForward, label: '外卖美食', color: 'bg-red-50 text-red-500' },
-    { icon: Plane, label: '旅游出行', color: 'bg-sky-50 text-sky-500' },
-    { icon: Film, label: '电影演出', color: 'bg-purple-50 text-purple-500' },
-    { icon: HeartPulse, label: '健康购药', color: 'bg-teal-50 text-teal-500' },
-    { icon: Grid2X2, label: '全部分类', color: 'bg-slate-100 text-slate-600' },
+    { icon: Smartphone, label: '手机充值', color: 'bg-blue-50 text-blue-600', path: '/recharge' },
+    { icon: Ticket, label: '领券中心', color: 'bg-orange-50 text-orange-500', path: '/coupons' },
+    { icon: StoreIcon, label: '附近门店', color: 'bg-green-50 text-green-600', path: '/discovery?category=fujinmendian' },
+    { icon: FastForward, label: '外卖美食', color: 'bg-red-50 text-red-500', path: '/discovery?category=waimaimeishi' },
+    { icon: Plane, label: '旅游出行', color: 'bg-sky-50 text-sky-500', path: '/discovery?category=lvyouchuxing' },
+    { icon: Film, label: '电影演出', color: 'bg-purple-50 text-purple-500', path: '/discovery?category=dianyingyanchu' },
+    { icon: HeartPulse, label: '健康购药', color: 'bg-teal-50 text-teal-500', path: '/discovery?category=jiankanggouyao' },
+    { icon: Grid2X2, label: '全部分类', color: 'bg-slate-100 text-slate-600', path: '/discovery' },
   ];
 
   useEffect(() => {
@@ -50,7 +50,10 @@ export default function Home() {
         setFeaturedMerchants(tenants.slice(0, 2));
 
         const productGroups = await Promise.all(
-          tenants.slice(0, 2).map((tenant) => appCatalogService.listTenantProducts(tenant.id)),
+          tenants.slice(0, 2).map(async (tenant) => {
+            const list = await appCatalogService.listTenantProducts(tenant.id);
+            return list.map((p) => ({ ...p, tenantId: tenant.id }));
+          }),
         );
         if (!isMounted) return;
         setFeaturedProducts(productGroups.flat().slice(0, 4));
@@ -98,7 +101,7 @@ export default function Home() {
       <section className="pl-4">
         <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 pr-4 hide-scrollbar">
           {[
-            { title: '真实商户数据', subtitle: '首页推荐已切换到后端返回结果', img: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80' },
+            { title: '真实商户数据', subtitle: '首页推荐已切换 to 后端返回结果', img: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80' },
             { title: '统一接口底座', subtitle: '登录、商户、商品浏览都已开始联调', img: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80' },
           ].map((banner, i) => (
             <motion.div
@@ -122,7 +125,7 @@ export default function Home() {
             <motion.button
               key={cat.label}
               whileTap={{ scale: 0.95 }}
-              onClick={() => navigate('/discovery')}
+              onClick={() => navigate(cat.path)}
               className="group flex flex-col items-center gap-2"
             >
               <div className={cn('flex h-12 w-12 items-center justify-center rounded-[18px] transition-transform duration-200 group-hover:scale-110', cat.color)}>
@@ -152,7 +155,7 @@ export default function Home() {
               <motion.div
                 key={isData ? product.id : index}
                 whileHover={{ y: -4 }}
-                onClick={() => isData && navigate(`/product/${product.id}`)}
+                onClick={() => isData && navigate(`/product/${product.id}?tenantId=${(product as any).tenantId}`)}
                 className="flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
               >
                 <div className="relative h-40 bg-slate-100">

@@ -6,6 +6,7 @@ import com.payment.common.Result;
 import com.payment.entity.PaymentBill;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.util.UserContext;
+import com.payment.vo.PaymentBillVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,24 +22,24 @@ public class V1AppPaymentBillController {
 
     @SaCheckLogin
     @GetMapping("/{billNo}")
-    public Result<PaymentBill> getPaymentBill(@PathVariable String billNo) {
+    public Result<PaymentBillVO> getPaymentBill(@PathVariable String billNo) {
         PaymentBill bill = paymentBillV1Service.getByBillNo(billNo);
         if (bill == null) {
             throw new BusinessException("支付单不存在");
         }
         checkOwnership(bill);
-        return Result.success(bill);
+        return Result.success(PaymentBillVO.from(bill));
     }
 
     @SaCheckLogin
     @PostMapping("/{billNo}/sync")
-    public Result<PaymentBill> syncPaymentBill(@PathVariable String billNo) {
+    public Result<PaymentBillVO> syncPaymentBill(@PathVariable String billNo) {
         PaymentBill bill = paymentBillV1Service.getByBillNo(billNo);
         if (bill == null) {
             throw new BusinessException("支付单不存在");
         }
         checkOwnership(bill);
-        return Result.success(paymentBillV1Service.syncBillStatus(billNo));
+        return Result.success(PaymentBillVO.from(paymentBillV1Service.syncBillStatus(billNo)));
     }
 
     /** 校验支付单归属，防止水平越权 */

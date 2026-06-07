@@ -14,7 +14,7 @@ const CART_STORAGE_KEY = 'sales_system_cart_items';
 interface CartContextValue {
   items: CartItem[];
   totalItems: number;
-  addItem: (product: Product, quantity?: number) => void;
+  addItem: (product: Product & { tenantId?: number }, quantity?: number) => void;
   addCartItems: (nextItems: CartItem[]) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   removeItem: (productId: number) => void;
@@ -42,10 +42,10 @@ function clampQuantity(quantity: number, stock?: number | null) {
   return safeQuantity;
 }
 
-function toCartItem(product: Product, quantity: number): CartItem {
+function toCartItem(product: Product & { tenantId?: number }, quantity: number): CartItem {
   return {
     productId: product.id,
-    tenantId: product.tenantId,
+    tenantId: product.tenantId ?? 0,
     name: product.name,
     price: product.price,
     quantity: clampQuantity(quantity, product.stock),
@@ -94,7 +94,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     storage?.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
-  function addItem(product: Product, quantity = 1) {
+  function addItem(product: Product & { tenantId?: number }, quantity = 1) {
     setItems((currentItems) => {
       const existingItem = currentItems.find((item) => item.productId === product.id);
 

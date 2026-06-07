@@ -71,6 +71,12 @@ import UserOrders from './pages/UserOrders';
 import UserOrderDetail from './pages/UserOrderDetail';
 import PaymentStatus from './pages/PaymentStatus';
 import PublicMerchantDetail from './pages/PublicMerchantDetail';
+import AuthGuard from './components/guards/AuthGuard';
+import RoleGuard from './components/guards/RoleGuard';
+import GuestGuard from './components/guards/GuestGuard';
+import CouponCenter from './pages/CouponCenter';
+import Points from './pages/Points';
+import { ToastProvider } from './context/ToastContext';
 
 // --- Components ---
 
@@ -286,52 +292,55 @@ function AppContent() {
       )}>
         <div className="max-w-7xl mx-auto w-full h-full">
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/" element={<Home />} />
-            <Route path="/discovery" element={<Discovery />} />
-            <Route path="/product/:id" element={<ProductDetails />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/wallet" element={<UserWallet />} />
-            <Route path="/recharge" element={<Recharge />} />
-            <Route path="/history" element={<ConsumptionHistory />} />
-            <Route path="/orders" element={<UserOrders />} />
-            <Route path="/order/:id" element={<UserOrderDetail />} />
-            <Route path="/payment/status" element={<PaymentStatus />} />
-            <Route path="/merchant-store/:id" element={<PublicMerchantDetail />} />
-            <Route path="/ai" element={<AIAssistant />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/success" element={<Success />} />
+            <Route path="/login" element={<GuestGuard><Login /></GuestGuard>} />
+            <Route path="/register" element={<GuestGuard><Register /></GuestGuard>} />
+            <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
+            <Route path="/discovery" element={<AuthGuard><Discovery /></AuthGuard>} />
+            <Route path="/product/:id" element={<AuthGuard><ProductDetails /></AuthGuard>} />
+            {/* --- Auth-required user routes --- */}
+            <Route path="/cart" element={<AuthGuard><Cart /></AuthGuard>} />
+            <Route path="/wallet" element={<AuthGuard><UserWallet /></AuthGuard>} />
+            <Route path="/recharge" element={<AuthGuard><Recharge /></AuthGuard>} />
+            <Route path="/history" element={<AuthGuard><ConsumptionHistory /></AuthGuard>} />
+            <Route path="/orders" element={<AuthGuard><UserOrders /></AuthGuard>} />
+            <Route path="/order/:id" element={<AuthGuard><UserOrderDetail /></AuthGuard>} />
+            <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
+            <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />
+            <Route path="/ai" element={<AuthGuard><AIAssistant /></AuthGuard>} />
+            <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
+            <Route path="/success" element={<AuthGuard><Success /></AuthGuard>} />
+            <Route path="/coupons" element={<AuthGuard><CouponCenter /></AuthGuard>} />
+            <Route path="/points" element={<AuthGuard><Points /></AuthGuard>} />
             
-            {/* Admin Routes */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/merchants" element={<AdminMerchants />} />
-            <Route path="/admin/merchant/new" element={<AdminMerchantEdit />} />
-            <Route path="/admin/merchant/edit/:id" element={<AdminMerchantEdit />} />
-            <Route path="/admin/merchant/:id" element={<AdminMerchantDetail />} />
-            <Route path="/admin/products" element={<AdminProducts />} />
-            <Route path="/admin/analytics" element={<AdminAnalytics />} />
-            <Route path="/admin/transactions" element={<AdminTransactions />} />
-            <Route path="/admin/payments" element={<AdminPayments />} />
-            <Route path="/admin/order/:id" element={<AdminOrderDetail />} />
-            <Route path="/admin/recharges" element={<AdminRecharges />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/user/:id" element={<AdminUserDetail />} />
-            <Route path="/admin/user/:id/permissions" element={<AdminUserPermissions />} />
-            <Route path="/admin/permissions" element={<AdminPermissions />} />
-            <Route path="/admin/withdrawals" element={<AdminWithdrawals />} />
+            {/* --- Admin routes (admin role required) --- */}
+            <Route path="/admin" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDashboard /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/merchants" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMerchants /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/merchant/new" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMerchantEdit /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/merchant/edit/:id" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMerchantEdit /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/merchant/:id" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMerchantDetail /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/products" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminProducts /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/analytics" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminAnalytics /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/transactions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminTransactions /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/payments" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminPayments /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/order/:id" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminOrderDetail /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/recharges" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminRecharges /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/users" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminUsers /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/user/:id" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminUserDetail /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/user/:id/permissions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminUserPermissions /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/permissions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminPermissions /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminWithdrawals /></RoleGuard></AuthGuard>} />
             
-            {/* Merchant Routes */}
-            <Route path="/merchant" element={<MerchantDashboard />} />
-            <Route path="/merchant/products" element={<MerchantProducts />} />
-            <Route path="/merchant/product/:id" element={<MerchantProductDetail />} />
-            <Route path="/merchant/product/new" element={<MerchantProductEdit />} />
-            <Route path="/merchant/product/edit/:id" element={<MerchantProductEdit />} />
-            <Route path="/merchant/orders" element={<MerchantOrders />} />
-            <Route path="/merchant/order/:id" element={<MerchantOrderDetail />} />
-            <Route path="/merchant/finance" element={<MerchantFinance />} />
-            <Route path="/merchant/rules" element={<MerchantRules />} />
-            <Route path="/merchant/withdrawals" element={<MerchantWithdraw />} />
+            {/* --- Merchant routes (merchant role required) --- */}
+            <Route path="/merchant" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantDashboard /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/products" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProducts /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/product/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductDetail /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/product/new" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/product/edit/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/orders" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrders /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/order/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrderDetail /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/finance" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantFinance /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/rules" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRules /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantWithdraw /></RoleGuard></AuthGuard>} />
           </Routes>
         </div>
       </main>
@@ -343,8 +352,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <Router>
-      <AppContent />
-    </Router>
+    <ToastProvider>
+      <Router>
+        <AppContent />
+      </Router>
+    </ToastProvider>
   );
 }

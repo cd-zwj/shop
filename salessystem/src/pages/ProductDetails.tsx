@@ -13,7 +13,7 @@ import {
   ShoppingCart,
   ZoomIn,
 } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { appCatalogService } from '../services/modules/appCatalog';
@@ -27,6 +27,7 @@ import { formatCurrency, getImageUrl } from '../utils/display';
 export default function ProductDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const { currentRole } = useAuth();
   const { addItem, totalItems } = useCart();
   const productId = Number(id);
@@ -36,6 +37,9 @@ export default function ProductDetails() {
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  const queryTenantId = searchParams.get('tenantId');
+  const tenantId = queryTenantId ? Number(queryTenantId) : undefined;
 
   const thumbnails = [
     'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=600&q=80',
@@ -78,7 +82,7 @@ export default function ProductDetails() {
   function toCheckoutItem(detail: Product): CartItem {
     return {
       productId: detail.id,
-      tenantId: detail.tenantId,
+      tenantId: tenantId ?? 0,
       name: detail.name,
       price: detail.price,
       quantity: 1,
@@ -98,7 +102,7 @@ export default function ProductDetails() {
       return;
     }
 
-    addItem(product, 1);
+    addItem({ ...product, tenantId }, 1);
     setActionMessage('已加入购物车，可以继续选购或前往结算');
   }
 

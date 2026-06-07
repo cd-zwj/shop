@@ -8,14 +8,17 @@ import {
   Shield,
   ShoppingBag,
   Wallet,
+  Bell,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 
 export default function Profile() {
   const navigate = useNavigate();
   const { currentUser, logout } = useAuth();
+  const { showToast } = useToast();
 
   const menuGroups = [
     {
@@ -72,7 +75,13 @@ export default function Profile() {
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">绑定手机</span>
           </div>
           <div className="flex flex-col items-center gap-0.5">
-            <span className="text-xl font-black text-slate-900">{currentUser?.status ?? '--'}</span>
+            <span className="text-xl font-black text-slate-900">
+              {currentUser?.status !== undefined && currentUser?.status !== null
+                ? currentUser.status === 1
+                  ? '正常'
+                  : '异常'
+                : '--'}
+            </span>
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">账号状态</span>
           </div>
         </div>
@@ -86,7 +95,13 @@ export default function Profile() {
               {group.items.map((item) => (
                 <button
                   key={item.label}
-                  onClick={() => item.path !== '#' && navigate(item.path)}
+                  onClick={() => {
+                    if (item.path === '#') {
+                      showToast('该功能即将上线，敬请期待！', 'info');
+                    } else {
+                      navigate(item.path);
+                    }
+                  }}
                   className={cn(
                     'group flex items-center gap-4 border-b border-slate-50 p-5 text-left transition-colors last:border-0 hover:bg-slate-50',
                     item.path === '#' && 'cursor-not-allowed opacity-50',
@@ -117,6 +132,6 @@ export default function Profile() {
   );
 }
 
-function BellIcon(props: ComponentProps<typeof Settings>) {
-  return <Settings {...props} />;
+function BellIcon(props: ComponentProps<typeof Bell>) {
+  return <Bell {...props} />;
 }

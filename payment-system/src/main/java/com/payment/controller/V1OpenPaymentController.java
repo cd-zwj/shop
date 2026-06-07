@@ -38,20 +38,30 @@ public class V1OpenPaymentController {
         return Result.success();
     }
 
+    /**
+     * @deprecated 使用 POST /callbacks/{channelCode} 替代（统一入口）
+     */
+    @Deprecated
     @PostMapping("/callbacks/{channelCode}/recharge")
     public Result<Void> handleRechargeCallback(@PathVariable String channelCode,
                                                @RequestBody PaymentCallbackDTO dto,
                                                @RequestHeader Map<String, String> headers) {
+        log.warn("[DEPRECATED] /callbacks/{}/recharge 已废弃，请迁移到 /callbacks/{}", channelCode, channelCode);
         verifySignature(channelCode, dto, headers);
         log.info("充值回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
         paymentBillV1Service.handleCallback(channelCode, dto);
         return Result.success();
     }
 
+    /**
+     * @deprecated 使用 POST /callbacks/{channelCode} 替代（统一入口）
+     */
+    @Deprecated
     @PostMapping("/callbacks/{channelCode}/order")
     public Result<Void> handleOrderCallback(@PathVariable String channelCode,
                                             @RequestBody PaymentCallbackDTO dto,
                                             @RequestHeader Map<String, String> headers) {
+        log.warn("[DEPRECATED] /callbacks/{}/order 已废弃，请迁移到 /callbacks/{}", channelCode, channelCode);
         verifySignature(channelCode, dto, headers);
         log.info("订单回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
         paymentBillV1Service.handleCallback(channelCode, dto);
@@ -78,6 +88,13 @@ public class V1OpenPaymentController {
 
     @GetMapping("/bills/{billNo}/status")
     public Result<BillStatusVO> syncBillStatus(@PathVariable String billNo) {
+        if (billNo == null || billNo.isBlank()) {
+            throw new BusinessException("账单号不能为空");
+        }
+        if (billNo.length() > 64) {
+            throw new BusinessException("账单号格式非法");
+        }
+        log.info("查询账单状态, billNo={}", billNo);
         PaymentBill bill = paymentBillV1Service.syncBillStatus(billNo);
         BillStatusVO vo = new BillStatusVO();
         vo.setBillNo(bill.getBillNo());

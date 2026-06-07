@@ -21,6 +21,7 @@ import java.util.List;
  
 @RestController
 @RequestMapping("/product")
+@SaCheckLogin
 public class ProductController {
     
     @Autowired

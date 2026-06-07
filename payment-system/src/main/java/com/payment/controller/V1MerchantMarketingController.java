@@ -18,6 +18,7 @@ import com.payment.service.MemberService;
 import com.payment.service.PromotionService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +31,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/marketing")
 @RequiredArgsConstructor
+@SaCheckLogin
 public class V1MerchantMarketingController {
 
     private final V1MerchantSupportService v1MerchantSupportService;

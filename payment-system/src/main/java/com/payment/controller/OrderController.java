@@ -21,6 +21,7 @@ import jakarta.validation.Valid;
  
 @RestController
 @RequestMapping("/order")
+@SaCheckLogin
 public class OrderController {
     
     @Autowired

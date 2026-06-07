@@ -273,12 +273,32 @@ public class PaymentServiceImpl implements PaymentService {
     }
     
     /**
-     * 验证支付宝支付回调
+     * 验证支付宝支付回调签名（使用支付宝 SDK）。
      */
     private boolean verifyAlipayNotify(Map<String, String> params) {
-        // 实际应该验证支付宝签名
-        // 这里只是示例
-        return true;
+        String alipayPublicKey = getAlipayPublicKey();
+        if (alipayPublicKey == null || alipayPublicKey.isBlank()) {
+            log.error("[SECURITY] 支付宝公钥未配置，无法验签，拒绝回调");
+            return false;
+        }
+        try {
+            boolean valid = com.alipay.api.internal.util.AlipaySignature.rsaCheckV1(
+                    params, alipayPublicKey, "UTF-8", "RSA2");
+            if (!valid) {
+                log.warn("[SECURITY] 支付宝回调验签失败, out_trade_no={}", params.get("out_trade_no"));
+            }
+            return valid;
+        } catch (com.alipay.api.AlipayApiException e) {
+            log.error("[SECURITY] 支付宝回调验签异常, out_trade_no={}", params.get("out_trade_no"), e);
+            return false;
+        }
+    }
+
+    private String getAlipayPublicKey() {
+        if (paymentConfig == null || paymentConfig.getAlipay() == null) {
+            return null;
+        }
+        return paymentConfig.getAlipay().getPublicKey();
     }
     
     @Override
