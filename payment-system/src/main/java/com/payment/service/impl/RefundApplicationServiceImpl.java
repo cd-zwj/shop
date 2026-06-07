@@ -4,12 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.RefundCreateDTO;
+import com.payment.entity.ExchangeProduct;
 import com.payment.entity.RefundApplication;
 import com.payment.entity.SalesOrder;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.RefundApplicationStatus;
+import com.payment.mapper.ExchangeProductMapper;
 import com.payment.mapper.RefundApplicationMapper;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.service.PointsService;
 import com.payment.service.RefundApplicationService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,8 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
 
     private final RefundApplicationMapper refundApplicationMapper;
     private final SalesOrderMapper salesOrderMapper;
+    private final PointsService pointsService;
+    private final ExchangeProductMapper exchangeProductMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -159,6 +164,104 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
 
         refundApplicationMapper.updateById(app);
         // 实际退款到支付渠道的逻辑留给后续异步处理
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void completeRefund(Long tenantId, Long refundId) {
+        RefundApplication app = refundApplicationMapper.selectById(refundId);
+        if (app == null || !tenantId.equals(app.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        // 只有 APPROVED 或 PROCESSING 状态的退款申请才能标记为完成
+        if (!RefundApplicationStatus.APPROVED.name().equals(app.getRefundStatus())
+                && !RefundApplicationStatus.PROCESSING.name().equals(app.getRefundStatus())) {
+            throw new BusinessException("当前退款状态不允许标记为完成");
+        }
+
+        app.setRefundStatus(RefundApplicationStatus.COMPLETED.name());
+        app.setCompleteTime(LocalDateTime.now());
+        refundApplicationMapper.updateById(app);
+
+        // 检查是否为积分兑换订单，如果是则回退积分
+        handlePointsRefundIfNeeded(app);
+
+        log.info("退款已完成: refundNo={}, orderNo={}", app.getRefundNo(), app.getOrderNo());
+    }
+
+    /**
+     * 积分兑换订单退款时回退积分。
+     * 判断依据：订单 source 为 EXCHANGE，或订单号以 "EX" 开头。
+     */
+    private void handlePointsRefundIfNeeded(RefundApplication app) {
+        SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getOrderNo, app.getOrderNo())
+                .eq(SalesOrder::getTenantId, app.getTenantId()));
+
+        boolean isExchangeOrder = false;
+        Integer pointsToRefund = null;
+
+        if (salesOrder != null) {
+            // 通过 source 字段判断
+            if ("EXCHANGE".equalsIgnoreCase(salesOrder.getSource())) {
+                isExchangeOrder = true;
+            }
+            // 通过积分抵扣金额推算积分（1元=1积分的兜底逻辑）
+            if (isExchangeOrder && salesOrder.getPointsDeductAmount() != null
+                    && salesOrder.getPointsDeductAmount().signum() > 0) {
+                pointsToRefund = salesOrder.getPointsDeductAmount().intValue();
+            }
+        }
+
+        // 兜底：订单号以 "EX" 开头也视为积分兑换订单
+        if (!isExchangeOrder && app.getOrderNo() != null && app.getOrderNo().startsWith("EX")) {
+            isExchangeOrder = true;
+        }
+
+        if (!isExchangeOrder) {
+            return;
+        }
+
+        // 如果从订单上无法推算具体积分，尝试从兑换商品表查询
+        if (pointsToRefund == null || pointsToRefund <= 0) {
+            pointsToRefund = resolvePointsFromExchangeProduct(app);
+        }
+
+        if (pointsToRefund == null || pointsToRefund <= 0) {
+            log.warn("无法确定退款应返还的积分数量，跳过积分回退。refundNo={}, orderNo={}",
+                    app.getRefundNo(), app.getOrderNo());
+            return;
+        }
+
+        try {
+            pointsService.refundPoints(
+                    app.getPlatformUserId(),
+                    app.getTenantId(),
+                    pointsToRefund,
+                    app.getOrderNo(),
+                    "积分兑换商品退款回退，退款单号：" + app.getRefundNo()
+            );
+        } catch (Exception e) {
+            log.error("积分回退失败，refundNo={}, orderNo={}, points={}",
+                    app.getRefundNo(), app.getOrderNo(), pointsToRefund, e);
+            throw new BusinessException("积分回退失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 从兑换商品表中查找关联的积分数量。
+     * 尝试通过退款申请的 orderItemId 或退款金额匹配。
+     */
+    private Integer resolvePointsFromExchangeProduct(RefundApplication app) {
+        // 尝试通过 orderItemId 查找
+        if (app.getOrderItemId() != null) {
+            ExchangeProduct ep = exchangeProductMapper.selectById(app.getOrderItemId());
+            if (ep != null && ep.getPointsRequired() != null && ep.getPointsRequired() > 0) {
+                return ep.getPointsRequired();
+            }
+        }
+        log.warn("无法从兑换商品表推算积分数量，refundNo={}", app.getRefundNo());
+        return null;
     }
 
     private void validateRefundType(String refundType) {

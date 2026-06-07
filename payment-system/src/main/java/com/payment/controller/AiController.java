@@ -10,7 +10,7 @@ import reactor.core.publisher.Flux;
 @RestController
 @RequestMapping("/api/ai")
 @Slf4j
-public class AiConrtoller {
+public class AiController {
 
     @SaCheckPermission("ai:analysis")
     @PostMapping("/merchant/sales-analysis")

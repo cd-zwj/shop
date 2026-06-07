@@ -46,13 +46,28 @@ public class OrderController {
     @SaCheckPermission("order:query")
     @GetMapping("/query")
     public Result<PaymentOrder> queryOrder(@RequestParam String orderNo) {
+        Long userId = UserContext.getCurrentUserId();
         PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
+        if (order == null) {
+            throw new com.payment.common.BusinessException("订单不存在");
+        }
+        if (!order.getUserId().equals(userId)) {
+            throw new com.payment.common.BusinessException(403, "无权访问该订单");
+        }
         return Result.success(order);
     }
 
     @SaCheckPermission("order:cancel")
     @PostMapping("/cancel")
     public Result<Void> cancelOrder(@RequestParam String orderNo) {
+        Long userId = UserContext.getCurrentUserId();
+        PaymentOrder order = paymentOrderService.getOrderByNo(orderNo);
+        if (order == null) {
+            throw new com.payment.common.BusinessException("订单不存在");
+        }
+        if (!order.getUserId().equals(userId)) {
+            throw new com.payment.common.BusinessException(403, "无权操作该订单");
+        }
         paymentOrderService.cancelOrder(orderNo);
         return Result.success();
     }

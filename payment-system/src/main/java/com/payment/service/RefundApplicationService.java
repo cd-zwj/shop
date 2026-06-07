@@ -27,4 +27,7 @@ public interface RefundApplicationService {
 
     /** 商户端：审核退款 */
     void auditRefund(Long tenantId, Long refundId, Long adminId, boolean approved, String rejectReason);
+
+    /** 退款完成回调：渠道退款到账后调用，处理积分回退等后续逻辑 */
+    void completeRefund(Long tenantId, Long refundId);
 }

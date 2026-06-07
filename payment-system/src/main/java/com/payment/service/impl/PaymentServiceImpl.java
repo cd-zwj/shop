@@ -377,9 +377,8 @@ public class PaymentServiceImpl implements PaymentService {
      */
     private Map<String, String> queryAlipayOrder(String orderNo) {
         Map<String, String> result = new HashMap<>();
-        // TODO: 实现支付宝订单查询
-        result.put("status", "SUCCESS");
-        return result;
+        // TODO: 接入支付宝SDK后实现真实查询（AlipayTradeQueryRequest）
+        throw new UnsupportedOperationException("支付宝订单查询待接入SDK");
     }
 }
 

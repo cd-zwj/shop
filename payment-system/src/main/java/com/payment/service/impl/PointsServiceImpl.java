@@ -429,4 +429,61 @@ public class PointsServiceImpl implements PointsService {
         
         log.info("删除积分兑换商品，id={}", id);
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void refundPoints(Long userId, Long tenantId, Integer points, String orderNo, String reason) {
+        if (points == null || points <= 0) {
+            log.warn("退款回退积分数量无效，userId={}, points={}", userId, points);
+            return;
+        }
+
+        // 查询或创建用户积分记录
+        UserPoints userPoints = userPointsMapper.selectOne(
+                new LambdaQueryWrapper<UserPoints>()
+                        .eq(UserPoints::getUserId, userId)
+                        .eq(UserPoints::getTenantId, tenantId)
+                        .eq(UserPoints::getDeleted, 0)
+        );
+
+        if (userPoints == null) {
+            // 积分记录不存在，创建一条新的
+            userPoints = new UserPoints();
+            userPoints.setUserId(userId);
+            userPoints.setTenantId(tenantId);
+            userPoints.setPoints(points);
+            userPoints.setTotalEarned(points);
+            userPoints.setTotalUsed(0);
+            userPoints.setDeleted(0);
+            userPoints.setCreateTime(LocalDateTime.now());
+            userPoints.setUpdateTime(LocalDateTime.now());
+            userPointsMapper.insert(userPoints);
+        } else {
+            // 回退积分（乐观锁重试）
+            for (int attempt = 0; attempt < 3; attempt++) {
+                userPoints.setPoints(userPoints.getPoints() + points);
+                userPoints.setTotalEarned(userPoints.getTotalEarned() + points);
+                userPoints.setUpdateTime(LocalDateTime.now());
+                if (userPointsMapper.updateById(userPoints) > 0) break;
+                userPoints = userPointsMapper.selectById(userPoints.getId());
+                if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            }
+        }
+
+        // 记录积分明细
+        PointsLog pointsLog = new PointsLog();
+        pointsLog.setTenantId(tenantId);
+        pointsLog.setUserId(userId);
+        pointsLog.setPoints(points);
+        pointsLog.setBalance(userPoints.getPoints());
+        pointsLog.setType("REFUND");
+        pointsLog.setReason(reason);
+        pointsLog.setOrderNo(orderNo);
+        pointsLog.setDeleted(0);
+        pointsLog.setCreateTime(LocalDateTime.now());
+        pointsLogMapper.insert(pointsLog);
+
+        log.info("退款回退积分成功，userId={}, points={}, balance={}, orderNo={}, reason={}",
+                userId, points, userPoints.getPoints(), orderNo, reason);
+    }
 }

@@ -104,4 +104,14 @@ public interface PointsService {
      * @param id 兑换商品ID
      */
     void deleteExchangeProduct(Long id);
+
+    /**
+     * 退款回退积分（积分兑换商品退款时调用）
+     * @param userId 用户ID
+     * @param tenantId 租户ID
+     * @param points 回退积分数量
+     * @param orderNo 关联订单号
+     * @param reason 原因
+     */
+    void refundPoints(Long userId, Long tenantId, Integer points, String orderNo, String reason);
 }

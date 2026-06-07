@@ -2,8 +2,11 @@ package com.payment.consumer;
 
 import com.payment.util.JsonUtils;
 import com.payment.entity.PaymentOrder;
+import com.payment.service.CouponService;
+import com.payment.service.MemberService;
 import com.payment.service.MessageIdempotentService;
 import com.payment.service.PaymentOrderService;
+import com.payment.service.PointsService;
 import com.rabbitmq.client.Channel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
@@ -26,6 +29,15 @@ public class OrderConsumer {
     
     @Autowired
     private PaymentOrderService paymentOrderService;
+
+    @Autowired
+    private PointsService pointsService;
+
+    @Autowired
+    private MemberService memberService;
+
+    @Autowired
+    private CouponService couponService;
     
     private static final String CONSUMER_ORDER_CREATED = "OrderCreatedConsumer";
     private static final String CONSUMER_ORDER_PAID = "OrderPaidConsumer";
@@ -152,7 +164,7 @@ public class OrderConsumer {
     
     /**
      * 处理订单创建业务逻辑
-     * 
+     *
      * @param orderNo 订单号
      * @param messageMap 消息内容
      */
@@ -163,19 +175,21 @@ public class OrderConsumer {
             log.warn("订单不存在，orderNo: {}", orderNo);
             return;
         }
-        
-        // TODO: 实现订单创建后的业务逻辑
-        // 1. 发送订单创建通知（短信、邮件、站内信等）
-        // 2. 更新商品销量统计
-        // 3. 记录用户行为日志
-        // 4. 触发其他业务流程
-        
-        log.info("订单创建业务处理完成，orderNo: {}, totalAmount: {}", orderNo, order.getAmount());
+
+        // 扣减商品库存（如果订单包含商品明细）
+        // 注意：PaymentOrder 当前无明细表，库存扣减由 SalesOrder 流程处理。
+        // TODO: 如果 PaymentOrder 后续接入商品明细，此处需遍历 orderItem 逐一扣减库存
+
+        // 标记优惠券为已使用（如果订单使用了优惠券）
+        // 注意：PaymentOrder 当前无优惠券关联字段，优惠券核销由 SalesOrder 流程通过 OrderDiscountSnapshot 处理。
+        // TODO: 如果 PaymentOrder 后续接入优惠券，此处需查询关联的 userCouponId 并调用 couponService.writeOffCoupon
+
+        log.info("订单创建业务处理完成，orderNo: {}, amount: {}", orderNo, order.getAmount());
     }
     
     /**
      * 处理订单支付成功业务逻辑
-     * 
+     *
      * @param orderNo 订单号
      * @param messageMap 消息内容
      */
@@ -186,16 +200,33 @@ public class OrderConsumer {
             log.warn("订单不存在，orderNo: {}", orderNo);
             return;
         }
-        
-        // TODO: 实现订单支付成功后的业务逻辑
-        // 1. 发送支付成功通知（短信、邮件、站内信等）
-        // 2. 更新库存（如果是实物商品）
-        // 3. 发放积分奖励
-        // 4. 更新商户余额
-        // 5. 触发发货流程（如果是实物商品）
-        // 6. 记录用户行为日志
-        
-        log.info("订单支付成功业务处理完成，orderNo: {}, totalAmount: {}", orderNo, order.getAmount());
+
+        // 充值订单走单独的回调流程，此处不重复处理
+        if (orderNo.startsWith("R")) {
+            log.info("充值订单跳过消费处理，orderNo: {}", orderNo);
+            return;
+        }
+
+        // 1. 发放积分奖励
+        try {
+            Integer points = pointsService.calculatePoints(order.getAmount(), order.getTenantId());
+            if (points != null && points > 0) {
+                pointsService.grantPoints(order.getUserId(), points, "订单支付", orderNo);
+                log.info("积分发放成功，orderNo: {}, userId: {}, points: {}", orderNo, order.getUserId(), points);
+            }
+        } catch (Exception e) {
+            log.error("发放积分失败，orderNo: {}, userId: {}", orderNo, order.getUserId(), e);
+        }
+
+        // 2. 会员等级自动升级检查
+        try {
+            memberService.checkAndAutoUpgrade(order.getTenantId(), order.getUserId());
+            log.info("会员等级检查完成，orderNo: {}, tenantId: {}, userId: {}", orderNo, order.getTenantId(), order.getUserId());
+        } catch (Exception e) {
+            log.error("会员等级检查失败，orderNo: {}, tenantId: {}, userId: {}", orderNo, order.getTenantId(), order.getUserId(), e);
+        }
+
+        log.info("订单支付成功业务处理完成，orderNo: {}, amount: {}", orderNo, order.getAmount());
     }
 }
 
