@@ -36,7 +36,7 @@ public class TenantVO {
                 .phone(tenant.getPhone())
                 .address(tenant.getAddress())
                 .status(tenant.getStatus())
-                .createTime(tenant.getCreateTime() == null ? null : tenant.getCreateTime().toString())
+                .createTime(VoConverterUtil.formatTime(tenant.getCreateTime()))
                 .build();
     }
 }

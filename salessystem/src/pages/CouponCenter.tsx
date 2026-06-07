@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ticket, ArrowLeft, Store, Clock, Award, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Ticket, ArrowLeft, Store, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { EmptyState } from '../components/ui/EmptyState';
 import { appCatalogService } from '../services/modules/appCatalog';
 import { appCouponService } from '../services/modules/appCoupon';
 import type { Tenant } from '../types/catalog';
@@ -462,18 +463,6 @@ export default function CouponCenter() {
           </AnimatePresence>
         )}
       </div>
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-      <div className="p-4 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-400 mb-4">
-        {icon}
-      </div>
-      <h3 className="text-base font-extrabold text-slate-800 dark:text-white">{title}</h3>
-      <p className="text-xs font-semibold text-slate-400 mt-1.5 max-w-xs leading-relaxed">{subtitle}</p>
     </div>
   );
 }

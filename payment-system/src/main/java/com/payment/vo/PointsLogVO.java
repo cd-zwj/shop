@@ -41,14 +41,10 @@ public class PointsLogVO {
                 .pointsAfter(log.getPointsAfter())
                 .remark(log.getRemark())
                 .status(log.getStatus())
-                .confirmTime(formatTime(log.getConfirmTime()))
-                .releaseTime(formatTime(log.getReleaseTime()))
+                .confirmTime(VoConverterUtil.formatTime(log.getConfirmTime()))
+                .releaseTime(VoConverterUtil.formatTime(log.getReleaseTime()))
                 .releaseReason(log.getReleaseReason())
-                .createTime(formatTime(log.getCreateTime()))
+                .createTime(VoConverterUtil.formatTime(log.getCreateTime()))
                 .build();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

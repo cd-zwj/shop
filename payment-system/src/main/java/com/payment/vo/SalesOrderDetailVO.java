@@ -7,7 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -21,7 +20,6 @@ import java.util.stream.Collectors;
 public class SalesOrderDetailVO {
 
     private String orderNo;
-    private Long tenantId;
     private String orderStatus;
     private String payStatus;
     private Long totalAmount;
@@ -61,23 +59,22 @@ public class SalesOrderDetailVO {
         SalesOrder order = detailVO.getOrder();
         SalesOrderDetailVO vo = SalesOrderDetailVO.builder()
                 .orderNo(order.getOrderNo())
-                .tenantId(order.getTenantId())
                 .orderStatus(order.getOrderStatus())
                 .payStatus(order.getPayStatus())
-                .totalAmount(toFen(order.getTotalAmount()))
-                .discountAmount(toFen(order.getDiscountAmount()))
-                .walletDeductAmount(toFen(order.getWalletDeductAmount()))
-                .pointsDeductAmount(toFen(order.getPointsDeductAmount()))
-                .unifiedWalletDeductAmount(toFen(order.getUnifiedWalletDeductAmount()))
-                .merchantWalletDeductAmount(toFen(order.getMerchantWalletDeductAmount()))
-                .externalPayAmount(toFen(order.getExternalPayAmount()))
-                .payableAmount(toFen(order.getPayableAmount()))
+                .totalAmount(VoConverterUtil.toFen(order.getTotalAmount()))
+                .discountAmount(VoConverterUtil.toFen(order.getDiscountAmount()))
+                .walletDeductAmount(VoConverterUtil.toFen(order.getWalletDeductAmount()))
+                .pointsDeductAmount(VoConverterUtil.toFen(order.getPointsDeductAmount()))
+                .unifiedWalletDeductAmount(VoConverterUtil.toFen(order.getUnifiedWalletDeductAmount()))
+                .merchantWalletDeductAmount(VoConverterUtil.toFen(order.getMerchantWalletDeductAmount()))
+                .externalPayAmount(VoConverterUtil.toFen(order.getExternalPayAmount()))
+                .payableAmount(VoConverterUtil.toFen(order.getPayableAmount()))
                 .subject(order.getSubject())
                 .source(order.getSource())
                 .walletStrategy(order.getWalletStrategy())
-                .expireTime(formatTime(order.getExpireTime()))
-                .createTime(formatTime(order.getCreateTime()))
-                .updateTime(formatTime(order.getUpdateTime()))
+                .expireTime(VoConverterUtil.formatTime(order.getExpireTime()))
+                .createTime(VoConverterUtil.formatTime(order.getCreateTime()))
+                .updateTime(VoConverterUtil.formatTime(order.getUpdateTime()))
                 .paymentBillNo(detailVO.getPaymentBillNo())
                 .build();
 
@@ -93,17 +90,9 @@ public class SalesOrderDetailVO {
         return SalesOrderItemVO.builder()
                 .id(item.getId())
                 .productName(item.getProductName())
-                .price(toFen(item.getPrice()))
+                .price(VoConverterUtil.toFen(item.getPrice()))
                 .quantity(item.getQuantity())
-                .subtotal(toFen(item.getSubtotal()))
+                .subtotal(VoConverterUtil.toFen(item.getSubtotal()))
                 .build();
-    }
-
-    private static Long toFen(BigDecimal amount) {
-        return amount == null ? null : amount.multiply(new BigDecimal(100)).longValue();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

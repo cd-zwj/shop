@@ -16,7 +16,6 @@ import lombok.NoArgsConstructor;
 public class SalesOrderListVO {
 
     private String orderNo;
-    private Long tenantId;
     private String orderStatus;
     private String payStatus;
     private Long totalAmount;
@@ -37,28 +36,19 @@ public class SalesOrderListVO {
         }
         return SalesOrderListVO.builder()
                 .orderNo(order.getOrderNo())
-                .tenantId(order.getTenantId())
                 .orderStatus(order.getOrderStatus())
                 .payStatus(order.getPayStatus())
-                .totalAmount(toFen(order.getTotalAmount()))
-                .discountAmount(toFen(order.getDiscountAmount()))
-                .walletDeductAmount(toFen(order.getWalletDeductAmount()))
-                .pointsDeductAmount(toFen(order.getPointsDeductAmount()))
-                .externalPayAmount(toFen(order.getExternalPayAmount()))
-                .payableAmount(toFen(order.getPayableAmount()))
+                .totalAmount(VoConverterUtil.toFen(order.getTotalAmount()))
+                .discountAmount(VoConverterUtil.toFen(order.getDiscountAmount()))
+                .walletDeductAmount(VoConverterUtil.toFen(order.getWalletDeductAmount()))
+                .pointsDeductAmount(VoConverterUtil.toFen(order.getPointsDeductAmount()))
+                .externalPayAmount(VoConverterUtil.toFen(order.getExternalPayAmount()))
+                .payableAmount(VoConverterUtil.toFen(order.getPayableAmount()))
                 .subject(order.getSubject())
                 .source(order.getSource())
-                .expireTime(formatTime(order.getExpireTime()))
-                .createTime(formatTime(order.getCreateTime()))
-                .updateTime(formatTime(order.getUpdateTime()))
+                .expireTime(VoConverterUtil.formatTime(order.getExpireTime()))
+                .createTime(VoConverterUtil.formatTime(order.getCreateTime()))
+                .updateTime(VoConverterUtil.formatTime(order.getUpdateTime()))
                 .build();
-    }
-
-    private static Long toFen(java.math.BigDecimal amount) {
-        return amount == null ? null : amount.multiply(new java.math.BigDecimal(100)).longValue();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

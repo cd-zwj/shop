@@ -8,10 +8,10 @@ import com.payment.service.MessageIdempotentService;
 import com.payment.service.PaymentOrderService;
 import com.payment.service.PointsService;
 import com.rabbitmq.client.Channel;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -22,23 +22,15 @@ import java.util.Map;
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class OrderConsumer {
-    
-    @Autowired
-    private MessageIdempotentService messageIdempotentService;
-    
-    @Autowired
-    private PaymentOrderService paymentOrderService;
 
-    @Autowired
-    private PointsService pointsService;
+    private final MessageIdempotentService messageIdempotentService;
+    private final PaymentOrderService paymentOrderService;
+    private final PointsService pointsService;
+    private final MemberService memberService;
+    private final CouponService couponService;
 
-    @Autowired
-    private MemberService memberService;
-
-    @Autowired
-    private CouponService couponService;
-    
     private static final String CONSUMER_ORDER_CREATED = "OrderCreatedConsumer";
     private static final String CONSUMER_ORDER_PAID = "OrderPaidConsumer";
     private static final String QUEUE_ORDER_CREATED = "payment.order.created";

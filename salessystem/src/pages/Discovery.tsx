@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Heart,
@@ -12,6 +12,7 @@ import { appCatalogService } from '../services/modules/appCatalog';
 import type { Tenant } from '../types/catalog';
 import { cn } from '../lib/utils';
 import { getImageUrl } from '../utils/display';
+import { EmptyState } from '../components/ui/EmptyState';
 
 export default function Discovery() {
   const navigate = useNavigate();
@@ -126,6 +127,7 @@ export default function Discovery() {
               icon={<Search className="w-12 h-12" />}
               title="没有找到匹配的门店"
               subtitle="尝试调整你的搜索关键词再试一次吧~"
+              className="w-full col-span-full"
             />
           ) : (
             displayStores.map((store, index) => {
@@ -185,18 +187,6 @@ export default function Discovery() {
           )}
         </div>
       </section>
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-slate-100 bg-white shadow-sm w-full col-span-full">
-      <div className="p-4 rounded-full bg-slate-50 text-slate-400 mb-4">
-        {icon}
-      </div>
-      <h3 className="text-base font-extrabold text-slate-800">{title}</h3>
-      <p className="text-xs font-semibold text-slate-400 mt-1.5 max-w-xs leading-relaxed">{subtitle}</p>
     </div>
   );
 }

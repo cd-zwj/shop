@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 /**
  * 退款申请视图对象，过滤内部字段，金额转为分（Long）。
  */
@@ -21,7 +19,6 @@ public class RefundApplicationVO {
     private String refundNo;
     private String orderNo;
     private Long orderItemId;
-    private Long tenantId;
     private String refundType;
     private String refundStatus;
     private Long refundAmount;
@@ -42,25 +39,16 @@ public class RefundApplicationVO {
                 .refundNo(app.getRefundNo())
                 .orderNo(app.getOrderNo())
                 .orderItemId(app.getOrderItemId())
-                .tenantId(app.getTenantId())
                 .refundType(app.getRefundType())
                 .refundStatus(app.getRefundStatus())
-                .refundAmount(toFen(app.getRefundAmount()))
+                .refundAmount(VoConverterUtil.toFen(app.getRefundAmount()))
                 .reason(app.getReason())
                 .description(app.getDescription())
                 .rejectReason(app.getRejectReason())
-                .auditTime(formatTime(app.getAuditTime()))
-                .completeTime(formatTime(app.getCompleteTime()))
-                .createTime(formatTime(app.getCreateTime()))
-                .updateTime(formatTime(app.getUpdateTime()))
+                .auditTime(VoConverterUtil.formatTime(app.getAuditTime()))
+                .completeTime(VoConverterUtil.formatTime(app.getCompleteTime()))
+                .createTime(VoConverterUtil.formatTime(app.getCreateTime()))
+                .updateTime(VoConverterUtil.formatTime(app.getUpdateTime()))
                 .build();
-    }
-
-    private static Long toFen(BigDecimal amount) {
-        return amount == null ? null : amount.multiply(new BigDecimal(100)).longValue();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

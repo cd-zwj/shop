@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 
 @RestController
-@RequestMapping("/api/ai")
+@RequestMapping("/ai")
 @Slf4j
 public class AiController {
 

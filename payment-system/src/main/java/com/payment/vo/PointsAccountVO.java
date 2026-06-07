@@ -33,12 +33,8 @@ public class PointsAccountVO {
                 .totalEarned(account.getTotalEarned())
                 .totalUsed(account.getTotalUsed())
                 .status(account.getStatus())
-                .createTime(formatTime(account.getCreateTime()))
-                .updateTime(formatTime(account.getUpdateTime()))
+                .createTime(VoConverterUtil.formatTime(account.getCreateTime()))
+                .updateTime(VoConverterUtil.formatTime(account.getUpdateTime()))
                 .build();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

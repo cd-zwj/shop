@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Coins, ArrowLeft, Clock, ShoppingBag, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { EmptyState } from '../components/ui/EmptyState';
 import { appPointsService } from '../services/modules/appPoints';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { PointsBalance, PointsLog, ExchangeProduct } from '../types/points';
@@ -41,7 +42,7 @@ export default function Points() {
         const list = await appCatalogService.listTenantProducts(balanceData.tenantId);
         productsList = list.map((p) => ({ ...p, tenantId: balanceData.tenantId }));
       } catch (e) {
-        console.warn('Failed to load tenant products list', e);
+        // Silently ignore tenant products load failure
       }
 
       // Load exchange products
@@ -68,7 +69,7 @@ export default function Points() {
             if (p) resolvedDetails[p.id] = { ...p, tenantId: balanceData.tenantId } as ProductWithTenant;
           });
         } catch (e) {
-          console.warn('Failed to resolve missing product details', e);
+        // Silently ignore missing product details resolution failure
         }
       }
 
@@ -345,18 +346,6 @@ export default function Points() {
           </AnimatePresence>
         )}
       </div>
-    </div>
-  );
-}
-
-function EmptyState({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-3xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-      <div className="p-4 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-400 mb-4">
-        {icon}
-      </div>
-      <h3 className="text-base font-extrabold text-slate-800 dark:text-white">{title}</h3>
-      <p className="text-xs font-semibold text-slate-400 mt-1.5 max-w-xs leading-relaxed">{subtitle}</p>
     </div>
   );
 }

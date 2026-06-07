@@ -6,8 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
-
 /**
  * 用户端支付单视图对象，隐藏 platformUserId 等内部字段。
  */
@@ -41,22 +39,14 @@ public class PaymentBillVO {
                 .bizNo(bill.getBizNo())
                 .channelCode(bill.getChannelCode())
                 .channelMode(bill.getChannelMode())
-                .payAmount(toFen(bill.getPayAmount()))
+                .payAmount(VoConverterUtil.toFen(bill.getPayAmount()))
                 .payStatus(bill.getPayStatus())
                 .thirdPartyBillNo(bill.getThirdPartyBillNo())
                 .callbackStatus(bill.getCallbackStatus())
                 .statusRemark(bill.getStatusRemark())
-                .expireTime(formatTime(bill.getExpireTime()))
-                .createTime(formatTime(bill.getCreateTime()))
-                .updateTime(formatTime(bill.getUpdateTime()))
+                .expireTime(VoConverterUtil.formatTime(bill.getExpireTime()))
+                .createTime(VoConverterUtil.formatTime(bill.getCreateTime()))
+                .updateTime(VoConverterUtil.formatTime(bill.getUpdateTime()))
                 .build();
-    }
-
-    private static Long toFen(BigDecimal amount) {
-        return amount == null ? null : amount.multiply(new BigDecimal(100)).longValue();
-    }
-
-    private static String formatTime(java.time.LocalDateTime time) {
-        return time == null ? null : time.toString();
     }
 }

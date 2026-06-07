@@ -103,7 +103,7 @@ export default function Home() {
       <section className="pl-4">
         <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 pr-4 hide-scrollbar">
           {[
-            { title: '真实商户数据', subtitle: '首页推荐已切换 to 后端返回结果', img: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80' },
+            { title: '真实商户数据', subtitle: '首页推荐已切换到后端返回结果', img: 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?auto=format&fit=crop&w=1200&q=80' },
             { title: '统一接口底座', subtitle: '登录、商户、商品浏览都已开始联调', img: 'https://images.unsplash.com/photo-1556740749-887f6717d7e4?auto=format&fit=crop&w=1200&q=80' },
           ].map((banner, i) => (
             <motion.div
