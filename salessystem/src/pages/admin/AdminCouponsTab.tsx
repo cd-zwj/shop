@@ -43,7 +43,7 @@ export default function AdminCouponsTab({ statusFilter }: AdminCouponsTabProps) 
   const [receiveStartTime, setReceiveStartTime] = useState('');
   const [receiveEndTime, setReceiveEndTime] = useState('');
   const [couponDescription, setCouponDescription] = useState('');
-  const [stackStrategy, setStackStrategy] = useState('NONE');
+  const [stackStrategy, setStackStrategy] = useState('EXCLUSIVE');
   const [isCouponSubmitting, setIsCouponSubmitting] = useState(false);
 
   // Coupon Scope Modal
@@ -172,7 +172,7 @@ export default function AdminCouponsTab({ statusFilter }: AdminCouponsTabProps) 
     setReceiveStartTime('');
     setReceiveEndTime('');
     setCouponDescription('');
-    setStackStrategy('NONE');
+    setStackStrategy('EXCLUSIVE');
   };
 
   const handleOpenScopes = async (coupon: MerchantCouponTemplate) => {

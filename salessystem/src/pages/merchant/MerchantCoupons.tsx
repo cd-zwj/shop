@@ -49,7 +49,7 @@ export default function MerchantCoupons() {
   const [receiveStartTime, setReceiveStartTime] = useState('');
   const [receiveEndTime, setReceiveEndTime] = useState('');
   const [description, setDescription] = useState('');
-  const [stackStrategy, setStackStrategy] = useState('NONE');
+  const [stackStrategy, setStackStrategy] = useState('EXCLUSIVE');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Scope Modal
@@ -175,7 +175,7 @@ export default function MerchantCoupons() {
     setReceiveStartTime('');
     setReceiveEndTime('');
     setDescription('');
-    setStackStrategy('NONE');
+    setStackStrategy('EXCLUSIVE');
   };
 
   const handleActivate = async (id: number) => {

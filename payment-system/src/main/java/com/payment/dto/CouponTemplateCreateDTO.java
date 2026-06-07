@@ -3,6 +3,7 @@ package com.payment.dto;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -37,6 +38,8 @@ public class CouponTemplateCreateDTO {
     private LocalDateTime validEndTime;
     private Integer minMemberLevel;
     private String excludeMemberTagIds;
+    /** 叠加策略：EXCLUSIVE(互斥取大) | STACKABLE(可叠加) | COUPON_FIRST(先券后活动) | ACTIVITY_FIRST(先活动后券)，默认 EXCLUSIVE */
+    @Pattern(regexp = "^(EXCLUSIVE|STACKABLE|COUPON_FIRST|ACTIVITY_FIRST|NONE)?$", message = "叠加策略值不合法")
     private String stackStrategy;
     private String description;
 }
