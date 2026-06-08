@@ -15,6 +15,7 @@ import com.payment.util.UserContextHolder;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,12 +25,14 @@ import java.util.Map;
 
 /**
  * 积分管理控制器
+ * @deprecated 功能已被 V1 版本完全替代
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/points")
- 
- 
+
+@Deprecated
+@Profile({"dev", "test"})
 public class PointsController {
     
     @Autowired

@@ -1,7 +1,5 @@
 package com.payment.util;
 
-import jakarta.servlet.http.HttpServletRequest;
-
 /**
  * 用户上下文工具类
  * 用于在Controller中方便地获取当前登录用户信息
@@ -43,29 +41,5 @@ public class UserContext {
      */
     public static Long getCurrentTenantId() {
         return TenantContextHolder.getTenantId();
-    }
-
-    /**
-     * 兼容旧版本：从request中获取当前用户ID（已废弃，建议直接使用getCurrentUserId()�?
-     */
-    @Deprecated
-    public static Long getCurrentUserId(HttpServletRequest request) {
-        return getCurrentUserId();
-    }
-
-    /**
-     * 兼容旧版本：从request中获取当前用户名（已废弃，建议直接使用getCurrentUsername()�?
-     */
-    @Deprecated
-    public static String getCurrentUsername(HttpServletRequest request) {
-        return getCurrentUsername();
-    }
-
-    /**
-     * 兼容旧版本：从request中获取当前token（已废弃，建议直接使用getCurrentToken()�?
-     */
-    @Deprecated
-    public static String getCurrentToken(HttpServletRequest request) {
-        return getCurrentToken();
     }
 }

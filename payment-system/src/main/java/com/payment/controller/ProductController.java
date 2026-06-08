@@ -9,6 +9,7 @@ import com.payment.dto.ProductDTO;
 import com.payment.entity.Product;
 import com.payment.service.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -16,12 +17,15 @@ import java.util.List;
 
 /**
  * 商品管理控制器
+ * @deprecated 功能已被 V1 版本完全替代
  */
- 
- 
+
+
 @RestController
 @RequestMapping("/product")
 @SaCheckLogin
+@Deprecated
+@Profile({"dev", "test"})
 public class ProductController {
     
     @Autowired

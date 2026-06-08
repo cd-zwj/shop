@@ -11,9 +11,11 @@ import java.time.LocalDateTime;
 
 /**
  * 用户积分实体
+ * @deprecated 使用 MemberPointsAccount 替代
  */
 @Data
 @TableName("user_points")
+@Deprecated
 public class UserPoints implements Serializable {
     private static final long serialVersionUID = 1L;
 

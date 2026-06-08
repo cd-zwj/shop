@@ -10,9 +10,11 @@ import java.time.LocalDateTime;
 
 /**
  * 用户实体
+ * @deprecated 使用 PlatformUser 替代
  */
 @Data
 @TableName("sys_user")
+@Deprecated
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 

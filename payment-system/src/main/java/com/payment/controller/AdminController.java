@@ -25,6 +25,7 @@ import com.payment.dto.UserPermissionVO;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,11 +36,13 @@ import jakarta.validation.Valid;
 /**
  * 平台管理员控制器（旧版，部分接口已废弃）。
  * 登录接口请使用 {@link V1AdminAuthController}。
+ * @deprecated 功能已被 V1 版本完全替代
  */
 @Slf4j
 @RestController
 @RequestMapping("/api/admin")
 @Deprecated
+@Profile({"dev", "test"})
 public class AdminController {
     
     @Autowired

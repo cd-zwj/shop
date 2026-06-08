@@ -12,9 +12,11 @@ import java.time.LocalDateTime;
 
 /**
  * 用户余额实体
+ * @deprecated 使用 UnifiedWalletAccount 替代
  */
 @Data
 @TableName("user_balance")
+@Deprecated
 public class UserBalance implements Serializable {
     private static final long serialVersionUID = 1L;
 

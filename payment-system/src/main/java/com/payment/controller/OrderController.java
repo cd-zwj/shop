@@ -9,6 +9,7 @@ import com.payment.entity.PaymentOrder;
 import com.payment.service.PaymentOrderService;
 
 import com.payment.util.UserContext;
+import org.springframework.context.annotation.Profile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,12 +17,15 @@ import jakarta.validation.Valid;
 
 /**
  * 订单控制器
+ * @deprecated 功能已被 V1 版本完全替代
  */
- 
- 
+
+
 @RestController
 @RequestMapping("/order")
 @SaCheckLogin
+@Deprecated
+@Profile({"dev", "test"})
 public class OrderController {
     
     @Autowired

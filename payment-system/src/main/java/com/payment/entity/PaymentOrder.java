@@ -11,9 +11,11 @@ import java.time.LocalDateTime;
 
 /**
  * 订单实体
+ * @deprecated 使用 SalesOrder + PaymentBill 替代
  */
 @Data
 @TableName("payment_order")
+@Deprecated
 public class PaymentOrder implements Serializable {
     private static final long serialVersionUID = 1L;
 

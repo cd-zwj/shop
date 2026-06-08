@@ -13,6 +13,7 @@ import com.payment.service.*;
 
 import com.payment.util.UserContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
@@ -21,10 +22,13 @@ import java.util.List;
 
 /**
  * 微信小程序用户端控制器
+ * @deprecated 功能已被 V1 版本完全替代
  */
 
 @RestController
 @RequestMapping("/miniprogram")
+@Deprecated
+@Profile({"dev", "test"})
 public class MiniProgramController {
     
     @Autowired
