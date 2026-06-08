@@ -109,6 +109,15 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
                 }
             }
 
+            // 校验 seller_id（收款方）
+            String sellerId = params.get("seller_id");
+            if (sellerId != null && config.getAlipay().getSellerId() != null) {
+                if (!sellerId.equals(config.getAlipay().getSellerId())) {
+                    log.warn("支付宝回调 seller_id 不一致: callback={}, config={}", sellerId, config.getAlipay().getSellerId());
+                    return false;
+                }
+            }
+
             return true;
         } catch (BusinessException e) {
             throw e;

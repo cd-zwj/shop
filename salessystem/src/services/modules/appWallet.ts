@@ -4,6 +4,7 @@ import type {
   MerchantRechargeRule,
   MerchantWalletRechargePayload,
   RechargePayment,
+  UnifiedRechargeRule,
   UnifiedWalletRechargePayload,
   WalletAccount,
   WalletLog,
@@ -33,6 +34,14 @@ export const appWalletService = {
       url: '/v1/app/wallets/unified/recharges',
       method: 'post',
       data: payload,
+      authRole: 'user',
+    });
+  },
+
+  listUnifiedRechargeRules() {
+    return request<UnifiedRechargeRule[]>({
+      url: '/v1/app/wallets/unified/recharge-rules',
+      method: 'get',
       authRole: 'user',
     });
   },

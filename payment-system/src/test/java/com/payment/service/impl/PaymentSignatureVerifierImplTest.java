@@ -2,8 +2,12 @@ package com.payment.service.impl;
 
 import com.payment.config.PaymentConfig;
 import com.payment.dto.PaymentCallbackDTO;
+import com.payment.mapper.PaymentBillMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -11,13 +15,17 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("PaymentSignatureVerifierImpl - 支付回调验签")
 class PaymentSignatureVerifierImplTest {
+
+    @Mock
+    private PaymentBillMapper paymentBillMapper;
 
     @Test
     @DisplayName("未知渠道必须拒绝")
     void unknownChannelShouldBeRejected() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
         PaymentCallbackDTO dto = buildCallback("{\"billNo\":\"PB-001\"}");
 
         boolean valid = verifier.verify("UNKNOWN", dto, Map.of());
@@ -28,7 +36,7 @@ class PaymentSignatureVerifierImplTest {
     @Test
     @DisplayName("缺少原始报文时必须拒绝 JSON 回调")
     void jsonCallbackWithoutRawBodyShouldBeRejected() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo("PB-001");
 
@@ -40,7 +48,7 @@ class PaymentSignatureVerifierImplTest {
     @Test
     @DisplayName("支付宝回调缺少 sign 必须拒绝")
     void alipayCallbackWithoutSignShouldBeRejected() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
 
         boolean valid = verifier.verifyAlipayCallback(Map.of(
                 "out_trade_no", "PB-001",
@@ -55,7 +63,7 @@ class PaymentSignatureVerifierImplTest {
     @Test
     @DisplayName("支付宝回调签名无效必须拒绝")
     void alipayCallbackWithInvalidSignShouldBeRejected() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
 
         boolean valid = verifier.verifyAlipayCallback(Map.of(
                 "out_trade_no", "PB-001",
@@ -72,7 +80,7 @@ class PaymentSignatureVerifierImplTest {
     @Test
     @DisplayName("第三方渠道缺少签名必须拒绝")
     void extProviderWithoutSignatureShouldBeRejected() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
         PaymentCallbackDTO dto = buildCallback("{\"billNo\":\"PB-EXT\",\"success\":true}");
 
         boolean valid = verifier.verify("EXT_PROVIDER", dto, Map.of());
@@ -83,7 +91,7 @@ class PaymentSignatureVerifierImplTest {
     @Test
     @DisplayName("非成功状态不应映射为成功")
     void nonSuccessTradeStatusShouldNotBeTreatedAsSuccess() {
-        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig());
+        PaymentSignatureVerifierImpl verifier = new PaymentSignatureVerifierImpl(buildConfig(), paymentBillMapper);
 
         Map<String, String> params = new HashMap<>();
         params.put("out_trade_no", "PB-100");

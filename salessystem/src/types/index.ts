@@ -72,6 +72,7 @@ export type {
   WalletLog,
   RechargePayment,
   MerchantRechargeRule as MerchantRechargeRuleFromWallet,
+  UnifiedRechargeRule,
   UnifiedWalletRechargePayload,
   MerchantWalletRechargePayload,
 } from './wallet';

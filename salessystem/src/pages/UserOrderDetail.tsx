@@ -19,6 +19,7 @@ import { ApiError } from '../types/api';
 import type { SalesOrderDetail } from '../types/order';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { getPaymentBillReuseHint } from '../utils/paymentStatus';
 import {
   buildRepurchaseCartItems,
@@ -138,7 +139,16 @@ export default function UserOrderDetail() {
       setActionHint(getPaymentBillReuseHint(payment.reusedPaymentBill));
 
       if (payment.externalPayUrl) {
-        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+        const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
+        if (!isOpened && payment.paymentBillNo) {
+          saveAlipayPaymentPayload({
+            billNo: payment.paymentBillNo,
+            orderNo: payment.orderNo ?? order?.orderNo,
+            source: 'order',
+            payHtml: payment.externalPayUrl,
+            amount: payment.totalAmount,
+          });
+        }
       }
 
       navigate(

@@ -42,6 +42,17 @@ export interface MerchantRechargeRule {
   sortOrder?: number | null;
 }
 
+/**
+ * 统一钱包充值规则（用户端 API 返回，已隐藏内部字段，金额单位：分）。
+ */
+export interface UnifiedRechargeRule {
+  id: number;
+  rechargeAmount: number;
+  giftAmount: number;
+  giftPoints: number;
+  sortOrder?: number | null;
+}
+
 export interface UnifiedWalletRechargePayload {
   amount: number;
   paymentChannelCode: PaymentChannelCode;

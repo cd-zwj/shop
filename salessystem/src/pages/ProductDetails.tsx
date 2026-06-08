@@ -23,6 +23,7 @@ import type { Product } from '../types/catalog';
 import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
+import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 
 export default function ProductDetails() {
   const navigate = useNavigate();
@@ -128,7 +129,16 @@ export default function ProductDetails() {
       const payment = await createOrderForItems([toCheckoutItem(product)], 'APP_BUY_NOW');
 
       if (payment.externalPayUrl) {
-        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+        const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
+        if (!isOpened && payment.paymentBillNo) {
+          saveAlipayPaymentPayload({
+            billNo: payment.paymentBillNo,
+            orderNo: payment.orderNo,
+            source: 'order',
+            payHtml: payment.externalPayUrl,
+            amount: payment.totalAmount,
+          });
+        }
       }
 
       navigate(getOrderCheckoutPath(payment));

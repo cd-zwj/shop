@@ -46,13 +46,13 @@ class OrderConsumerTest {
 
     @BeforeEach
     void setUp() {
-        consumer = new OrderConsumer();
-        // 注入 @Autowired 字段
-        setField(consumer, "messageIdempotentService", messageIdempotentService);
-        setField(consumer, "paymentOrderService", paymentOrderService);
-        setField(consumer, "pointsService", pointsService);
-        setField(consumer, "memberService", memberService);
-        setField(consumer, "couponService", couponService);
+        consumer = new OrderConsumer(
+                messageIdempotentService,
+                paymentOrderService,
+                pointsService,
+                memberService,
+                couponService
+        );
     }
 
     @Test
@@ -163,19 +163,6 @@ class OrderConsumerTest {
             if (e.getCause() instanceof RuntimeException re) {
                 throw re;
             }
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * 通过反射设置 @Autowired 字段
-     */
-    private static void setField(Object target, String fieldName, Object value) {
-        try {
-            var field = OrderConsumer.class.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new RuntimeException(e);
         }
     }

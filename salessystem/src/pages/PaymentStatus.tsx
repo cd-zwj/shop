@@ -25,6 +25,11 @@ import {
   buildRepurchaseCartItems,
   getPaymentFailureActions,
 } from '../utils/orderActions';
+import {
+  readAlipayPaymentPayload,
+  clearAlipayPaymentPayload,
+  openAlipayPaymentWindow,
+} from '../utils/alipayPayment';
 
 export default function PaymentStatus() {
   const navigate = useNavigate();
@@ -39,6 +44,8 @@ export default function PaymentStatus() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRepurchasing, setIsRepurchasing] = useState(false);
   const [error, setError] = useState('');
+
+  const savedPayload = readAlipayPaymentPayload(billNo);
 
   useEffect(() => {
     let isMounted = true;
@@ -247,6 +254,18 @@ export default function PaymentStatus() {
         </div>
 
         <div className="flex w-full flex-col gap-4">
+          {savedPayload && (
+            <button
+              onClick={() => {
+                openAlipayPaymentWindow(savedPayload.payHtml);
+                clearAlipayPaymentPayload(billNo);
+              }}
+              className="flex w-full items-center justify-center gap-3 rounded-[24px] bg-blue-500 py-5 text-lg font-black text-white shadow-2xl shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
+            >
+              重新打开支付宝支付
+              <CreditCard size={20} />
+            </button>
+          )}
           <button
             onClick={() => (content.primaryPath ? navigate(content.primaryPath) : handleRefresh())}
             disabled={isRefreshing}
