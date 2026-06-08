@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.util.StringUtils;
 
 /**
  * 支付配置
@@ -27,11 +28,11 @@ public class PaymentConfig {
     @PostConstruct
     public void validate() {
         if (alipay != null) {
-            if (alipay.getSellerId() == null || alipay.getSellerId().isEmpty()) {
-                log.warn("⚠️ payment.alipay.seller-id 未配置，支付宝回调 seller_id 校验将拒绝所有回调");
+            if (!StringUtils.hasText(alipay.getSellerId())) {
+                throw new IllegalStateException("payment.alipay.seller-id 未配置，支付宝支付无法使用");
             }
-            if (alipay.getAppId() == null || alipay.getAppId().isEmpty()) {
-                log.warn("⚠️ payment.alipay.app-id 未配置");
+            if (!StringUtils.hasText(alipay.getAppId())) {
+                throw new IllegalStateException("payment.alipay.app-id 未配置");
             }
         }
     }

@@ -236,8 +236,9 @@ public class AlipayPagePaymentProvider implements PaymentProvider {
                 || !StringUtils.hasText(config.getPublicKey())
                 || !StringUtils.hasText(config.getGatewayUrl())
                 || !StringUtils.hasText(config.getNotifyUrl())
-                || !StringUtils.hasText(config.getReturnUrl())) {
-            throw new BusinessException("Alipay payment config is incomplete");
+                || !StringUtils.hasText(config.getReturnUrl())
+                || !StringUtils.hasText(config.getSellerId())) {
+            throw new BusinessException("Alipay payment config is incomplete (seller-id required)");
         }
         return config;
     }
