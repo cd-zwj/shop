@@ -31,6 +31,15 @@ export default function Home() {
   const [featuredMerchants, setFeaturedMerchants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSearch = () => {
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      navigate(`/discovery?keyword=${encodeURIComponent(trimmed)}`);
+    }
+  };
+
   const categories = [
     { icon: Smartphone, label: '手机充值', color: 'bg-blue-50 text-blue-600', path: '/recharge' },
     { icon: Ticket, label: '领券中心', color: 'bg-orange-50 text-orange-500', path: '/coupons' },
@@ -91,9 +100,16 @@ export default function Home() {
             <input
               type="text"
               placeholder="搜索商户、商品或分类..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="w-full rounded-full border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm transition-all placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            <button className="absolute right-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90">
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="absolute right-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white shadow-sm transition-opacity hover:opacity-90"
+            >
               搜索
             </button>
           </div>

@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { Check, Gift, Info, Wallet, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appWalletService } from '../services/modules/appWallet';
-import type { WalletAccount } from '../types/wallet';
+import type { UnifiedRechargeRule, WalletAccount } from '../types/wallet';
 import { ApiError } from '../types/api';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
@@ -14,9 +14,42 @@ const PRESET_PACKAGES = [
   { id: 500, label: '尊享档', amount: 500 },
 ] as const;
 
+interface RechargePackage {
+  id: number;
+  label: string;
+  amount: number;
+  giftAmount: number;
+  giftPoints: number;
+  popular?: boolean;
+}
+
+/** 将后端规则（金额单位：分）转为页面展示用的档位对象。 */
+function toPackage(rule: UnifiedRechargeRule, index: number): RechargePackage {
+  return {
+    id: rule.id,
+    label: `档位${index + 1}`,
+    amount: rule.rechargeAmount / 100,
+    giftAmount: rule.giftAmount / 100,
+    giftPoints: rule.giftPoints,
+  };
+}
+
+/** 当后端规则为空时，使用前端硬编码兜底。 */
+function fallbackPackages(): RechargePackage[] {
+  return PRESET_PACKAGES.map((p, i) => ({
+    id: p.id,
+    label: p.label,
+    amount: p.amount,
+    giftAmount: 0,
+    giftPoints: 0,
+    popular: 'popular' in p ? p.popular : undefined,
+  }));
+}
+
 export default function Recharge() {
   const navigate = useNavigate();
-  const [selectedPackage, setSelectedPackage] = useState<number>(300);
+  const [packages, setPackages] = useState<RechargePackage[]>([]);
+  const [selectedPackage, setSelectedPackage] = useState<number>(0);
   const [customAmount, setCustomAmount] = useState('');
   const [wallet, setWallet] = useState<WalletAccount | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,18 +57,35 @@ export default function Recharge() {
 
   useEffect(() => {
     let isMounted = true;
-    async function loadWallet() {
-      try {
-        const result = await appWalletService.getUnifiedWallet();
-        if (!isMounted) return;
-        setWallet(result);
-      } catch {
-        if (!isMounted) return;
-        setWallet(null);
+
+    async function load() {
+      const [walletResult, rules] = await Promise.allSettled([
+        appWalletService.getUnifiedWallet(),
+        appWalletService.listUnifiedRechargeRules(),
+      ]);
+
+      if (!isMounted) return;
+
+      if (walletResult.status === 'fulfilled') {
+        setWallet(walletResult.value);
       }
+
+      const resolved =
+        rules.status === 'fulfilled' && rules.value.length > 0
+          ? rules.value.map((r, i) => toPackage(r, i))
+          : fallbackPackages();
+
+      // 将第一个档位标记为推荐
+      if (resolved.length > 0) {
+        const popularIdx = Math.min(1, resolved.length - 1);
+        resolved[popularIdx] = { ...resolved[popularIdx], popular: true };
+      }
+
+      setPackages(resolved);
+      setSelectedPackage(resolved[0]?.amount ?? 100);
     }
 
-    void loadWallet();
+    void load();
     return () => {
       isMounted = false;
     };
@@ -105,16 +155,16 @@ export default function Recharge() {
       </motion.div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-        {PRESET_PACKAGES.map((pkg) => (
+        {packages.map((pkg) => (
           <label key={pkg.id} className="group relative cursor-pointer">
             <input
               type="radio"
               name="recharge_package"
               className="sr-only"
-              checked={!customAmount && selectedPackage === pkg.id}
+              checked={!customAmount && selectedPackage === pkg.amount}
               onChange={() => {
                 setCustomAmount('');
-                setSelectedPackage(pkg.id);
+                setSelectedPackage(pkg.amount);
               }}
             />
             <motion.div
@@ -122,12 +172,12 @@ export default function Recharge() {
               whileTap={{ scale: 0.98 }}
               className={cn(
                 'relative h-full overflow-hidden rounded-3xl border-2 bg-white p-8 shadow-lg transition-all duration-300',
-                !customAmount && selectedPackage === pkg.id
+                !customAmount && selectedPackage === pkg.amount
                   ? 'border-primary ring-4 ring-primary/5 shadow-primary/10'
                   : 'border-slate-100 shadow-slate-200/40',
               )}
             >
-              {'popular' in pkg && pkg.popular && (
+              {pkg.popular && (
                 <div className="absolute right-0 top-0 rounded-bl-xl bg-primary px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-white">
                   推荐
                 </div>
@@ -144,7 +194,7 @@ export default function Recharge() {
                 <div
                   className={cn(
                     'flex h-8 w-8 items-center justify-center rounded-full border-2 transition-all',
-                    !customAmount && selectedPackage === pkg.id
+                    !customAmount && selectedPackage === pkg.amount
                       ? 'border-primary bg-primary text-white'
                       : 'border-slate-200 text-transparent',
                   )}
@@ -156,8 +206,14 @@ export default function Recharge() {
               <div className="mt-auto border-t border-slate-50 pt-6">
                 <div className="flex items-center gap-2 text-primary">
                   <Gift className="h-5 w-5" />
-                  <span className="text-base font-black uppercase tracking-tight">预计到账 {formatCurrency(pkg.amount)}</span>
+                  <span className="text-base font-black uppercase tracking-tight">
+                    预计到账 {formatCurrency(pkg.amount)}
+                    {pkg.giftAmount > 0 && ` + ${formatCurrency(pkg.giftAmount)} 赠送`}
+                  </span>
                 </div>
+                {pkg.giftPoints > 0 && (
+                  <p className="mt-1 text-xs font-bold text-slate-400">赠送 {pkg.giftPoints} 积分</p>
+                )}
                 <p className="mt-2 text-xs font-bold text-slate-400">使用真实支付单流程</p>
               </div>
             </motion.div>
