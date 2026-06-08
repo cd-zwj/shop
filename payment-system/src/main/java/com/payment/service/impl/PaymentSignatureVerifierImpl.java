@@ -98,24 +98,37 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
                 return false;
             }
 
-            // 校验 total_amount 是否与账单金额一致
+            // 校验 total_amount（必须字段，缺值直接拒绝）
             String totalAmountStr = params.get("total_amount");
-            if (totalAmountStr != null && bill.getPayAmount() != null) {
-                BigDecimal callbackAmount = new BigDecimal(totalAmountStr);
-                BigDecimal billAmount = bill.getPayAmount().setScale(2, RoundingMode.HALF_UP);
-                if (callbackAmount.compareTo(billAmount) != 0) {
-                    log.warn("支付宝回调金额不一致: callback={}, bill={}", callbackAmount, billAmount);
-                    return false;
-                }
+            if (totalAmountStr == null || totalAmountStr.isEmpty()) {
+                log.warn("支付宝回调缺少 total_amount");
+                return false;
+            }
+            if (bill.getPayAmount() == null) {
+                log.warn("支付宝回调账单金额为空, billNo={}", outTradeNo);
+                return false;
+            }
+            BigDecimal callbackAmount = new BigDecimal(totalAmountStr);
+            BigDecimal billAmount = bill.getPayAmount().setScale(2, RoundingMode.HALF_UP);
+            if (callbackAmount.compareTo(billAmount) != 0) {
+                log.warn("支付宝回调金额不一致: callback={}, bill={}", callbackAmount, billAmount);
+                return false;
             }
 
-            // 校验 seller_id（收款方）
+            // 校验 seller_id（必须字段，缺值直接拒绝）
             String sellerId = params.get("seller_id");
-            if (sellerId != null && config.getAlipay().getSellerId() != null) {
-                if (!sellerId.equals(config.getAlipay().getSellerId())) {
-                    log.warn("支付宝回调 seller_id 不一致: callback={}, config={}", sellerId, config.getAlipay().getSellerId());
-                    return false;
-                }
+            String configSellerId = config.getAlipay().getSellerId();
+            if (sellerId == null || sellerId.isEmpty()) {
+                log.warn("支付宝回调缺少 seller_id");
+                return false;
+            }
+            if (configSellerId == null || configSellerId.isEmpty()) {
+                log.warn("支付宝 seller_id 未配置，无法校验回调");
+                return false;
+            }
+            if (!sellerId.equals(configSellerId)) {
+                log.warn("支付宝回调 seller_id 不一致: callback={}, config={}", sellerId, configSellerId);
+                return false;
             }
 
             return true;

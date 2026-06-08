@@ -47,7 +47,13 @@ public class V1OpenPaymentController {
         }
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo(params.get("out_trade_no"));
-        dto.setCallbackRequestId(params.get("notify_id"));
+        // notify_id 为空时 fallback 到 trade_no + out_trade_no 组合键
+        String notifyId = params.get("notify_id");
+        if (notifyId == null || notifyId.isEmpty()) {
+            notifyId = params.get("trade_no") + ":" + params.get("out_trade_no");
+            log.warn("支付宝回调缺少 notify_id, 使用 fallback: {}", notifyId);
+        }
+        dto.setCallbackRequestId(notifyId);
         dto.setThirdPartyBillNo(params.get("trade_no"));
         dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status"))
                 || "TRADE_FINISHED".equals(params.get("trade_status")));
