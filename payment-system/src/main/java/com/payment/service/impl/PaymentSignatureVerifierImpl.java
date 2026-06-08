@@ -1,9 +1,12 @@
 package com.payment.service.impl;
 
 import com.alipay.api.internal.util.AlipaySignature;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.config.PaymentConfig;
 import com.payment.dto.PaymentCallbackDTO;
+import com.payment.entity.PaymentBill;
+import com.payment.mapper.PaymentBillMapper;
 import com.payment.service.PaymentSignatureVerifier;
 import com.payment.util.JsonUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +15,8 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -27,9 +32,11 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
     private static final String HMAC_SHA256 = "HmacSHA256";
 
     private final PaymentConfig config;
+    private final PaymentBillMapper paymentBillMapper;
 
-    public PaymentSignatureVerifierImpl(PaymentConfig config) {
+    public PaymentSignatureVerifierImpl(PaymentConfig config, PaymentBillMapper paymentBillMapper) {
         this.config = config;
+        this.paymentBillMapper = paymentBillMapper;
     }
 
     @Override
@@ -75,8 +82,34 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
             boolean valid = AlipaySignature.rsaCheckContent(content, params.get("sign"), publicKey, signType);
             if (!valid) {
                 log.warn("支付宝验签失败: 签名不匹配");
+                return false;
             }
-            return valid;
+
+            // 校验 out_trade_no 是否存在于系统中
+            String outTradeNo = params.get("out_trade_no");
+            if (outTradeNo == null || outTradeNo.isBlank()) {
+                log.warn("支付宝回调缺少 out_trade_no");
+                return false;
+            }
+            PaymentBill bill = paymentBillMapper.selectOne(
+                    new LambdaQueryWrapper<PaymentBill>().eq(PaymentBill::getBillNo, outTradeNo));
+            if (bill == null) {
+                log.warn("支付宝回调 out_trade_no 不存在: {}", outTradeNo);
+                return false;
+            }
+
+            // 校验 total_amount 是否与账单金额一致
+            String totalAmountStr = params.get("total_amount");
+            if (totalAmountStr != null && bill.getPayAmount() != null) {
+                BigDecimal callbackAmount = new BigDecimal(totalAmountStr);
+                BigDecimal billAmount = bill.getPayAmount().setScale(2, RoundingMode.HALF_UP);
+                if (callbackAmount.compareTo(billAmount) != 0) {
+                    log.warn("支付宝回调金额不一致: callback={}, bill={}", callbackAmount, billAmount);
+                    return false;
+                }
+            }
+
+            return true;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {

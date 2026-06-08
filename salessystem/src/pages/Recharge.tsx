@@ -7,6 +7,7 @@ import type { UnifiedRechargeRule, WalletAccount } from '../types/wallet';
 import { ApiError } from '../types/api';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 
 const PRESET_PACKAGES = [
   { id: 100, label: '基础档', amount: 100 },
@@ -115,7 +116,19 @@ export default function Recharge() {
       });
 
       if (payment.externalPayUrl) {
-        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+        // 支付宝返回的是 HTML 表单，需要用 openAlipayPaymentWindow 渲染
+        const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
+        if (!isOpened) {
+          // 弹窗被阻止，保存 payload 到 sessionStorage，让用户在支付状态页手动触发
+          if (payment.paymentBillNo) {
+            saveAlipayPaymentPayload({
+              billNo: payment.paymentBillNo,
+              bizNo: payment.rechargeNo,
+              source: 'recharge',
+              payHtml: payment.externalPayUrl,
+            });
+          }
+        }
       }
 
       navigate(

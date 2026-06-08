@@ -22,6 +22,7 @@ import {
 import { ApiError } from '../types/api';
 import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { formatCurrency, getImageUrl } from '../utils/display';
+import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 
 const calculateDiscount = (coupon: { couponType: 'FIXED' | 'RATE'; discountAmount: number | null; discountRate: number | null; maxDiscountAmount: number | null }, subtotal: number) => {
   if (coupon.couponType === 'FIXED') {
@@ -339,7 +340,20 @@ export default function Cart() {
       clearTenantItems(tenantId);
 
       if (payment.externalPayUrl) {
-        window.open(payment.externalPayUrl, '_blank', 'noopener,noreferrer');
+        // 支付宝返回的是 HTML 表单，需要用 openAlipayPaymentWindow 渲染
+        const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
+        if (!isOpened) {
+          // 弹窗被阻止，保存 payload 到 sessionStorage，让用户在支付状态页手动触发
+          if (payment.paymentBillNo) {
+            saveAlipayPaymentPayload({
+              billNo: payment.paymentBillNo,
+              orderNo: payment.orderNo,
+              source: 'order',
+              payHtml: payment.externalPayUrl,
+              amount: payment.totalAmount,
+            });
+          }
+        }
       }
 
       navigate(getOrderCheckoutPath(payment));
