@@ -55,6 +55,14 @@ public class V1AppWalletController {
     }
 
     @SaCheckLogin
+    @GetMapping("/wallets/unified/recharge-rules")
+    public Result<List<RechargeRuleVO>> listUnifiedRechargeRules() {
+        return Result.success(merchantRechargeRuleService.listAllActiveRules().stream()
+                .map(RechargeRuleVO::from)
+                .collect(Collectors.toList()));
+    }
+
+    @SaCheckLogin
     @PostMapping("/wallets/unified/recharges")
     public Result<RechargePaymentVO> createUnifiedRecharge(@Valid @RequestBody CreateUnifiedWalletRechargeDTO dto) {
         return Result.success(walletRechargeService.createUnifiedRecharge(PlatformSessionHelper.getPlatformUserId(), dto));

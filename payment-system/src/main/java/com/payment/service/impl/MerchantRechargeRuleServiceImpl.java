@@ -30,6 +30,13 @@ public class MerchantRechargeRuleServiceImpl implements MerchantRechargeRuleServ
     }
 
     @Override
+    public List<MerchantRechargeRule> listAllActiveRules() {
+        return merchantRechargeRuleMapper.selectList(new LambdaQueryWrapper<MerchantRechargeRule>()
+                .eq(MerchantRechargeRule::getStatus, 1)
+                .orderByAsc(MerchantRechargeRule::getSortOrder));
+    }
+
+    @Override
     public List<MerchantRechargeRule> listAllRules(Long tenantId) {
         return merchantRechargeRuleMapper.selectList(new LambdaQueryWrapper<MerchantRechargeRule>()
                 .eq(MerchantRechargeRule::getTenantId, tenantId)

@@ -19,8 +19,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new SaInterceptor(handler -> SaRouter.match("/**")
                 .notMatch(
-                        "/user/login",
-                        "/user/register",
                         "/admin/login",
                         "/v1/auth/captcha",
                         "/v1/app/auth/register",

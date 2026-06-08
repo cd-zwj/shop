@@ -1,7 +1,6 @@
 package com.payment.util;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.payment.entity.User;
 
 /**
  * 用户上下文 - 适配 Sa-Token
@@ -24,8 +23,8 @@ public class UserContextHolder {
      */
     public static String getUsername() {
         try {
-            User user = (User) StpUtil.getSession().get("user");
-            return user != null ? user.getUsername() : null;
+            Object username = StpUtil.getSession().get("username");
+            return username != null ? username.toString() : null;
         } catch (Exception e) {
             return null;
         }
