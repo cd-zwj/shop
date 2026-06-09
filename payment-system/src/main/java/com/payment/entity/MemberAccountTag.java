@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * 租户会员与会员标签关联实体。
  */
 @Data
-@TableName("member_account_tag")
+@TableName("member_tag_relation")
 public class MemberAccountTag implements Serializable {
     private static final long serialVersionUID = 1L;
 

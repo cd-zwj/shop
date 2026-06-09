@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
  * 营销活动实体。
  */
 @Data
-@TableName("promotion_activity")
+@TableName("marketing_activity")
 public class PromotionActivity implements Serializable {
     private static final long serialVersionUID = 1L;
 
