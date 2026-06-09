@@ -2,9 +2,15 @@ package com.payment.controller;
 
 import com.payment.common.Result;
 import com.payment.dto.ActivityRuleCreateDTO;
+import com.payment.dto.ActivityRuleVO;
 import com.payment.dto.CouponScopeCreateDTO;
+import com.payment.dto.CouponScopeVO;
 import com.payment.dto.CouponTemplateCreateDTO;
+import com.payment.dto.CouponTemplateVO;
+import com.payment.dto.MemberLevelVO;
+import com.payment.dto.MemberTagVO;
 import com.payment.dto.PromotionActivityCreateDTO;
+import com.payment.dto.PromotionActivityVO;
 import jakarta.validation.Valid;
 import com.payment.entity.ActivityRule;
 import com.payment.entity.CouponScope;
@@ -19,11 +25,13 @@ import com.payment.service.PromotionService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import org.springframework.beans.BeanUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 商户端营销运营管理接口。
@@ -40,32 +48,42 @@ public class V1MerchantMarketingController {
     private final MemberService memberService;
 
     @GetMapping("/coupons")
-    public Result<List<CouponTemplate>> listCouponTemplates(@PathVariable Long tenantId,
+    public Result<List<CouponTemplateVO>> listCouponTemplates(@PathVariable Long tenantId,
                                                             @RequestParam(required = false) String status) {
         requireEmployee(tenantId);
-        return Result.success(couponService.listTemplates(tenantId, status));
+        return Result.success(couponService.listTemplates(tenantId, status).stream()
+                .map(e -> { CouponTemplateVO vo = new CouponTemplateVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/coupons")
-    public Result<CouponTemplate> createCouponTemplate(@PathVariable Long tenantId,
+    public Result<CouponTemplateVO> createCouponTemplate(@PathVariable Long tenantId,
                                                        @Valid @RequestBody CouponTemplateCreateDTO dto) {
         requireEmployee(tenantId);
-        return Result.success(couponService.createTemplate(toTenantCouponTemplateDTO(tenantId, dto)));
+        CouponTemplate entity = couponService.createTemplate(toTenantCouponTemplateDTO(tenantId, dto));
+        CouponTemplateVO vo = new CouponTemplateVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @GetMapping("/coupons/{templateId}/scopes")
-    public Result<List<CouponScope>> listCouponScopes(@PathVariable Long tenantId,
+    public Result<List<CouponScopeVO>> listCouponScopes(@PathVariable Long tenantId,
                                                       @PathVariable Long templateId) {
         requireEmployee(tenantId);
-        return Result.success(couponService.listScopes(templateId, tenantId));
+        return Result.success(couponService.listScopes(templateId, tenantId).stream()
+                .map(e -> { CouponScopeVO vo = new CouponScopeVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/coupons/{templateId}/scopes")
-    public Result<CouponScope> addCouponScope(@PathVariable Long tenantId,
+    public Result<CouponScopeVO> addCouponScope(@PathVariable Long tenantId,
                                               @PathVariable("templateId") Long templateId,
                                               @Valid @RequestBody CouponScopeCreateDTO dto) {
         requireEmployee(tenantId);
-        return Result.success(couponService.addScope(toCouponScopeDTO(tenantId, templateId, dto)));
+        CouponScope entity = couponService.addScope(toCouponScopeDTO(tenantId, templateId, dto));
+        CouponScopeVO vo = new CouponScopeVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @PutMapping("/coupons/{templateId}/activate")
@@ -85,33 +103,43 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/activities")
-    public Result<List<PromotionActivity>> listActivities(@PathVariable Long tenantId,
+    public Result<List<PromotionActivityVO>> listActivities(@PathVariable Long tenantId,
                                                           @RequestParam(required = false) String status) {
         requireEmployee(tenantId);
-        return Result.success(promotionService.listActivities(tenantId, status));
+        return Result.success(promotionService.listActivities(tenantId, status).stream()
+                .map(e -> { PromotionActivityVO vo = new PromotionActivityVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/activities")
-    public Result<PromotionActivity> createActivity(@PathVariable Long tenantId,
+    public Result<PromotionActivityVO> createActivity(@PathVariable Long tenantId,
                                                     @Valid @RequestBody PromotionActivityCreateDTO dto) {
         requireEmployee(tenantId);
-        return Result.success(promotionService.createActivity(toTenantActivityDTO(tenantId, dto)));
+        PromotionActivity entity = promotionService.createActivity(toTenantActivityDTO(tenantId, dto));
+        PromotionActivityVO vo = new PromotionActivityVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @GetMapping("/activities/{activityId}/rules")
-    public Result<List<ActivityRule>> listActivityRules(@PathVariable Long tenantId,
+    public Result<List<ActivityRuleVO>> listActivityRules(@PathVariable Long tenantId,
                                                         @PathVariable Long activityId) {
         requireEmployee(tenantId);
-        return Result.success(promotionService.listRules(activityId, tenantId));
+        return Result.success(promotionService.listRules(activityId, tenantId).stream()
+                .map(e -> { ActivityRuleVO vo = new ActivityRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/activities/{activityId}/rules")
-    public Result<ActivityRule> addActivityRule(@PathVariable Long tenantId,
+    public Result<ActivityRuleVO> addActivityRule(@PathVariable Long tenantId,
                                                 @PathVariable Long activityId,
                                                 @Valid @RequestBody ActivityRuleCreateDTO dto) {
         requireEmployee(tenantId);
         promotionService.listRules(activityId, tenantId);
-        return Result.success(promotionService.addRule(toActivityRuleDTO(activityId, dto)));
+        ActivityRule entity = promotionService.addRule(toActivityRuleDTO(activityId, dto));
+        ActivityRuleVO vo = new ActivityRuleVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @PutMapping("/activities/{activityId}/activate")
@@ -131,19 +159,24 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/member-levels")
-    public Result<List<MemberLevel>> listMemberLevels(@PathVariable Long tenantId) {
+    public Result<List<MemberLevelVO>> listMemberLevels(@PathVariable Long tenantId) {
         requireEmployee(tenantId);
-        return Result.success(memberService.listLevels(tenantId));
+        return Result.success(memberService.listLevels(tenantId).stream()
+                .map(e -> { MemberLevelVO vo = new MemberLevelVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/member-levels")
-    public Result<MemberLevel> createMemberLevel(@PathVariable Long tenantId,
+    public Result<MemberLevelVO> createMemberLevel(@PathVariable Long tenantId,
                                                  @RequestParam Integer level,
                                                  @RequestParam String name,
                                                  @RequestParam BigDecimal thresholdAmount,
                                                  @RequestParam(required = false) BigDecimal discountRate) {
         requireEmployee(tenantId);
-        return Result.success(memberService.createLevel(tenantId, level, name, thresholdAmount, discountRate));
+        MemberLevel entity = memberService.createLevel(tenantId, level, name, thresholdAmount, discountRate);
+        MemberLevelVO vo = new MemberLevelVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @PutMapping("/members/{memberId}/level")
@@ -156,15 +189,20 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/member-tags")
-    public Result<List<MemberTag>> listMemberTags(@PathVariable Long tenantId) {
+    public Result<List<MemberTagVO>> listMemberTags(@PathVariable Long tenantId) {
         requireEmployee(tenantId);
-        return Result.success(memberService.listTags(tenantId));
+        return Result.success(memberService.listTags(tenantId).stream()
+                .map(e -> { MemberTagVO vo = new MemberTagVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/member-tags")
-    public Result<MemberTag> createMemberTag(@PathVariable Long tenantId, @RequestParam String name) {
+    public Result<MemberTagVO> createMemberTag(@PathVariable Long tenantId, @RequestParam String name) {
         requireEmployee(tenantId);
-        return Result.success(memberService.createTag(tenantId, name));
+        MemberTag entity = memberService.createTag(tenantId, name);
+        MemberTagVO vo = new MemberTagVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @PutMapping("/members/{memberId}/tags/{tagId}")

@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.Result;
+import com.payment.dto.MerchantRechargeRuleVO;
 import com.payment.dto.V1MerchantBalanceVO;
 import com.payment.dto.V1MerchantPointsRuleDTO;
 import com.payment.dto.V1MerchantRechargeRuleDTO;
@@ -15,10 +16,12 @@ import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}")
@@ -82,9 +85,11 @@ public class V1MerchantFinanceController {
     }
 
     @GetMapping("/recharge-rules")
-    public Result<List<MerchantRechargeRule>> listRechargeRules(@PathVariable Long tenantId) {
+    public Result<List<MerchantRechargeRuleVO>> listRechargeRules(@PathVariable Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
-        return Result.success(merchantRechargeRuleService.listAllRules(tenantId));
+        return Result.success(merchantRechargeRuleService.listAllRules(tenantId).stream()
+                .map(e -> { MerchantRechargeRuleVO vo = new MerchantRechargeRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @PutMapping("/recharge-rules")

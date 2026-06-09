@@ -6,15 +6,18 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.AdminPlatformUserVO;
+import com.payment.dto.PermissionVO;
 import com.payment.dto.UserPermissionDTO;
 import com.payment.dto.UserPermissionVO;
 import com.payment.entity.Permission;
 import com.payment.service.V1AdminService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * v1 管理端用户与权限接口。
@@ -58,8 +61,18 @@ public class V1AdminUserController {
 
     @SaCheckPermission("admin:permission:list")
     @GetMapping("/permissions")
-    public Result<Map<String, List<Permission>>> listPermissions() {
-        return Result.success(v1AdminService.listPermissions());
+    public Result<Map<String, List<PermissionVO>>> listPermissions() {
+        Map<String, List<Permission>> raw = v1AdminService.listPermissions();
+        Map<String, List<PermissionVO>> voMap = raw.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().stream().map(p -> {
+                            PermissionVO vo = new PermissionVO();
+                            BeanUtils.copyProperties(p, vo);
+                            return vo;
+                        }).collect(Collectors.toList())
+                ));
+        return Result.success(voMap);
     }
 
     @SaCheckPermission("admin:user:permission")

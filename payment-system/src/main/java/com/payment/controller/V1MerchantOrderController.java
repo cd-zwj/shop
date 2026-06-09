@@ -9,6 +9,7 @@ import com.payment.entity.SalesOrder;
 import com.payment.service.AppOrderService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
+import com.payment.vo.SalesOrderListVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,7 +28,7 @@ public class V1MerchantOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<SalesOrder>> listOrders(@PathVariable Long tenantId,
+    public Result<PageResult<SalesOrderListVO>> listOrders(@PathVariable Long tenantId,
                                                       @RequestParam(defaultValue = "1") Integer current,
                                                       @RequestParam(defaultValue = "10") Integer size,
                                                       @RequestParam(required = false) String orderStatus,
@@ -37,7 +38,7 @@ public class V1MerchantOrderController {
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
 
         Page<SalesOrder> result = appOrderService.listMerchantOrders(tenantId, current, size, orderStatus, payStatus, keyword);
-        return Result.success(PageResult.from(result));
+        return Result.success(PageResult.from(result, SalesOrderListVO::from));
     }
 
     @SaCheckLogin

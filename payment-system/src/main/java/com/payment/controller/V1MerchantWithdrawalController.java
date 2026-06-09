@@ -6,6 +6,7 @@ import com.payment.common.Result;
 import com.payment.dto.V1MerchantBalanceVO;
 import com.payment.dto.WithdrawalApplyDTO;
 import com.payment.dto.WithdrawalQueryDTO;
+import com.payment.dto.WithdrawalVO;
 import com.payment.entity.MerchantBalance;
 import com.payment.entity.Withdrawal;
 import com.payment.service.WithdrawalService;
@@ -14,6 +15,7 @@ import com.payment.util.PlatformSessionHelper;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -41,7 +43,7 @@ public class V1MerchantWithdrawalController {
     }
 
     @GetMapping
-    public Result<PageResult<Withdrawal>> listWithdrawals(@PathVariable Long tenantId,
+    public Result<PageResult<WithdrawalVO>> listWithdrawals(@PathVariable Long tenantId,
                                                            @RequestParam(defaultValue = "1") Integer current,
                                                            @RequestParam(defaultValue = "10") Integer size,
                                                            @RequestParam(required = false) Integer status) {
@@ -52,12 +54,19 @@ public class V1MerchantWithdrawalController {
         queryDTO.setPageNum(current);
         queryDTO.setPageSize(size);
         Page<Withdrawal> page = withdrawalService.listWithdrawals(queryDTO);
-        return Result.success(PageResult.from(page));
+        return Result.success(PageResult.from(page, e -> {
+            WithdrawalVO vo = new WithdrawalVO();
+            BeanUtils.copyProperties(e, vo);
+            return vo;
+        }));
     }
 
     @PostMapping
-    public Result<Withdrawal> createWithdrawal(@PathVariable Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
+    public Result<WithdrawalVO> createWithdrawal(@PathVariable Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
-        return Result.success(withdrawalService.createWithdrawal(tenantId, dto));
+        Withdrawal entity = withdrawalService.createWithdrawal(tenantId, dto);
+        WithdrawalVO vo = new WithdrawalVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 }

@@ -8,6 +8,7 @@ import com.payment.dto.MerchantDTO;
 import com.payment.dto.MerchantDetailVO;
 import com.payment.dto.MerchantListVO;
 import com.payment.entity.Tenant;
+import org.springframework.beans.BeanUtils;
 import com.payment.service.V1AdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -41,8 +42,11 @@ public class V1AdminMerchantController {
 
     @SaCheckPermission("admin:merchant:create")
     @PostMapping
-    public Result<Tenant> createMerchant(@Valid @RequestBody MerchantDTO dto) {
-        return Result.success(v1AdminService.createMerchant(dto));
+    public Result<MerchantDetailVO> createMerchant(@Valid @RequestBody MerchantDTO dto) {
+        Tenant tenant = v1AdminService.createMerchant(dto);
+        MerchantDetailVO vo = new MerchantDetailVO();
+        BeanUtils.copyProperties(tenant, vo);
+        return Result.success(vo);
     }
 
     @SaCheckPermission("admin:merchant:update")

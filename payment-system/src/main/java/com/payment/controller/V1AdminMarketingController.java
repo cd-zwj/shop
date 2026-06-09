@@ -3,9 +3,13 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.ActivityRuleCreateDTO;
+import com.payment.dto.ActivityRuleVO;
 import com.payment.dto.CouponScopeCreateDTO;
+import com.payment.dto.CouponScopeVO;
 import com.payment.dto.CouponTemplateCreateDTO;
+import com.payment.dto.CouponTemplateVO;
 import com.payment.dto.PromotionActivityCreateDTO;
+import com.payment.dto.PromotionActivityVO;
 import jakarta.validation.Valid;
 import com.payment.entity.ActivityRule;
 import com.payment.entity.CouponScope;
@@ -14,10 +18,12 @@ import com.payment.entity.PromotionActivity;
 import com.payment.enums.CouponOwnerTypeEnum;
 import com.payment.service.CouponService;
 import com.payment.service.PromotionService;
+import org.springframework.beans.BeanUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 管理端营销运营管理接口。
@@ -32,28 +38,38 @@ public class V1AdminMarketingController {
 
     @SaCheckPermission("admin:marketing:list")
     @GetMapping("/coupons")
-    public Result<List<CouponTemplate>> listPlatformCouponTemplates(@RequestParam(required = false) String status) {
-        return Result.success(couponService.listPlatformTemplates(status));
+    public Result<List<CouponTemplateVO>> listPlatformCouponTemplates(@RequestParam(required = false) String status) {
+        return Result.success(couponService.listPlatformTemplates(status).stream()
+                .map(e -> { CouponTemplateVO vo = new CouponTemplateVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @SaCheckPermission("admin:marketing:create")
     @PostMapping("/coupons")
-    public Result<CouponTemplate> createPlatformCouponTemplate(@Valid @RequestBody CouponTemplateCreateDTO dto) {
-        return Result.success(couponService.createTemplate(toPlatformCouponTemplateDTO(dto)));
+    public Result<CouponTemplateVO> createPlatformCouponTemplate(@Valid @RequestBody CouponTemplateCreateDTO dto) {
+        CouponTemplate entity = couponService.createTemplate(toPlatformCouponTemplateDTO(dto));
+        CouponTemplateVO vo = new CouponTemplateVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @SaCheckPermission("admin:marketing:list")
     @GetMapping("/coupons/{templateId}/scopes")
-    public Result<List<CouponScope>> listCouponScopes(@PathVariable Long templateId) {
-        return Result.success(couponService.listPlatformScopes(templateId));
+    public Result<List<CouponScopeVO>> listCouponScopes(@PathVariable Long templateId) {
+        return Result.success(couponService.listPlatformScopes(templateId).stream()
+                .map(e -> { CouponScopeVO vo = new CouponScopeVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @SaCheckPermission("admin:marketing:create")
     @PostMapping("/coupons/{templateId}/scopes")
-    public Result<CouponScope> addCouponScope(@PathVariable Long templateId,
+    public Result<CouponScopeVO> addCouponScope(@PathVariable Long templateId,
                                               @Valid @RequestBody CouponScopeCreateDTO dto) {
         couponService.listPlatformScopes(templateId);
-        return Result.success(couponService.addScope(toCouponScopeDTO(templateId, dto)));
+        CouponScope entity = couponService.addScope(toCouponScopeDTO(templateId, dto));
+        CouponScopeVO vo = new CouponScopeVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @SaCheckPermission("admin:marketing:update")
@@ -74,28 +90,38 @@ public class V1AdminMarketingController {
 
     @SaCheckPermission("admin:marketing:list")
     @GetMapping("/activities")
-    public Result<List<PromotionActivity>> listPlatformActivities(@RequestParam(required = false) String status) {
-        return Result.success(promotionService.listPlatformActivities(status));
+    public Result<List<PromotionActivityVO>> listPlatformActivities(@RequestParam(required = false) String status) {
+        return Result.success(promotionService.listPlatformActivities(status).stream()
+                .map(e -> { PromotionActivityVO vo = new PromotionActivityVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @SaCheckPermission("admin:marketing:create")
     @PostMapping("/activities")
-    public Result<PromotionActivity> createPlatformActivity(@Valid @RequestBody PromotionActivityCreateDTO dto) {
-        return Result.success(promotionService.createActivity(toPlatformActivityDTO(dto)));
+    public Result<PromotionActivityVO> createPlatformActivity(@Valid @RequestBody PromotionActivityCreateDTO dto) {
+        PromotionActivity entity = promotionService.createActivity(toPlatformActivityDTO(dto));
+        PromotionActivityVO vo = new PromotionActivityVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @SaCheckPermission("admin:marketing:list")
     @GetMapping("/activities/{activityId}/rules")
-    public Result<List<ActivityRule>> listActivityRules(@PathVariable Long activityId) {
-        return Result.success(promotionService.listPlatformRules(activityId));
+    public Result<List<ActivityRuleVO>> listActivityRules(@PathVariable Long activityId) {
+        return Result.success(promotionService.listPlatformRules(activityId).stream()
+                .map(e -> { ActivityRuleVO vo = new ActivityRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @SaCheckPermission("admin:marketing:create")
     @PostMapping("/activities/{activityId}/rules")
-    public Result<ActivityRule> addActivityRule(@PathVariable Long activityId,
+    public Result<ActivityRuleVO> addActivityRule(@PathVariable Long activityId,
                                                 @Valid @RequestBody ActivityRuleCreateDTO dto) {
         promotionService.listPlatformRules(activityId);
-        return Result.success(promotionService.addRule(toActivityRuleDTO(activityId, dto)));
+        ActivityRule entity = promotionService.addRule(toActivityRuleDTO(activityId, dto));
+        ActivityRuleVO vo = new ActivityRuleVO();
+        BeanUtils.copyProperties(entity, vo);
+        return Result.success(vo);
     }
 
     @SaCheckPermission("admin:marketing:update")

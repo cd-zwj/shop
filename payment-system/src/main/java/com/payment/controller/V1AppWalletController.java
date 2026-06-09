@@ -6,6 +6,7 @@ import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.*;
 import com.payment.entity.MemberPointsLog;
+import com.payment.entity.ExchangeProduct;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantRechargeRuleService;
 import com.payment.service.MerchantWalletService;
@@ -16,7 +17,7 @@ import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.PointsAccountVO;
 import com.payment.vo.PointsLogVO;
 import com.payment.vo.RechargeRuleVO;
-import com.payment.entity.ExchangeProduct;
+import org.springframework.beans.BeanUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -116,8 +117,10 @@ public class V1AppWalletController {
 
     @SaCheckLogin
     @GetMapping("/tenants/{tenantId}/points/exchange/products")
-    public Result<List<ExchangeProduct>> listExchangeProducts(@PathVariable Long tenantId) {
-        return Result.success(pointsService.listExchangeProducts(tenantId));
+    public Result<List<ExchangeProductVO>> listExchangeProducts(@PathVariable Long tenantId) {
+        return Result.success(pointsService.listExchangeProducts(tenantId).stream()
+                .map(e -> { ExchangeProductVO vo = new ExchangeProductVO(); BeanUtils.copyProperties(e, vo); return vo; })
+                .collect(Collectors.toList()));
     }
 
     @SaCheckLogin
