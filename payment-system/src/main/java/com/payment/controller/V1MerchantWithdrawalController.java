@@ -14,6 +14,7 @@ import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
@@ -30,7 +31,7 @@ public class V1MerchantWithdrawalController {
     private final WithdrawalService withdrawalService;
 
     @GetMapping("/balance")
-    public Result<V1MerchantBalanceVO> getBalance(@PathVariable Long tenantId) {
+    public Result<V1MerchantBalanceVO> getBalance(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         MerchantBalance balance = withdrawalService.getMerchantBalance(tenantId);
         V1MerchantBalanceVO vo = new V1MerchantBalanceVO();
@@ -43,9 +44,9 @@ public class V1MerchantWithdrawalController {
     }
 
     @GetMapping
-    public Result<PageResult<WithdrawalVO>> listWithdrawals(@PathVariable Long tenantId,
-                                                           @RequestParam(defaultValue = "1") Integer current,
-                                                           @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<WithdrawalVO>> listWithdrawals(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                           @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                           @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                            @RequestParam(required = false) Integer status) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         WithdrawalQueryDTO queryDTO = new WithdrawalQueryDTO();
@@ -62,7 +63,7 @@ public class V1MerchantWithdrawalController {
     }
 
     @PostMapping
-    public Result<WithdrawalVO> createWithdrawal(@PathVariable Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
+    public Result<WithdrawalVO> createWithdrawal(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         Withdrawal entity = withdrawalService.createWithdrawal(tenantId, dto);
         WithdrawalVO vo = new WithdrawalVO();

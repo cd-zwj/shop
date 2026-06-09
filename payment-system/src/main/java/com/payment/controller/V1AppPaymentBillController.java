@@ -3,6 +3,7 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
+import com.payment.dto.BillStatusVO;
 import com.payment.entity.PaymentBill;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.util.UserContext;
@@ -40,6 +41,23 @@ public class V1AppPaymentBillController {
         }
         checkOwnership(bill);
         return Result.success(PaymentBillVO.from(paymentBillV1Service.syncBillStatus(billNo)));
+    }
+
+    @SaCheckLogin
+    @GetMapping("/{billNo}/status")
+    public Result<BillStatusVO> getBillStatus(@PathVariable String billNo) {
+        if (billNo == null || billNo.isBlank()) {
+            throw new BusinessException("账单号不能为空");
+        }
+        PaymentBill bill = paymentBillV1Service.getByBillNo(billNo);
+        if (bill == null) {
+            throw new BusinessException("支付单不存在");
+        }
+        checkOwnership(bill);
+        BillStatusVO vo = new BillStatusVO();
+        vo.setBillNo(bill.getBillNo());
+        vo.setPayStatus(bill.getPayStatus());
+        return Result.success(vo);
     }
 
     /** 校验支付单归属，防止水平越权 */

@@ -10,6 +10,7 @@ import com.payment.service.AppOrderService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.SalesOrderListVO;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,9 +29,9 @@ public class V1MerchantOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<SalesOrderListVO>> listOrders(@PathVariable Long tenantId,
-                                                      @RequestParam(defaultValue = "1") Integer current,
-                                                      @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<SalesOrderListVO>> listOrders(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                      @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                       @RequestParam(required = false) String orderStatus,
                                                       @RequestParam(required = false) String payStatus,
                                                       @RequestParam(required = false) String keyword) {
@@ -43,7 +44,7 @@ public class V1MerchantOrderController {
 
     @SaCheckLogin
     @GetMapping("/{orderNo}")
-    public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable Long tenantId, @PathVariable String orderNo) {
+    public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable String orderNo) {
         return Result.success(appOrderService.getMerchantOrderDetail(tenantId, PlatformSessionHelper.getPlatformUserId(), orderNo));
     }
 }

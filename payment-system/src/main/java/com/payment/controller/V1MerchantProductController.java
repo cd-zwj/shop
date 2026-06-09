@@ -16,6 +16,7 @@ import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,9 +37,9 @@ public class V1MerchantProductController {
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
     @GetMapping
-    public Result<PageResult<V1MerchantProductVO>> listProducts(@PathVariable Long tenantId,
-                                                          @RequestParam(defaultValue = "1") Integer current,
-                                                          @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<V1MerchantProductVO>> listProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                          @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                          @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                           @RequestParam(required = false) String search,
                                                           @RequestParam(required = false) String category,
                                                           @RequestParam(required = false) String status) {
@@ -65,7 +66,7 @@ public class V1MerchantProductController {
     }
 
     @GetMapping("/{productId}")
-    public Result<V1MerchantProductVO> getProduct(@PathVariable Long tenantId, @PathVariable Long productId) {
+    public Result<V1MerchantProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         Product product = getTenantProduct(tenantId, productId);
         ProductStock stock = getOrCreateStock(tenantId, productId);
@@ -73,7 +74,7 @@ public class V1MerchantProductController {
     }
 
     @PostMapping
-    public Result<V1MerchantProductVO> createProduct(@PathVariable Long tenantId,
+    public Result<V1MerchantProductVO> createProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                      @Valid @RequestBody V1MerchantProductUpsertDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
 
@@ -109,8 +110,8 @@ public class V1MerchantProductController {
     }
 
     @PutMapping("/{productId}")
-    public Result<V1MerchantProductVO> updateProduct(@PathVariable Long tenantId,
-                                                     @PathVariable Long productId,
+    public Result<V1MerchantProductVO> updateProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                     @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
                                                      @Valid @RequestBody V1MerchantProductUpsertDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
 
@@ -145,7 +146,7 @@ public class V1MerchantProductController {
     }
 
     @DeleteMapping("/{productId}")
-    public Result<Void> deleteProduct(@PathVariable Long tenantId, @PathVariable Long productId) {
+    public Result<Void> deleteProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         Product product = getTenantProduct(tenantId, productId);
         product.setDeleted(1);

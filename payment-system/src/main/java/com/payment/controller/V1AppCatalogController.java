@@ -8,6 +8,7 @@ import com.payment.mapper.ProductMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.vo.ProductVO;
 import com.payment.vo.TenantVO;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,13 +36,13 @@ public class V1AppCatalogController {
     }
 
     @GetMapping("/tenants/{tenantId}")
-    public Result<TenantVO> getTenant(@PathVariable Long tenantId) {
+    public Result<TenantVO> getTenant(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         Tenant tenant = tenantMapper.selectById(tenantId);
         return Result.success(TenantVO.from(tenant));
     }
 
     @GetMapping("/tenants/{tenantId}/products")
-    public Result<List<ProductVO>> listProducts(@PathVariable Long tenantId) {
+    public Result<List<ProductVO>> listProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(productMapper.selectList(new LambdaQueryWrapper<Product>()
                 .eq(Product::getTenantId, tenantId)
                 .eq(Product::getDeleted, 0)
@@ -51,7 +52,7 @@ public class V1AppCatalogController {
     }
 
     @GetMapping("/products/{productId}")
-    public Result<ProductVO> getProduct(@PathVariable Long productId) {
+    public Result<ProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         return Result.success(ProductVO.from(productMapper.selectById(productId)));
     }
 }

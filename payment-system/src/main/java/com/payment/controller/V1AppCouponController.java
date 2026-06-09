@@ -8,6 +8,7 @@ import com.payment.dto.AppCouponTemplateVO;
 import com.payment.dto.AppUserCouponVO;
 import com.payment.service.CouponService;
 import com.payment.util.PlatformSessionHelper;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,13 +31,13 @@ public class V1AppCouponController {
 
     @SaCheckLogin
     @GetMapping("/available")
-    public Result<List<AppCouponTemplateVO>> listAvailableCoupons(@PathVariable Long tenantId) {
+    public Result<List<AppCouponTemplateVO>> listAvailableCoupons(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(couponService.listAvailableTemplates(tenantId, PlatformSessionHelper.getPlatformUserId()));
     }
 
     @SaCheckLogin
     @GetMapping
-    public Result<List<AppUserCouponVO>> listUserCoupons(@PathVariable Long tenantId,
+    public Result<List<AppUserCouponVO>> listUserCoupons(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                          @RequestParam(required = false) String status) {
         return Result.success(couponService.listUserCoupons(tenantId, PlatformSessionHelper.getPlatformUserId(), status));
     }
@@ -44,7 +45,7 @@ public class V1AppCouponController {
     @SaCheckLogin
     @PostMapping("/{templateId}/receive")
     @RateLimit(prefix = "app:coupon:receive", key = "#tenantId + ':' + #templateId", window = 60, maxRequests = 20, includeIp = true)
-    public Result<AppCouponReceiveVO> receiveCoupon(@PathVariable Long tenantId, @PathVariable Long templateId) {
+    public Result<AppCouponReceiveVO> receiveCoupon(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         return Result.success(couponService.receiveCouponForApp(templateId, tenantId, PlatformSessionHelper.getPlatformUserId()));
     }
 }

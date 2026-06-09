@@ -10,6 +10,7 @@ import com.payment.service.RefundApplicationService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.RefundApplicationVO;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +26,7 @@ public class V1AppRefundController {
 
     @SaCheckLogin
     @PostMapping
-    public Result<RefundApplicationVO> createRefund(@PathVariable Long tenantId,
+    public Result<RefundApplicationVO> createRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                      @Valid @RequestBody RefundCreateDTO dto) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         RefundApplication app = refundApplicationService.createRefund(platformUserId, tenantId, dto);
@@ -34,10 +35,10 @@ public class V1AppRefundController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<RefundApplicationVO>> listMyRefunds(@PathVariable Long tenantId,
+    public Result<PageResult<RefundApplicationVO>> listMyRefunds(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                   @RequestParam(required = false) String status,
-                                                                  @RequestParam(defaultValue = "1") Integer pageNum,
-                                                                  @RequestParam(defaultValue = "10") Integer pageSize) {
+                                                                  @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer pageNum,
+                                                                  @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer pageSize) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         Page<RefundApplication> page = refundApplicationService.listMyRefunds(platformUserId, tenantId, status, pageNum, pageSize);
         return Result.success(PageResult.from(page, RefundApplicationVO::from));
@@ -45,8 +46,8 @@ public class V1AppRefundController {
 
     @SaCheckLogin
     @GetMapping("/{refundId}")
-    public Result<RefundApplicationVO> getRefundDetail(@PathVariable Long tenantId,
-                                                        @PathVariable Long refundId) {
+    public Result<RefundApplicationVO> getRefundDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         RefundApplication app = refundApplicationService.getRefundDetail(platformUserId, tenantId, refundId);
         return Result.success(RefundApplicationVO.from(app));
@@ -54,8 +55,8 @@ public class V1AppRefundController {
 
     @SaCheckLogin
     @PutMapping("/{refundId}/cancel")
-    public Result<Void> cancelRefund(@PathVariable Long tenantId,
-                                      @PathVariable Long refundId) {
+    public Result<Void> cancelRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         refundApplicationService.cancelRefund(platformUserId, tenantId, refundId);
         return Result.success();

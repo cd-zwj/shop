@@ -1,11 +1,9 @@
 package com.payment.controller;
 
-import com.payment.dto.BillStatusVO;
 import com.payment.util.JsonUtils;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.dto.PaymentCallbackDTO;
-import com.payment.entity.PaymentBill;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.service.PaymentSignatureVerifier;
 import lombok.RequiredArgsConstructor;
@@ -60,22 +58,6 @@ public class V1OpenPaymentController {
         dto.setRawBody(JsonUtils.toJson(params));
         paymentBillV1Service.handleCallback("ALIPAY_PAGE", dto);
         return "success";
-    }
-
-    @GetMapping("/bills/{billNo}/status")
-    public Result<BillStatusVO> syncBillStatus(@PathVariable String billNo) {
-        if (billNo == null || billNo.isBlank()) {
-            throw new BusinessException("账单号不能为空");
-        }
-        if (billNo.length() > 64) {
-            throw new BusinessException("账单号格式非法");
-        }
-        log.info("查询账单状态, billNo={}", billNo);
-        PaymentBill bill = paymentBillV1Service.syncBillStatus(billNo);
-        BillStatusVO vo = new BillStatusVO();
-        vo.setBillNo(bill.getBillNo());
-        vo.setPayStatus(bill.getPayStatus());
-        return Result.success(vo);
     }
 
     @GetMapping(value = "/returns/alipay-page", produces = MediaType.TEXT_HTML_VALUE)

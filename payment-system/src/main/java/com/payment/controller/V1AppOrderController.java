@@ -13,6 +13,7 @@ import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.SalesOrderDetailVO;
 import com.payment.vo.SalesOrderListVO;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,8 +35,8 @@ public class V1AppOrderController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<SalesOrderListVO>> listOrders(@RequestParam(defaultValue = "1") Integer current,
-                                                      @RequestParam(defaultValue = "10") Integer size) {
+    public Result<PageResult<SalesOrderListVO>> listOrders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                      @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
         Page<SalesOrder> page = appOrderService.listOrders(PlatformSessionHelper.getPlatformUserId(), current, size);
         return Result.success(PageResult.from(page, SalesOrderListVO::from));
     }

@@ -8,6 +8,7 @@ import com.payment.dto.PlatformAuthProviderDTO;
 import com.payment.dto.PlatformAuthProviderVO;
 import com.payment.service.PlatformAuthProviderAdminService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,8 +24,8 @@ public class V1AdminAuthProviderController {
 
     @SaCheckPermission("admin:auth-provider:list")
     @GetMapping
-    public Result<PageResult<PlatformAuthProviderVO>> listProviders(@RequestParam(defaultValue = "1") Integer current,
-                                                                     @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<PlatformAuthProviderVO>> listProviders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                                     @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                                      @RequestParam(required = false) String keyword,
                                                                      @RequestParam(required = false) Integer status) {
         Page<PlatformAuthProviderVO> page = platformAuthProviderAdminService.listProviders(current, size, keyword, status);
@@ -33,7 +34,7 @@ public class V1AdminAuthProviderController {
 
     @SaCheckPermission("admin:auth-provider:detail")
     @GetMapping("/{providerId}")
-    public Result<PlatformAuthProviderVO> getProvider(@PathVariable Long providerId) {
+    public Result<PlatformAuthProviderVO> getProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         return Result.success(platformAuthProviderAdminService.getProvider(providerId));
     }
 
@@ -45,21 +46,21 @@ public class V1AdminAuthProviderController {
 
     @SaCheckPermission("admin:auth-provider:update")
     @PutMapping("/{providerId}")
-    public Result<Void> updateProvider(@PathVariable Long providerId, @Valid @RequestBody PlatformAuthProviderDTO dto) {
+    public Result<Void> updateProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId, @Valid @RequestBody PlatformAuthProviderDTO dto) {
         platformAuthProviderAdminService.updateProvider(providerId, dto);
         return Result.success();
     }
 
     @SaCheckPermission("admin:auth-provider:enable")
     @PutMapping("/{providerId}/enable")
-    public Result<Void> enableProvider(@PathVariable Long providerId) {
+    public Result<Void> enableProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         platformAuthProviderAdminService.enableProvider(providerId);
         return Result.success();
     }
 
     @SaCheckPermission("admin:auth-provider:disable")
     @PutMapping("/{providerId}/disable")
-    public Result<Void> disableProvider(@PathVariable Long providerId) {
+    public Result<Void> disableProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         platformAuthProviderAdminService.disableProvider(providerId);
         return Result.success();
     }

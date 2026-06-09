@@ -12,6 +12,7 @@ import com.payment.dto.MemberTagVO;
 import com.payment.dto.PromotionActivityCreateDTO;
 import com.payment.dto.PromotionActivityVO;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import com.payment.entity.ActivityRule;
 import com.payment.entity.CouponScope;
 import com.payment.entity.CouponTemplate;
@@ -48,7 +49,7 @@ public class V1MerchantMarketingController {
     private final MemberService memberService;
 
     @GetMapping("/coupons")
-    public Result<List<CouponTemplateVO>> listCouponTemplates(@PathVariable Long tenantId,
+    public Result<List<CouponTemplateVO>> listCouponTemplates(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                             @RequestParam(required = false) String status) {
         requireEmployee(tenantId);
         return Result.success(couponService.listTemplates(tenantId, status).stream()
@@ -57,7 +58,7 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/coupons")
-    public Result<CouponTemplateVO> createCouponTemplate(@PathVariable Long tenantId,
+    public Result<CouponTemplateVO> createCouponTemplate(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                        @Valid @RequestBody CouponTemplateCreateDTO dto) {
         requireEmployee(tenantId);
         CouponTemplate entity = couponService.createTemplate(toTenantCouponTemplateDTO(tenantId, dto));
@@ -67,8 +68,8 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/coupons/{templateId}/scopes")
-    public Result<List<CouponScopeVO>> listCouponScopes(@PathVariable Long tenantId,
-                                                      @PathVariable Long templateId) {
+    public Result<List<CouponScopeVO>> listCouponScopes(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         requireEmployee(tenantId);
         return Result.success(couponService.listScopes(templateId, tenantId).stream()
                 .map(e -> { CouponScopeVO vo = new CouponScopeVO(); BeanUtils.copyProperties(e, vo); return vo; })
@@ -76,8 +77,8 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/coupons/{templateId}/scopes")
-    public Result<CouponScopeVO> addCouponScope(@PathVariable Long tenantId,
-                                              @PathVariable("templateId") Long templateId,
+    public Result<CouponScopeVO> addCouponScope(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                              @PathVariable("templateId") @Min(value = 1, message = "ID必须大于0") Long templateId,
                                               @Valid @RequestBody CouponScopeCreateDTO dto) {
         requireEmployee(tenantId);
         CouponScope entity = couponService.addScope(toCouponScopeDTO(tenantId, templateId, dto));
@@ -87,7 +88,7 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/coupons/{templateId}/activate")
-    public Result<Void> activateCouponTemplate(@PathVariable Long tenantId, @PathVariable Long templateId) {
+    public Result<Void> activateCouponTemplate(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         requireEmployee(tenantId);
         ensureCouponBelongsToTenant(tenantId, templateId);
         couponService.activateTemplate(templateId);
@@ -95,7 +96,7 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/coupons/{templateId}/disable")
-    public Result<Void> disableCouponTemplate(@PathVariable Long tenantId, @PathVariable Long templateId) {
+    public Result<Void> disableCouponTemplate(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         requireEmployee(tenantId);
         ensureCouponBelongsToTenant(tenantId, templateId);
         couponService.disableTemplate(templateId);
@@ -103,7 +104,7 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/activities")
-    public Result<List<PromotionActivityVO>> listActivities(@PathVariable Long tenantId,
+    public Result<List<PromotionActivityVO>> listActivities(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                           @RequestParam(required = false) String status) {
         requireEmployee(tenantId);
         return Result.success(promotionService.listActivities(tenantId, status).stream()
@@ -112,7 +113,7 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/activities")
-    public Result<PromotionActivityVO> createActivity(@PathVariable Long tenantId,
+    public Result<PromotionActivityVO> createActivity(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                     @Valid @RequestBody PromotionActivityCreateDTO dto) {
         requireEmployee(tenantId);
         PromotionActivity entity = promotionService.createActivity(toTenantActivityDTO(tenantId, dto));
@@ -122,8 +123,8 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/activities/{activityId}/rules")
-    public Result<List<ActivityRuleVO>> listActivityRules(@PathVariable Long tenantId,
-                                                        @PathVariable Long activityId) {
+    public Result<List<ActivityRuleVO>> listActivityRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         requireEmployee(tenantId);
         return Result.success(promotionService.listRules(activityId, tenantId).stream()
                 .map(e -> { ActivityRuleVO vo = new ActivityRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
@@ -131,8 +132,8 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/activities/{activityId}/rules")
-    public Result<ActivityRuleVO> addActivityRule(@PathVariable Long tenantId,
-                                                @PathVariable Long activityId,
+    public Result<ActivityRuleVO> addActivityRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                @PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId,
                                                 @Valid @RequestBody ActivityRuleCreateDTO dto) {
         requireEmployee(tenantId);
         promotionService.listRules(activityId, tenantId);
@@ -143,7 +144,7 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/activities/{activityId}/activate")
-    public Result<Void> activateActivity(@PathVariable Long tenantId, @PathVariable Long activityId) {
+    public Result<Void> activateActivity(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         requireEmployee(tenantId);
         promotionService.listRules(activityId, tenantId);
         promotionService.activateActivity(activityId);
@@ -151,7 +152,7 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/activities/{activityId}/disable")
-    public Result<Void> disableActivity(@PathVariable Long tenantId, @PathVariable Long activityId) {
+    public Result<Void> disableActivity(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         requireEmployee(tenantId);
         promotionService.listRules(activityId, tenantId);
         promotionService.disableActivity(activityId);
@@ -159,7 +160,7 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/member-levels")
-    public Result<List<MemberLevelVO>> listMemberLevels(@PathVariable Long tenantId) {
+    public Result<List<MemberLevelVO>> listMemberLevels(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         requireEmployee(tenantId);
         return Result.success(memberService.listLevels(tenantId).stream()
                 .map(e -> { MemberLevelVO vo = new MemberLevelVO(); BeanUtils.copyProperties(e, vo); return vo; })
@@ -167,7 +168,7 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/member-levels")
-    public Result<MemberLevelVO> createMemberLevel(@PathVariable Long tenantId,
+    public Result<MemberLevelVO> createMemberLevel(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                  @RequestParam Integer level,
                                                  @RequestParam String name,
                                                  @RequestParam BigDecimal thresholdAmount,
@@ -180,8 +181,8 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/members/{memberId}/level")
-    public Result<Void> updateMemberLevel(@PathVariable Long tenantId,
-                                          @PathVariable Long memberId,
+    public Result<Void> updateMemberLevel(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                          @PathVariable @Min(value = 1, message = "ID必须大于0") Long memberId,
                                           @RequestParam Integer memberLevel) {
         requireEmployee(tenantId);
         memberService.updateMemberLevel(tenantId, memberId, memberLevel);
@@ -189,7 +190,7 @@ public class V1MerchantMarketingController {
     }
 
     @GetMapping("/member-tags")
-    public Result<List<MemberTagVO>> listMemberTags(@PathVariable Long tenantId) {
+    public Result<List<MemberTagVO>> listMemberTags(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         requireEmployee(tenantId);
         return Result.success(memberService.listTags(tenantId).stream()
                 .map(e -> { MemberTagVO vo = new MemberTagVO(); BeanUtils.copyProperties(e, vo); return vo; })
@@ -197,7 +198,7 @@ public class V1MerchantMarketingController {
     }
 
     @PostMapping("/member-tags")
-    public Result<MemberTagVO> createMemberTag(@PathVariable Long tenantId, @RequestParam String name) {
+    public Result<MemberTagVO> createMemberTag(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @RequestParam String name) {
         requireEmployee(tenantId);
         MemberTag entity = memberService.createTag(tenantId, name);
         MemberTagVO vo = new MemberTagVO();
@@ -206,18 +207,18 @@ public class V1MerchantMarketingController {
     }
 
     @PutMapping("/members/{memberId}/tags/{tagId}")
-    public Result<Void> assignMemberTag(@PathVariable Long tenantId,
-                                        @PathVariable Long memberId,
-                                        @PathVariable Long tagId) {
+    public Result<Void> assignMemberTag(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long memberId,
+                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long tagId) {
         requireEmployee(tenantId);
         memberService.assignTag(tenantId, memberId, tagId);
         return Result.success();
     }
 
     @DeleteMapping("/members/{memberId}/tags/{tagId}")
-    public Result<Void> removeMemberTag(@PathVariable Long tenantId,
-                                        @PathVariable Long memberId,
-                                        @PathVariable Long tagId) {
+    public Result<Void> removeMemberTag(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long memberId,
+                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long tagId) {
         requireEmployee(tenantId);
         memberService.removeTag(tenantId, memberId, tagId);
         return Result.success();

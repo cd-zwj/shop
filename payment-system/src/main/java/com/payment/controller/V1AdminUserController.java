@@ -11,6 +11,8 @@ import com.payment.dto.UserPermissionDTO;
 import com.payment.dto.UserPermissionVO;
 import com.payment.entity.Permission;
 import com.payment.service.V1AdminService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
@@ -31,8 +33,8 @@ public class V1AdminUserController {
 
     @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/users")
-    public Result<PageResult<AdminPlatformUserVO>> listUsers(@RequestParam(defaultValue = "1") Integer current,
-                                                              @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<AdminPlatformUserVO>> listUsers(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                              @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                               @RequestParam(required = false) String keyword,
                                                               @RequestParam(required = false) Integer status) {
         Page<AdminPlatformUserVO> page = v1AdminService.listPlatformUsers(current, size, keyword, status);
@@ -41,20 +43,20 @@ public class V1AdminUserController {
 
     @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/users/{userId}")
-    public Result<AdminPlatformUserVO> getUserDetail(@PathVariable Long userId) {
+    public Result<AdminPlatformUserVO> getUserDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         return Result.success(v1AdminService.getPlatformUserDetail(userId));
     }
 
     @SaCheckPermission(value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
     @PutMapping("/users/{userId}/enable")
-    public Result<Void> enableUser(@PathVariable Long userId) {
+    public Result<Void> enableUser(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         v1AdminService.enablePlatformUser(userId);
         return Result.success();
     }
 
     @SaCheckPermission(value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
     @PutMapping("/users/{userId}/disable")
-    public Result<Void> disableUser(@PathVariable Long userId) {
+    public Result<Void> disableUser(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         v1AdminService.disablePlatformUser(userId);
         return Result.success();
     }
@@ -77,20 +79,20 @@ public class V1AdminUserController {
 
     @SaCheckPermission("admin:user:permission")
     @GetMapping("/users/{userId}/permissions")
-    public Result<UserPermissionVO> getUserPermissions(@PathVariable Long userId) {
+    public Result<UserPermissionVO> getUserPermissions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         return Result.success(v1AdminService.getUserPermissions(userId));
     }
 
     @SaCheckPermission("admin:user:permission")
     @PutMapping("/users/{userId}/permissions")
-    public Result<Void> setUserPermissions(@PathVariable Long userId, @RequestBody UserPermissionDTO dto) {
+    public Result<Void> setUserPermissions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId, @Valid @RequestBody UserPermissionDTO dto) {
         v1AdminService.setUserPermissions(userId, dto);
         return Result.success();
     }
 
     @SaCheckPermission("admin:user:permission")
     @DeleteMapping("/users/{userId}/permissions/{permissionId}")
-    public Result<Void> removeUserPermission(@PathVariable Long userId, @PathVariable Long permissionId) {
+    public Result<Void> removeUserPermission(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long permissionId) {
         v1AdminService.removeUserPermission(userId, permissionId);
         return Result.success();
     }

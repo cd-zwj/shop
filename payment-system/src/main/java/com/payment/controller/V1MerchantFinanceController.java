@@ -15,6 +15,7 @@ import com.payment.service.MerchantRechargeRuleService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
@@ -34,7 +35,7 @@ public class V1MerchantFinanceController {
     private final MerchantRechargeRuleService merchantRechargeRuleService;
 
     @GetMapping("/wallet-summary")
-    public Result<V1MerchantBalanceVO> getWalletSummary(@PathVariable Long tenantId) {
+    public Result<V1MerchantBalanceVO> getWalletSummary(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         MerchantBalance balance = merchantBalanceMapper.selectOne(new LambdaQueryWrapper<MerchantBalance>()
                 .eq(MerchantBalance::getTenantId, tenantId)
@@ -50,7 +51,7 @@ public class V1MerchantFinanceController {
     }
 
     @GetMapping("/points-rule")
-    public Result<V1MerchantPointsRuleDTO> getPointsRule(@PathVariable Long tenantId) {
+    public Result<V1MerchantPointsRuleDTO> getPointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
@@ -62,7 +63,7 @@ public class V1MerchantFinanceController {
     }
 
     @PutMapping("/points-rule")
-    public Result<Void> updatePointsRule(@PathVariable Long tenantId, @Valid @RequestBody V1MerchantPointsRuleDTO dto) {
+    public Result<Void> updatePointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody V1MerchantPointsRuleDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
@@ -85,7 +86,7 @@ public class V1MerchantFinanceController {
     }
 
     @GetMapping("/recharge-rules")
-    public Result<List<MerchantRechargeRuleVO>> listRechargeRules(@PathVariable Long tenantId) {
+    public Result<List<MerchantRechargeRuleVO>> listRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         return Result.success(merchantRechargeRuleService.listAllRules(tenantId).stream()
                 .map(e -> { MerchantRechargeRuleVO vo = new MerchantRechargeRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
@@ -93,7 +94,7 @@ public class V1MerchantFinanceController {
     }
 
     @PutMapping("/recharge-rules")
-    public Result<Void> replaceRechargeRules(@PathVariable Long tenantId,
+    public Result<Void> replaceRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                              @Valid @RequestBody List<V1MerchantRechargeRuleDTO> rules) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         merchantRechargeRuleService.replaceRules(tenantId, rules);

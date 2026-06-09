@@ -11,6 +11,7 @@ import com.payment.entity.Tenant;
 import org.springframework.beans.BeanUtils;
 import com.payment.service.V1AdminService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -26,8 +27,8 @@ public class V1AdminMerchantController {
 
     @SaCheckPermission("admin:merchant:list")
     @GetMapping
-    public Result<PageResult<MerchantListVO>> listMerchants(@RequestParam(defaultValue = "1") Integer current,
-                                                             @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<MerchantListVO>> listMerchants(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                             @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                              @RequestParam(required = false) String name,
                                                              @RequestParam(required = false) Integer status) {
         Page<MerchantListVO> page = v1AdminService.listMerchants(current, size, name, status);
@@ -36,7 +37,7 @@ public class V1AdminMerchantController {
 
     @SaCheckPermission("admin:merchant:detail")
     @GetMapping("/{tenantId}")
-    public Result<MerchantDetailVO> getMerchantDetail(@PathVariable Long tenantId) {
+    public Result<MerchantDetailVO> getMerchantDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(v1AdminService.getMerchantDetail(tenantId));
     }
 
@@ -51,21 +52,21 @@ public class V1AdminMerchantController {
 
     @SaCheckPermission("admin:merchant:update")
     @PutMapping("/{tenantId}")
-    public Result<Void> updateMerchant(@PathVariable Long tenantId, @Valid @RequestBody MerchantDTO dto) {
+    public Result<Void> updateMerchant(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody MerchantDTO dto) {
         v1AdminService.updateMerchant(tenantId, dto);
         return Result.success();
     }
 
     @SaCheckPermission("admin:merchant:enable")
     @PutMapping("/{tenantId}/enable")
-    public Result<Void> enableMerchant(@PathVariable Long tenantId) {
+    public Result<Void> enableMerchant(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1AdminService.enableMerchant(tenantId);
         return Result.success();
     }
 
     @SaCheckPermission("admin:merchant:disable")
     @PutMapping("/{tenantId}/disable")
-    public Result<Void> disableMerchant(@PathVariable Long tenantId) {
+    public Result<Void> disableMerchant(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1AdminService.disableMerchant(tenantId);
         return Result.success();
     }

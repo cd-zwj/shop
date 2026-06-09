@@ -10,6 +10,7 @@ import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.RefundApplicationVO;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -28,10 +29,10 @@ public class V1MerchantRefundController {
 
     @SaCheckLogin
     @GetMapping
-    public Result<PageResult<RefundApplicationVO>> listTenantRefunds(@PathVariable Long tenantId,
+    public Result<PageResult<RefundApplicationVO>> listTenantRefunds(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                       @RequestParam(required = false) String status,
-                                                                      @RequestParam(defaultValue = "1") Integer pageNum,
-                                                                      @RequestParam(defaultValue = "10") Integer pageSize) {
+                                                                      @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer pageNum,
+                                                                      @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer pageSize) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
 
@@ -41,8 +42,8 @@ public class V1MerchantRefundController {
 
     @SaCheckLogin
     @PutMapping("/{refundId}/audit")
-    public Result<Void> auditRefund(@PathVariable Long tenantId,
-                                     @PathVariable Long refundId,
+    public Result<Void> auditRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                     @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId,
                                      @Valid @RequestBody AuditRefundRequest request) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);

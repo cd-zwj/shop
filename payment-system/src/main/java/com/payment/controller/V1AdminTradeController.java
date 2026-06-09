@@ -11,6 +11,7 @@ import com.payment.dto.AdminRechargeOrderVO;
 import com.payment.dto.AdminTradeOverviewVO;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.service.V1AdminService;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,8 +33,8 @@ public class V1AdminTradeController {
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/orders")
-    public Result<PageResult<AdminOrderListVO>> listOrders(@RequestParam(defaultValue = "1") Integer current,
-                                                            @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<AdminOrderListVO>> listOrders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                             @RequestParam(required = false) String orderNo,
                                                             @RequestParam(required = false) String orderStatus,
                                                             @RequestParam(required = false) String payStatus,
@@ -50,8 +51,8 @@ public class V1AdminTradeController {
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/payment-bills")
-    public Result<PageResult<AdminPaymentBillVO>> listPaymentBills(@RequestParam(defaultValue = "1") Integer current,
-                                                                    @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<AdminPaymentBillVO>> listPaymentBills(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                                    @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                                     @RequestParam(required = false) String bizType,
                                                                     @RequestParam(required = false) String payStatus,
                                                                     @RequestParam(required = false) String channelCode) {
@@ -61,8 +62,8 @@ public class V1AdminTradeController {
 
     @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/recharge-orders")
-    public Result<PageResult<AdminRechargeOrderVO>> listRechargeOrders(@RequestParam(defaultValue = "1") Integer current,
-                                                                        @RequestParam(defaultValue = "10") Integer size,
+    public Result<PageResult<AdminRechargeOrderVO>> listRechargeOrders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+                                                                        @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                                         @RequestParam(required = false) String walletType,
                                                                         @RequestParam(required = false) String bizStatus,
                                                                         @RequestParam(required = false) Long tenantId) {
