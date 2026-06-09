@@ -5,7 +5,7 @@ import type { FileExistsResult } from '../../types/admin';
 export const fileUploadService = {
   checkExists(fileMd5: string, fileName: string) {
     return request<FileExistsResult>({
-      url: '/api/file/check-exists',
+      url: '/file/check-exists',
       method: 'get',
       params: {
         fileMd5,
@@ -23,7 +23,7 @@ export const fileUploadService = {
     }
 
     const response = await http.request({
-      url: '/api/file/upload',
+      url: '/file/upload',
       method: 'post',
       data: formData,
       headers: {

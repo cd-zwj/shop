@@ -1,12 +1,12 @@
 export function formatCurrency(value: number | string | null | undefined) {
   const amount = Number(value ?? 0);
   if (Number.isNaN(amount)) {
-    return '$0.00';
+    return '¥0.00';
   }
 
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat('zh-CN', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CNY',
   }).format(amount);
 }
 

@@ -6,7 +6,7 @@ export const appPointsService = {
   /** 积分余额 */
   getPointsBalance() {
     return request<PointsBalance>({
-      url: '/api/points/balance',
+      url: '/v1/app/tenants/points/balance',
       method: 'get',
       authRole: 'user',
     });
