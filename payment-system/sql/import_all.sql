@@ -27,6 +27,8 @@ SOURCE 17_auth_security.sql;
 SOURCE 18_store_membership.sql;
 SOURCE 19_message_retry.sql;
 SOURCE 20_payment_bill_status_remark.sql;
+SOURCE 25_mq_compensation.sql;
+SOURCE 26_coupon_records_and_rules.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;
