@@ -1,8 +1,13 @@
 package com.payment.controller;
 
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.BusinessException;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.service.FileAssetService;
 import com.payment.util.MinioUtil;
+import com.payment.util.PlatformSessionHelper;
+import com.payment.vo.FileAssetVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +42,9 @@ public class FileUploadController {
 
     @Autowired
     private MinioUtil minioUtil;
+
+    @Autowired
+    private FileAssetService fileAssetService;
     
     /**
      * 检查文件是否存在（秒传）
@@ -74,7 +83,8 @@ public class FileUploadController {
     @Operation(summary = "简单文件上传", description = "适用于小文件的直接上传，支持MD5去重")
     public Result<String> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "fileMd5", required = false) String fileMd5) {
+            @RequestParam(value = "fileMd5", required = false) String fileMd5,
+            @RequestParam(value = "tenantId", required = false) Long tenantId) {
         try {
             validateFileType(file);
 
@@ -83,12 +93,14 @@ public class FileUploadController {
                 String existingUrl = minioUtil.checkFileExists(fileMd5, file.getOriginalFilename());
                 if (existingUrl != null) {
                     log.info("文件秒传成功: md5={}", fileMd5);
+                    recordFileAsset(tenantId, file, existingUrl, fileMd5);
                     return Result.success(existingUrl);
                 }
             }
-            
+
             // 文件不存在，执行上传
             String fileUrl = minioUtil.uploadFile(file, fileMd5);
+            recordFileAsset(tenantId, file, fileUrl, fileMd5);
             return Result.success(fileUrl);
         } catch (Exception e) {
             log.error("文件上传失败", e);
@@ -138,6 +150,17 @@ public class FileUploadController {
         }
     }
 
+    @SaCheckLogin
+    @GetMapping("/list")
+    @Operation(summary = "查询已上传文件列表", description = "按租户分页查询已上传的文件列表，需要登录")
+    public Result<PageResult<FileAssetVO>> listFiles(
+            @RequestParam Long tenantId,
+            @RequestParam(defaultValue = "1") @jakarta.validation.constraints.Min(value = 1, message = "页码必须大于0") Integer current,
+            @RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "每页条数必须大于0") Integer size) {
+        List<FileAssetVO> records = fileAssetService.listByTenant(tenantId, current, size);
+        return Result.success(new PageResult<>(records, (long) records.size(), current, size));
+    }
+
     private void validateFileType(MultipartFile file) {
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
@@ -150,6 +173,22 @@ public class FileUploadController {
             if (extension == null || !ALLOWED_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT))) {
                 throw new BusinessException("不支持的文件扩展名，仅支持 .jpg、.jpeg、.png、.gif、.webp、.pdf");
             }
+        }
+    }
+
+    private void recordFileAsset(Long tenantId, MultipartFile file, String fileUrl, String md5) {
+        try {
+            Long userId = PlatformSessionHelper.getPlatformUserId();
+            fileAssetService.recordUpload(
+                    tenantId,
+                    userId,
+                    file.getOriginalFilename(),
+                    fileUrl,
+                    md5,
+                    file.getSize(),
+                    file.getContentType());
+        } catch (Exception e) {
+            log.warn("记录文件资产失败（不影响上传结果）: {}", e.getMessage());
         }
     }
 }

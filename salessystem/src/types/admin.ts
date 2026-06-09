@@ -175,6 +175,17 @@ export interface AdminWithdrawal {
   createTime?: string | null;
 }
 
+export interface AdminMerchantBalance {
+  id: number;
+  tenantId: number;
+  balance: number;
+  frozenBalance: number;
+  totalIncome: number;
+  totalWithdrawal: number;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
 export interface FileExistsResult {
   exists: boolean;
   fileUrl?: string | null;

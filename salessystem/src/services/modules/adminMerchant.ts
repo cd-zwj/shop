@@ -5,6 +5,7 @@ import type {
   AdminMerchantListItem,
   AdminMerchantPayload,
   AdminMerchantRecord,
+  AdminMerchantBalance,
 } from '../../types/admin';
 
 export const adminMerchantService = {
@@ -65,6 +66,14 @@ export const adminMerchantService = {
     return request<void>({
       url: `/v1/admin/merchants/${tenantId}/disable`,
       method: 'put',
+      authRole: 'admin',
+    });
+  },
+
+  getMerchantBalance(tenantId: number) {
+    return request<AdminMerchantBalance>({
+      url: `/v1/admin/merchants/${tenantId}/balance`,
+      method: 'get',
       authRole: 'admin',
     });
   },

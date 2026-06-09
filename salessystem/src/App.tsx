@@ -89,6 +89,7 @@ import MerchantCoupons from './pages/merchant/MerchantCoupons';
 import MerchantActivities from './pages/merchant/MerchantActivities';
 import MerchantMembers from './pages/merchant/MerchantMembers';
 import AdminMarketing from './pages/AdminMarketing';
+import AccountSecurity from './pages/AccountSecurity';
 
 // --- Components ---
 
@@ -331,6 +332,7 @@ function AppContent() {
             <Route path="/points/:tenantId" element={<AuthGuard><Points /></AuthGuard>} />
             <Route path="/addresses" element={<AuthGuard><AddressList /></AuthGuard>} />
             <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
+            <Route path="/account-security" element={<AuthGuard><AccountSecurity /></AuthGuard>} />
             
             {/* --- Admin routes (admin role required) --- */}
             <Route path="/admin" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDashboard /></RoleGuard></AuthGuard>} />
