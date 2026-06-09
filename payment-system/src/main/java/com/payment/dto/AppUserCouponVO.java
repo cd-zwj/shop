@@ -12,10 +12,10 @@ import java.time.LocalDateTime;
 public class AppUserCouponVO {
     private Long id;
     private String couponNo;
-    private Long couponTemplateId;
+    private Long templateId;
     private Long tenantId;
-    private String status;
-    private String name;
+    private String couponStatus;
+    private String templateName;
     private String couponType;
     private BigDecimal thresholdAmount;
     private BigDecimal discountAmount;
@@ -23,5 +23,5 @@ public class AppUserCouponVO {
     private BigDecimal maxDiscountAmount;
     private LocalDateTime receiveTime;
     private LocalDateTime expireTime;
-    private LocalDateTime usedTime;
+    private LocalDateTime useTime;
 }

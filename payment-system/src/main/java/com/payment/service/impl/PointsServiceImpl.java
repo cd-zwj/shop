@@ -47,7 +47,7 @@ public class PointsServiceImpl implements PointsService {
         return pointsRuleMapper.selectOne(
                 new LambdaQueryWrapper<PointsRule>()
                         .eq(PointsRule::getTenantId, tenantId)
-                        .eq(PointsRule::getDeleted, 0)
+                        .eq(PointsRule::getStatus, 1)
         );
     }
     
@@ -64,23 +64,23 @@ public class PointsServiceImpl implements PointsService {
         
         if (existRule != null) {
             // 更新规则
-            existRule.setPointsRatio(dto.getPointsRatio());
-            existRule.setEnabled(dto.getEnabled());
+            existRule.setPointsAmount(dto.getPointsRatio());
+            existRule.setStatus(dto.getEnabled());
             existRule.setUpdateTime(LocalDateTime.now());
             pointsRuleMapper.updateById(existRule);
-            log.info("更新积分规则，tenantId={}, pointsRatio={}, enabled={}", 
+            log.info("更新积分规则，tenantId={}, pointsAmount={}, status={}",
                     tenantId, dto.getPointsRatio(), dto.getEnabled());
         } else {
             // 创建规则
             PointsRule rule = new PointsRule();
             rule.setTenantId(tenantId);
-            rule.setPointsRatio(dto.getPointsRatio());
-            rule.setEnabled(dto.getEnabled());
-            rule.setDeleted(0);
+            rule.setRuleType("PAYMENT");
+            rule.setPointsAmount(dto.getPointsRatio());
+            rule.setStatus(dto.getEnabled());
             rule.setCreateTime(LocalDateTime.now());
             rule.setUpdateTime(LocalDateTime.now());
             pointsRuleMapper.insert(rule);
-            log.info("创建积分规则，tenantId={}, pointsRatio={}, enabled={}", 
+            log.info("创建积分规则，tenantId={}, pointsAmount={}, status={}",
                     tenantId, dto.getPointsRatio(), dto.getEnabled());
         }
     }
@@ -93,14 +93,14 @@ public class PointsServiceImpl implements PointsService {
         
         // 获取积分规则
         PointsRule rule = getPointsRule(tenantId);
-        if (rule == null || rule.getEnabled() == 0) {
+        if (rule == null || rule.getStatus() == 0) {
             return 0;
         }
-        
-        // 计算积分：订单金额 * 积分比例
-        int points = amount.intValue() * rule.getPointsRatio();
-        log.info("计算积分，tenantId={}, amount={}, pointsRatio={}, points={}", 
-                tenantId, amount, rule.getPointsRatio(), points);
+
+        // 计算积分：按 pointsAmount（DDL 模型）
+        int points = rule.getPointsAmount() != null ? rule.getPointsAmount() : 0;
+        log.info("计算积分，tenantId={}, amount={}, pointsAmount={}, points={}",
+                tenantId, amount, rule.getPointsAmount(), points);
         
         return points;
     }
@@ -174,12 +174,11 @@ public class PointsServiceImpl implements PointsService {
         PointsLog log = new PointsLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);
-        log.setPoints(points);
-        log.setBalance(userPoints.getPoints());
-        log.setType("GRANT");
-        log.setReason(reason);
+        log.setChangePoints(points);
+        log.setPointsAfter(userPoints.getPoints());
+        log.setChangeType("EARN");
+        log.setRemark(reason);
         log.setOrderNo(orderNo);
-        log.setDeleted(0);
         log.setCreateTime(LocalDateTime.now());
         pointsLogMapper.insert(log);
         
@@ -228,11 +227,10 @@ public class PointsServiceImpl implements PointsService {
         PointsLog log = new PointsLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);
-        log.setPoints(-points);
-        log.setBalance(userPoints.getPoints());
-        log.setType("DEDUCT");
-        log.setReason(reason);
-        log.setDeleted(0);
+        log.setChangePoints(-points);
+        log.setPointsAfter(userPoints.getPoints());
+        log.setChangeType("USE");
+        log.setRemark(reason);
         log.setCreateTime(LocalDateTime.now());
         pointsLogMapper.insert(log);
         
@@ -259,7 +257,6 @@ public class PointsServiceImpl implements PointsService {
         LambdaQueryWrapper<PointsLog> wrapper = new LambdaQueryWrapper<PointsLog>()
                 .eq(PointsLog::getUserId, userId)
                 .eq(PointsLog::getTenantId, tenantId)
-                .eq(PointsLog::getDeleted, 0)
                 .orderByDesc(PointsLog::getCreateTime);
         
         return pointsLogMapper.selectPage(page, wrapper);
@@ -476,12 +473,11 @@ public class PointsServiceImpl implements PointsService {
         PointsLog pointsLog = new PointsLog();
         pointsLog.setTenantId(tenantId);
         pointsLog.setUserId(userId);
-        pointsLog.setPoints(points);
-        pointsLog.setBalance(userPoints.getPoints());
-        pointsLog.setType("REFUND");
-        pointsLog.setReason(reason);
+        pointsLog.setChangePoints(points);
+        pointsLog.setPointsAfter(userPoints.getPoints());
+        pointsLog.setChangeType("EXPIRE");
+        pointsLog.setRemark(reason);
         pointsLog.setOrderNo(orderNo);
-        pointsLog.setDeleted(0);
         pointsLog.setCreateTime(LocalDateTime.now());
         pointsLogMapper.insert(pointsLog);
 

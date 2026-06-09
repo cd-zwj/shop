@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -18,25 +19,38 @@ public class PointsRule implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
     /**
-     * 积分比例（每消费1元获得的积分）
+     * 规则名称
      */
-    private Integer pointsRatio;
-    
+    private String ruleName;
+
     /**
-     * 是否启用（0-否，1-是）
+     * 规则类型：PAYMENT-支付获得，SIGNIN-签到，SHARE-分享
      */
-    private Integer enabled;
-    
-    private Integer deleted;
-    
+    private String ruleType;
+
+    /**
+     * 积分数量
+     */
+    private Integer pointsAmount;
+
+    /**
+     * 条件金额（支付满多少）
+     */
+    private BigDecimal conditionAmount;
+
+    /**
+     * 状态：0-禁用，1-启用
+     */
+    private Integer status;
+
     private LocalDateTime createTime;
-    
+
     private LocalDateTime updateTime;
 }

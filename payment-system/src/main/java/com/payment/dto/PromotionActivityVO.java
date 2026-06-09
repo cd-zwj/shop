@@ -16,8 +16,8 @@ public class PromotionActivityVO implements Serializable {
     private Long id;
     private String activityNo;
     private Long tenantId;
-    private String ownerType;
-    private String name;
+    private String activityScope;
+    private String activityName;
     private String activityType;
     private LocalDateTime startTime;
     private LocalDateTime endTime;

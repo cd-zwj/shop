@@ -79,7 +79,7 @@ public class CouponServiceImpl implements CouponService {
             throw new BusinessException("商户ID不能为空");
         }
         return couponTemplateMapper.selectList(new LambdaQueryWrapper<CouponTemplate>()
-                .eq(CouponTemplate::getOwnerType, CouponOwnerTypeEnum.TENANT.name())
+                .eq(CouponTemplate::getTemplateScope, CouponOwnerTypeEnum.TENANT.name())
                 .eq(CouponTemplate::getTenantId, tenantId)
                 .eq(CouponTemplate::getDeleted, 0)
                 .eq(status != null && !status.isBlank(), CouponTemplate::getStatus, status)
@@ -89,7 +89,7 @@ public class CouponServiceImpl implements CouponService {
     @Override
     public List<CouponTemplate> listPlatformTemplates(String status) {
         return couponTemplateMapper.selectList(new LambdaQueryWrapper<CouponTemplate>()
-                .eq(CouponTemplate::getOwnerType, CouponOwnerTypeEnum.PLATFORM.name())
+                .eq(CouponTemplate::getTemplateScope, CouponOwnerTypeEnum.PLATFORM.name())
                 .eq(CouponTemplate::getDeleted, 0)
                 .eq(status != null && !status.isBlank(), CouponTemplate::getStatus, status)
                 .orderByDesc(CouponTemplate::getCreateTime));
@@ -109,7 +109,7 @@ public class CouponServiceImpl implements CouponService {
     @Override
     public List<CouponScope> listPlatformScopes(Long couponTemplateId) {
         CouponTemplate template = requireTemplate(couponTemplateId);
-        if (!CouponOwnerTypeEnum.PLATFORM.name().equals(template.getOwnerType())) {
+        if (!CouponOwnerTypeEnum.PLATFORM.name().equals(template.getTemplateScope())) {
             throw new BusinessException("优惠券模板不是平台券");
         }
         return couponScopeMapper.selectList(new LambdaQueryWrapper<CouponScope>()
@@ -125,26 +125,28 @@ public class CouponServiceImpl implements CouponService {
         LocalDateTime now = LocalDateTime.now();
         CouponTemplate template = new CouponTemplate();
         template.setTemplateNo(BizNoGenerator.generate("CT"));
-        template.setTenantId(CouponOwnerTypeEnum.PLATFORM.name().equals(dto.getOwnerType()) ? null : dto.getTenantId());
-        template.setOwnerType(dto.getOwnerType());
-        template.setName(dto.getName().trim());
+        template.setTenantId(CouponOwnerTypeEnum.PLATFORM.name().equals(dto.getTemplateScope()) ? null : dto.getTenantId());
+        template.setTemplateScope(dto.getTemplateScope());
+        template.setTemplateName(dto.getTemplateName().trim());
         template.setCouponType(dto.getCouponType());
         template.setThresholdAmount(defaultAmount(dto.getThresholdAmount()));
         template.setDiscountAmount(defaultAmount(dto.getDiscountAmount()));
         template.setDiscountRate(dto.getDiscountRate());
         template.setMaxDiscountAmount(dto.getMaxDiscountAmount());
-        template.setTotalStock(defaultInt(dto.getTotalStock()));
-        template.setReceivedCount(0);
+        template.setTotalQuantity(defaultInt(dto.getTotalQuantity()));
+        template.setReceivedQuantity(0);
         template.setUsedQuantity(0);
         template.setPerUserLimit(dto.getPerUserLimit() == null ? 1 : dto.getPerUserLimit());
         template.setReceiveStartTime(dto.getReceiveStartTime());
         template.setReceiveEndTime(dto.getReceiveEndTime());
-        template.setValidDaysAfterReceive(dto.getValidDaysAfterReceive());
+        template.setValidType(dto.getValidDays() != null && dto.getValidDays() > 0 ? "FIXED_DAYS" : "FIXED_RANGE");
+        template.setValidDays(dto.getValidDays());
         template.setValidStartTime(dto.getValidStartTime());
         template.setValidEndTime(dto.getValidEndTime());
-        template.setMinMemberLevel(dto.getMinMemberLevel());
-        template.setExcludeMemberTagIds(trimToNull(dto.getExcludeMemberTagIds()));
-        template.setStackStrategy(trimToDefault(dto.getStackStrategy(), "EXCLUSIVE"));
+        template.setCanStackBalance(Boolean.FALSE);
+        template.setCanStackPoints(Boolean.FALSE);
+        template.setCanStackOtherCoupon(Boolean.FALSE);
+        template.setApplicableProductScope("ALL");
         template.setDescription(trimToNull(dto.getDescription()));
         template.setStatus(TEMPLATE_STATUS_DRAFT);
         template.setDeleted(0);
@@ -201,9 +203,9 @@ public class CouponServiceImpl implements CouponService {
                 .eq(CouponTemplate::getStatus, "ACTIVE")
                 .eq(CouponTemplate::getDeleted, 0)
                 .and(wrapper -> wrapper
-                        .eq(CouponTemplate::getOwnerType, CouponOwnerTypeEnum.PLATFORM.name())
+                        .eq(CouponTemplate::getTemplateScope, CouponOwnerTypeEnum.PLATFORM.name())
                         .or(inner -> inner
-                                .eq(CouponTemplate::getOwnerType, CouponOwnerTypeEnum.TENANT.name())
+                                .eq(CouponTemplate::getTemplateScope, CouponOwnerTypeEnum.TENANT.name())
                                 .eq(CouponTemplate::getTenantId, tenantId)))
                 .and(wrapper -> wrapper
                         .isNull(CouponTemplate::getReceiveStartTime)
@@ -229,15 +231,14 @@ public class CouponServiceImpl implements CouponService {
         List<UserCoupon> coupons = userCouponMapper.selectList(new LambdaQueryWrapper<UserCoupon>()
                 .and(w -> w.eq(UserCoupon::getTenantId, tenantId).or().isNull(UserCoupon::getTenantId))
                 .eq(UserCoupon::getPlatformUserId, platformUserId)
-                .eq(UserCoupon::getDeleted, 0)
-                .eq(status != null && !status.isBlank(), UserCoupon::getStatus, status)
+                .eq(status != null && !status.isBlank(), UserCoupon::getCouponStatus, status)
                 .orderByDesc(UserCoupon::getCreateTime));
         if (coupons == null || coupons.isEmpty()) {
             return Collections.emptyList();
         }
 
         Set<Long> templateIds = coupons.stream()
-                .map(UserCoupon::getCouponTemplateId)
+                .map(UserCoupon::getTemplateId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(HashSet::new));
         Map<Long, CouponTemplate> templateMap = templateIds.isEmpty()
@@ -247,16 +248,16 @@ public class CouponServiceImpl implements CouponService {
 
         return coupons.stream()
                 .filter(coupon -> {
-                    CouponTemplate tpl = templateMap.get(coupon.getCouponTemplateId());
+                    CouponTemplate tpl = templateMap.get(coupon.getTemplateId());
                     if (tpl == null) {
                         return false;
                     }
-                    if (!CouponOwnerTypeEnum.PLATFORM.name().equals(tpl.getOwnerType())) {
+                    if (!CouponOwnerTypeEnum.PLATFORM.name().equals(tpl.getTemplateScope())) {
                         return true;
                     }
                     return isCouponTemplateVisibleToTenant(tpl, tenantId, platformUserId);
                 })
-                .map(coupon -> toUserCouponVO(coupon, templateMap.get(coupon.getCouponTemplateId())))
+                .map(coupon -> toUserCouponVO(coupon, templateMap.get(coupon.getTemplateId())))
                 .collect(Collectors.toList());
     }
 
@@ -285,14 +286,14 @@ public class CouponServiceImpl implements CouponService {
         LocalDateTime now = LocalDateTime.now();
         UserCoupon coupon = new UserCoupon();
         coupon.setCouponNo(BizNoGenerator.generate("UC"));
-        coupon.setCouponTemplateId(template.getId());
+        coupon.setTemplateId(template.getId());
         coupon.setTenantId(resolveCouponTenantId(template, tenantId));
         coupon.setPlatformUserId(platformUserId);
-        coupon.setStatus(UserCouponStatusEnum.RECEIVED.name());
+        coupon.setSourceType("RECEIVE");
+        coupon.setCouponStatus(UserCouponStatusEnum.RECEIVED.name());
         coupon.setReceiveTime(now);
         coupon.setExpireTime(resolveExpireTime(template, now));
         coupon.setVersion(0);
-        coupon.setDeleted(0);
         coupon.setCreateTime(now);
         coupon.setUpdateTime(now);
         userCouponMapper.insert(coupon);
@@ -315,9 +316,9 @@ public class CouponServiceImpl implements CouponService {
         AppCouponReceiveVO result = new AppCouponReceiveVO();
         result.setUserCouponId(coupon.getId());
         result.setCouponNo(coupon.getCouponNo());
-        result.setCouponTemplateId(coupon.getCouponTemplateId());
+        result.setTemplateId(coupon.getTemplateId());
         result.setTenantId(coupon.getTenantId());
-        result.setStatus(coupon.getStatus());
+        result.setCouponStatus(coupon.getCouponStatus());
         result.setExpireTime(coupon.getExpireTime());
         return result;
     }
@@ -333,14 +334,14 @@ public class CouponServiceImpl implements CouponService {
         UserCoupon userCoupon = requireCoupon(userCouponId);
         ensureTenant(userCoupon, tenantId);
         ensureUser(userCoupon, platformUserId);
-        if (!UserCouponStatusEnum.RECEIVED.name().equals(userCoupon.getStatus())) {
+        if (!UserCouponStatusEnum.RECEIVED.name().equals(userCoupon.getCouponStatus())) {
             throw new BusinessException("选择的优惠券不可用");
         }
         if (userCoupon.getExpireTime() != null && userCoupon.getExpireTime().isBefore(LocalDateTime.now())) {
             throw new BusinessException("选择的优惠券已过期");
         }
 
-        CouponTemplate template = couponTemplateMapper.selectById(userCoupon.getCouponTemplateId());
+        CouponTemplate template = couponTemplateMapper.selectById(userCoupon.getTemplateId());
         if (template == null || Integer.valueOf(1).equals(template.getDeleted())) {
             throw new BusinessException("选择的优惠券模板不存在");
         }
@@ -359,13 +360,15 @@ public class CouponServiceImpl implements CouponService {
         candidate.setUserCouponId(userCoupon.getId());
         candidate.setCouponTemplateId(template.getId());
         candidate.setCouponType(template.getCouponType());
-        candidate.setStatus(userCoupon.getStatus());
+        candidate.setCouponStatus(userCoupon.getCouponStatus());
         candidate.setEligibleAmount(eligibleAmount);
         candidate.setThresholdAmount(template.getThresholdAmount());
         candidate.setDiscountAmount(template.getDiscountAmount());
         candidate.setDiscountRate(template.getDiscountRate());
         candidate.setMaxDiscountAmount(template.getMaxDiscountAmount());
-        candidate.setStackStrategy(template.getStackStrategy());
+        candidate.setCanStackBalance(template.getCanStackBalance());
+        candidate.setCanStackPoints(template.getCanStackPoints());
+        candidate.setCanStackOtherCoupon(template.getCanStackOtherCoupon());
         candidate.setRuleSnapshotJson("{\"templateNo\":\"" + template.getTemplateNo() + "\",\"couponType\":\"" + template.getCouponType() + "\"}");
         return candidate;
     }
@@ -379,11 +382,11 @@ public class CouponServiceImpl implements CouponService {
         UserCoupon coupon = requireCoupon(userCouponId);
         ensureTenant(coupon, tenantId);
         ensureUser(coupon, platformUserId);
-        if (UserCouponStatusEnum.LOCKED.name().equals(coupon.getStatus())
-                && Objects.equals(coupon.getLockOrderId(), orderId)) {
+        if (UserCouponStatusEnum.LOCKED.name().equals(coupon.getCouponStatus())
+                && Objects.equals(coupon.getOrderNo(), orderNo)) {
             return;
         }
-        if (!UserCouponStatusEnum.RECEIVED.name().equals(coupon.getStatus())) {
+        if (!UserCouponStatusEnum.RECEIVED.name().equals(coupon.getCouponStatus())) {
             throw new BusinessException("优惠券不可锁定");
         }
         if (coupon.getExpireTime() != null && coupon.getExpireTime().isBefore(LocalDateTime.now())) {
@@ -391,9 +394,8 @@ public class CouponServiceImpl implements CouponService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        coupon.setStatus(UserCouponStatusEnum.LOCKED.name());
-        coupon.setLockOrderId(orderId);
-        coupon.setLockOrderNo(orderNo);
+        coupon.setCouponStatus(UserCouponStatusEnum.LOCKED.name());
+        coupon.setOrderNo(orderNo);
         coupon.setLockTime(now);
         coupon.setUpdateTime(now);
         int affected = userCouponMapper.updateById(coupon);
@@ -421,19 +423,17 @@ public class CouponServiceImpl implements CouponService {
         UserCoupon coupon = requireCoupon(userCouponId);
         ensureTenant(coupon, tenantId);
         ensureUser(coupon, platformUserId);
-        if (!UserCouponStatusEnum.LOCKED.name().equals(coupon.getStatus())) {
+        if (!UserCouponStatusEnum.LOCKED.name().equals(coupon.getCouponStatus())) {
             return;
         }
-        if (orderId != null && !Objects.equals(coupon.getLockOrderId(), orderId)) {
+        if (orderNo != null && !Objects.equals(coupon.getOrderNo(), orderNo)) {
             throw new BusinessException("优惠券不属于当前订单");
         }
 
         LocalDateTime now = LocalDateTime.now();
-        coupon.setStatus(UserCouponStatusEnum.RECEIVED.name());
-        coupon.setLockOrderId(null);
-        coupon.setLockOrderNo(null);
+        coupon.setCouponStatus(UserCouponStatusEnum.RECEIVED.name());
+        coupon.setOrderNo(null);
         coupon.setLockTime(null);
-        coupon.setReleaseTime(now);
         coupon.setUpdateTime(now);
         int affected = userCouponMapper.updateById(coupon);
         if (affected == 0) {
@@ -459,10 +459,10 @@ public class CouponServiceImpl implements CouponService {
     public void writeOffCoupon(Long userCouponId, Long tenantId, Long orderId, String orderNo, String bizNo, BigDecimal discountAmount) {
         UserCoupon coupon = requireCoupon(userCouponId);
         ensureTenant(coupon, tenantId);
-        if (!UserCouponStatusEnum.LOCKED.name().equals(coupon.getStatus())) {
+        if (!UserCouponStatusEnum.LOCKED.name().equals(coupon.getCouponStatus())) {
             throw new BusinessException("优惠券未锁定，不能核销");
         }
-        if (orderId != null && !Objects.equals(coupon.getLockOrderId(), orderId)) {
+        if (orderNo != null && !Objects.equals(coupon.getOrderNo(), orderNo)) {
             throw new BusinessException("优惠券不属于当前订单，不能核销");
         }
         if (discountAmount == null || discountAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -470,8 +470,8 @@ public class CouponServiceImpl implements CouponService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        coupon.setStatus(UserCouponStatusEnum.USED.name());
-        coupon.setUsedTime(now);
+        coupon.setCouponStatus(UserCouponStatusEnum.USED.name());
+        coupon.setUseTime(now);
         coupon.setUpdateTime(now);
         int affected = userCouponMapper.updateById(coupon);
         if (affected == 0) {
@@ -480,7 +480,7 @@ public class CouponServiceImpl implements CouponService {
 
         CouponWriteOffRecord record = new CouponWriteOffRecord();
         record.setUserCouponId(userCouponId);
-        record.setCouponTemplateId(coupon.getCouponTemplateId());
+        record.setCouponTemplateId(coupon.getTemplateId());
         record.setTenantId(tenantId);
         record.setOrderId(orderId);
         record.setOrderNo(orderNo);
@@ -495,9 +495,8 @@ public class CouponServiceImpl implements CouponService {
     public int expireCoupons(Long tenantId, LocalDateTime expireBefore, String bizNo, String expireReason) {
         LocalDateTime cutoff = expireBefore == null ? LocalDateTime.now() : expireBefore;
         List<UserCoupon> coupons = userCouponMapper.selectList(new LambdaQueryWrapper<UserCoupon>()
-                .eq(UserCoupon::getStatus, UserCouponStatusEnum.RECEIVED.name())
+                .eq(UserCoupon::getCouponStatus, UserCouponStatusEnum.RECEIVED.name())
                 .le(UserCoupon::getExpireTime, cutoff)
-                .eq(UserCoupon::getDeleted, 0)
                 .eq(tenantId != null, UserCoupon::getTenantId, tenantId));
         if (coupons == null || coupons.isEmpty()) {
             return 0;
@@ -506,9 +505,8 @@ public class CouponServiceImpl implements CouponService {
         LocalDateTime now = LocalDateTime.now();
         int expiredCount = 0;
         for (UserCoupon coupon : coupons) {
-            coupon.setStatus(UserCouponStatusEnum.EXPIRED.name());
-            coupon.setLockOrderId(null);
-            coupon.setLockOrderNo(null);
+            coupon.setCouponStatus(UserCouponStatusEnum.EXPIRED.name());
+            coupon.setOrderNo(null);
             coupon.setLockTime(null);
             coupon.setUpdateTime(now);
             int affected = userCouponMapper.updateById(coupon);
@@ -519,7 +517,7 @@ public class CouponServiceImpl implements CouponService {
 
             CouponExpireRecord record = new CouponExpireRecord();
             record.setUserCouponId(coupon.getId());
-            record.setCouponTemplateId(coupon.getCouponTemplateId());
+            record.setCouponTemplateId(coupon.getTemplateId());
             record.setTenantId(coupon.getTenantId());
             record.setPlatformUserId(coupon.getPlatformUserId());
             record.setBizNo(resolveExpireBizNo(bizNo, coupon));
@@ -534,12 +532,12 @@ public class CouponServiceImpl implements CouponService {
         if (dto == null) {
             throw new BusinessException("优惠券模板不能为空");
         }
-        CouponOwnerTypeEnum ownerType = parseEnum(CouponOwnerTypeEnum.class, dto.getOwnerType(), "优惠券归属类型不合法");
+        CouponOwnerTypeEnum templateScope = parseEnum(CouponOwnerTypeEnum.class, dto.getTemplateScope(), "优惠券归属类型不合法");
         CouponTypeEnum couponType = parseEnum(CouponTypeEnum.class, dto.getCouponType(), "优惠券类型不合法");
-        if (dto.getName() == null || dto.getName().isBlank()) {
+        if (dto.getTemplateName() == null || dto.getTemplateName().isBlank()) {
             throw new BusinessException("优惠券名称不能为空");
         }
-        if (ownerType == CouponOwnerTypeEnum.TENANT && (dto.getTenantId() == null || dto.getTenantId() <= 0)) {
+        if (templateScope == CouponOwnerTypeEnum.TENANT && (dto.getTenantId() == null || dto.getTenantId() <= 0)) {
             throw new BusinessException("商户券必须绑定商户");
         }
         if (defaultAmount(dto.getThresholdAmount()).compareTo(BigDecimal.ZERO) < 0) {
@@ -548,32 +546,32 @@ public class CouponServiceImpl implements CouponService {
         if (defaultAmount(dto.getDiscountAmount()).compareTo(BigDecimal.ZERO) < 0) {
             throw new BusinessException("优惠券优惠金额不能小于0");
         }
-        if (dto.getTotalStock() != null && dto.getTotalStock() < 0) {
+        if (dto.getTotalQuantity() != null && dto.getTotalQuantity() < 0) {
             throw new BusinessException("优惠券库存不能小于0");
         }
         if (dto.getPerUserLimit() != null && dto.getPerUserLimit() < 0) {
             throw new BusinessException("每人限领数量不能小于0");
         }
         validateReceiveWindow(dto.getReceiveStartTime(), dto.getReceiveEndTime());
-        validateValidity(dto.getValidDaysAfterReceive(), dto.getValidStartTime(), dto.getValidEndTime());
+        validateValidity(dto.getValidDays(), dto.getValidStartTime(), dto.getValidEndTime());
         validateCouponRule(couponType, dto);
     }
 
     private void validateTemplateForActivation(CouponTemplate template) {
         CouponTemplateCreateDTO dto = new CouponTemplateCreateDTO();
         dto.setTenantId(template.getTenantId());
-        dto.setOwnerType(template.getOwnerType());
-        dto.setName(template.getName());
+        dto.setTemplateScope(template.getTemplateScope());
+        dto.setTemplateName(template.getTemplateName());
         dto.setCouponType(template.getCouponType());
         dto.setThresholdAmount(template.getThresholdAmount());
         dto.setDiscountAmount(template.getDiscountAmount());
         dto.setDiscountRate(template.getDiscountRate());
         dto.setMaxDiscountAmount(template.getMaxDiscountAmount());
-        dto.setTotalStock(template.getTotalStock());
+        dto.setTotalQuantity(template.getTotalQuantity());
         dto.setPerUserLimit(template.getPerUserLimit());
         dto.setReceiveStartTime(template.getReceiveStartTime());
         dto.setReceiveEndTime(template.getReceiveEndTime());
-        dto.setValidDaysAfterReceive(template.getValidDaysAfterReceive());
+        dto.setValidDays(template.getValidDays());
         dto.setValidStartTime(template.getValidStartTime());
         dto.setValidEndTime(template.getValidEndTime());
         validateTemplateCreate(dto);
@@ -611,15 +609,15 @@ public class CouponServiceImpl implements CouponService {
         }
     }
 
-    private void validateValidity(Integer validDaysAfterReceive,
+    private void validateValidity(Integer validDays,
                                   LocalDateTime validStartTime,
                                   LocalDateTime validEndTime) {
-        boolean hasRelativeValidity = validDaysAfterReceive != null && validDaysAfterReceive > 0;
+        boolean hasRelativeValidity = validDays != null && validDays > 0;
         boolean hasFixedValidity = validEndTime != null;
         if (!hasRelativeValidity && !hasFixedValidity) {
             throw new BusinessException("优惠券有效期未配置");
         }
-        if (validDaysAfterReceive != null && validDaysAfterReceive <= 0) {
+        if (validDays != null && validDays <= 0) {
             throw new BusinessException("领取后有效天数必须大于0");
         }
         if (validStartTime != null && validEndTime != null && validStartTime.isAfter(validEndTime)) {
@@ -628,7 +626,7 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private void validateScopeBoundary(CouponTemplate template, CouponScopeCreateDTO dto, CouponScopeTypeEnum scopeType) {
-        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getOwnerType())
+        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getTemplateScope())
                 && !Objects.equals(template.getTenantId(), dto.getTenantId())) {
             throw new BusinessException("商户券适用范围必须归属同一商户");
         }
@@ -643,7 +641,7 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private Long resolveScopeTenantId(CouponTemplate template, CouponScopeCreateDTO dto, CouponScopeTypeEnum scopeType) {
-        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getOwnerType())) {
+        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getTemplateScope())) {
             return template.getTenantId();
         }
         if (scopeType == CouponScopeTypeEnum.TENANT) {
@@ -705,77 +703,21 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private void ensureTemplateTenant(CouponTemplate template, Long tenantId, Long platformUserId) {
-        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getOwnerType()) && !Objects.equals(template.getTenantId(), tenantId)) {
+        if (CouponOwnerTypeEnum.TENANT.name().equals(template.getTemplateScope()) && !Objects.equals(template.getTenantId(), tenantId)) {
             throw new BusinessException("优惠券模板不属于当前商户");
         }
-        if (CouponOwnerTypeEnum.PLATFORM.name().equals(template.getOwnerType())
+        if (CouponOwnerTypeEnum.PLATFORM.name().equals(template.getTemplateScope())
                 && !isTemplateVisibleForTenantAndUser(template, tenantId, platformUserId)) {
             throw new BusinessException("平台优惠券不适用于当前商户");
         }
     }
 
     private void ensureMemberRules(CouponTemplate template, Long tenantId, Long platformUserId) {
-        boolean requiresMember = template.getMinMemberLevel() != null && template.getMinMemberLevel() > 0
-                || template.getExcludeMemberTagIds() != null && !template.getExcludeMemberTagIds().isBlank();
-        if (!requiresMember) {
-            return;
-        }
-        TenantMember member = requireTenantMember(tenantId, platformUserId);
-        ensureMinMemberLevel(template, member);
-        ensureExcludedTags(template, member);
-    }
-
-    private TenantMember requireTenantMember(Long tenantId, Long platformUserId) {
-        TenantMember member = tenantMemberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
-                .eq(TenantMember::getTenantId, tenantId)
-                .eq(TenantMember::getPlatformUserId, platformUserId));
-        if (member == null) {
-            throw new BusinessException("当前用户不是商户会员，不能领取或使用该优惠券");
-        }
-        return member;
-    }
-
-    private void ensureMinMemberLevel(CouponTemplate template, TenantMember member) {
-        if (template.getMinMemberLevel() == null || template.getMinMemberLevel() <= 0) {
-            return;
-        }
-        int memberLevel = member.getMemberLevel() == null ? 0 : member.getMemberLevel();
-        if (memberLevel < template.getMinMemberLevel()) {
-            throw new BusinessException("会员等级未达到优惠券要求");
-        }
-    }
-
-    private void ensureExcludedTags(CouponTemplate template, TenantMember member) {
-        Set<Long> excludedTagIds = parseTagIds(template.getExcludeMemberTagIds());
-        if (excludedTagIds.isEmpty()) {
-            return;
-        }
-        List<MemberAccountTag> memberTags = memberAccountTagMapper.selectList(new LambdaQueryWrapper<MemberAccountTag>()
-                .eq(MemberAccountTag::getMemberId, member.getId()));
-        if (memberTags == null || memberTags.isEmpty()) {
-            return;
-        }
-        boolean hasExcludedTag = memberTags.stream()
-                .map(MemberAccountTag::getTagId)
-                .anyMatch(excludedTagIds::contains);
-        if (hasExcludedTag) {
-            throw new BusinessException("当前会员标签不可领取或使用该优惠券");
-        }
-    }
-
-    private Set<Long> parseTagIds(String rawTagIds) {
-        if (rawTagIds == null || rawTagIds.isBlank()) {
-            return Collections.emptySet();
-        }
-        return java.util.Arrays.stream(rawTagIds.split(","))
-                .map(String::trim)
-                .filter(value -> !value.isBlank())
-                .map(Long::parseLong)
-                .collect(Collectors.toSet());
+        // Member level / tag restrictions removed from entity — no-op for now
     }
 
     private Long resolveCouponTenantId(CouponTemplate template, Long tenantId) {
-        if (CouponOwnerTypeEnum.PLATFORM.name().equals(template.getOwnerType())) {
+        if (CouponOwnerTypeEnum.PLATFORM.name().equals(template.getTemplateScope())) {
             return null;
         }
         return template.getTenantId();
@@ -792,8 +734,8 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private LocalDateTime resolveExpireTime(CouponTemplate template, LocalDateTime receiveTime) {
-        if (template.getValidDaysAfterReceive() != null && template.getValidDaysAfterReceive() > 0) {
-            return receiveTime.plusDays(template.getValidDaysAfterReceive());
+        if (template.getValidDays() != null && template.getValidDays() > 0) {
+            return receiveTime.plusDays(template.getValidDays());
         }
         if (template.getValidEndTime() != null) {
             return template.getValidEndTime();
@@ -816,19 +758,12 @@ public class CouponServiceImpl implements CouponService {
         return value.trim();
     }
 
-    private String trimToDefault(String value, String defaultValue) {
-        if (value == null || value.isBlank()) {
-            return defaultValue;
-        }
-        return value.trim();
-    }
-
     private AppCouponTemplateVO toTemplateVO(CouponTemplate template, Long platformUserId) {
         AppCouponTemplateVO vo = new AppCouponTemplateVO();
         vo.setId(template.getId());
         vo.setTenantId(template.getTenantId());
-        vo.setOwnerType(template.getOwnerType());
-        vo.setName(template.getName());
+        vo.setTemplateScope(template.getTemplateScope());
+        vo.setTemplateName(template.getTemplateName());
         vo.setCouponType(template.getCouponType());
         vo.setThresholdAmount(template.getThresholdAmount());
         vo.setDiscountAmount(template.getDiscountAmount());
@@ -843,7 +778,7 @@ public class CouponServiceImpl implements CouponService {
         vo.setReceiveEndTime(template.getReceiveEndTime());
         vo.setValidStartTime(template.getValidStartTime());
         vo.setValidEndTime(template.getValidEndTime());
-        vo.setValidDaysAfterReceive(template.getValidDaysAfterReceive());
+        vo.setValidDays(template.getValidDays());
         vo.setDescription(template.getDescription());
         return vo;
     }
@@ -852,14 +787,14 @@ public class CouponServiceImpl implements CouponService {
         AppUserCouponVO vo = new AppUserCouponVO();
         vo.setId(coupon.getId());
         vo.setCouponNo(coupon.getCouponNo());
-        vo.setCouponTemplateId(coupon.getCouponTemplateId());
+        vo.setTemplateId(coupon.getTemplateId());
         vo.setTenantId(coupon.getTenantId());
-        vo.setStatus(coupon.getStatus());
+        vo.setCouponStatus(coupon.getCouponStatus());
         vo.setReceiveTime(coupon.getReceiveTime());
         vo.setExpireTime(coupon.getExpireTime());
-        vo.setUsedTime(coupon.getUsedTime());
+        vo.setUseTime(coupon.getUseTime());
         if (template != null) {
-            vo.setName(template.getName());
+            vo.setTemplateName(template.getTemplateName());
             vo.setCouponType(template.getCouponType());
             vo.setThresholdAmount(template.getThresholdAmount());
             vo.setDiscountAmount(template.getDiscountAmount());
@@ -875,18 +810,17 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private Integer resolveRemainingStock(CouponTemplate template) {
-        int totalStock = defaultInt(template.getTotalStock());
-        if (totalStock <= 0) {
+        int totalQuantity = defaultInt(template.getTotalQuantity());
+        if (totalQuantity <= 0) {
             return -1;
         }
-        return Math.max(0, totalStock - defaultInt(template.getReceivedCount()));
+        return Math.max(0, totalQuantity - defaultInt(template.getReceivedQuantity()));
     }
 
     private int countReceivedByUser(Long templateId, Long platformUserId) {
         Long count = userCouponMapper.selectCount(new LambdaQueryWrapper<UserCoupon>()
-                .eq(UserCoupon::getCouponTemplateId, templateId)
-                .eq(UserCoupon::getPlatformUserId, platformUserId)
-                .eq(UserCoupon::getDeleted, 0));
+                .eq(UserCoupon::getTemplateId, templateId)
+                .eq(UserCoupon::getPlatformUserId, platformUserId));
         return count == null ? 0 : count.intValue();
     }
 

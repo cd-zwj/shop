@@ -50,9 +50,10 @@ class LoginSecurityServiceImplTest {
         LoginSecurityServiceImpl service = new LoginSecurityServiceImpl(mapper);
 
         LoginFailRecord record = new LoginFailRecord();
-        record.setAccount("user@test.com");
+        record.setAccountType("USERNAME");
+        record.setAccountValue("user@test.com");
         record.setFailCount(5);
-        record.setLockedUntil(LocalDateTime.now().plusMinutes(20));
+        record.setLockEndTime(LocalDateTime.now().plusMinutes(20));
         when(mapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(record);
 
         assertThrows(RuntimeException.class, () -> service.checkNotLocked("user@test.com"));
@@ -72,8 +73,7 @@ class LoginSecurityServiceImplTest {
 
         ArgumentCaptor<LoginFailRecord> captor = ArgumentCaptor.forClass(LoginFailRecord.class);
         verify(mapper).insert(captor.capture());
-        assertEquals("user@test.com", captor.getValue().getAccount());
-        assertEquals("192.168.1.1", captor.getValue().getIp());
+        assertEquals("user@test.com", captor.getValue().getAccountValue());
         assertEquals(1, captor.getValue().getFailCount());
         assertNotNull(captor.getValue().getLastFailTime());
     }
@@ -88,9 +88,10 @@ class LoginSecurityServiceImplTest {
 
         // findByAccount 返回 failCount=5，尚未锁定
         LoginFailRecord record = new LoginFailRecord();
-        record.setAccount("user@test.com");
+        record.setAccountType("USERNAME");
+        record.setAccountValue("user@test.com");
         record.setFailCount(5);
-        record.setLockedUntil(null);
+        record.setLockEndTime(null);
         when(mapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(record);
 
         service.recordFailure("user@test.com", "192.168.1.1");
@@ -108,9 +109,10 @@ class LoginSecurityServiceImplTest {
         when(mapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(0);
         // findByAccount 返回 failCount=1，未达阈值
         LoginFailRecord record = new LoginFailRecord();
-        record.setAccount("user@test.com");
+        record.setAccountType("USERNAME");
+        record.setAccountValue("user@test.com");
         record.setFailCount(1);
-        record.setLockedUntil(null);
+        record.setLockEndTime(null);
         when(mapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(record);
 
         service.recordFailure("user@test.com", "10.0.0.1");

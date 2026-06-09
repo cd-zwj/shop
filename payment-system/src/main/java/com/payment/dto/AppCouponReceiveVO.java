@@ -11,8 +11,8 @@ import java.time.LocalDateTime;
 public class AppCouponReceiveVO {
     private Long userCouponId;
     private String couponNo;
-    private Long couponTemplateId;
+    private Long templateId;
     private Long tenantId;
-    private String status;
+    private String couponStatus;
     private LocalDateTime expireTime;
 }

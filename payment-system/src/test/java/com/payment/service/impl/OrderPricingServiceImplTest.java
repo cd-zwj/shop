@@ -120,7 +120,8 @@ class OrderPricingServiceImplTest {
         coupon.setUserCouponId(userCouponId);
         coupon.setCouponTemplateId(couponTemplateId);
         coupon.setCouponType(couponType);
-        coupon.setStatus(UserCouponStatusEnum.RECEIVED.name());
+        coupon.setCouponStatus(UserCouponStatusEnum.RECEIVED.name());
+        coupon.setCanStackOtherCoupon(Boolean.TRUE);
         coupon.setThresholdAmount(new BigDecimal(thresholdAmount));
         coupon.setDiscountAmount(new BigDecimal(discountAmount));
         if (discountRate != null) {

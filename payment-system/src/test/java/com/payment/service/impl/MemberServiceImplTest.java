@@ -37,9 +37,9 @@ class MemberServiceImplTest {
         ArgumentCaptor<MemberLevel> captor = ArgumentCaptor.forClass(MemberLevel.class);
         verify(levelMapper).insert(captor.capture());
         assertEquals(9L, captor.getValue().getTenantId());
-        assertEquals(2, captor.getValue().getLevel());
-        assertEquals("银卡", captor.getValue().getName());
-        assertEquals(new BigDecimal("1000.00"), captor.getValue().getThresholdAmount());
+        assertEquals(2, captor.getValue().getLevelRank());
+        assertEquals("银卡", captor.getValue().getLevelName());
+        assertEquals(1000, captor.getValue().getUpgradeGrowth());
         assertEquals(new BigDecimal("0.9500"), captor.getValue().getDiscountRate());
         assertEquals(1, captor.getValue().getStatus());
         assertEquals(result, captor.getValue());
@@ -147,8 +147,8 @@ class MemberServiceImplTest {
         MemberLevel entity = new MemberLevel();
         entity.setId(30L);
         entity.setTenantId(tenantId);
-        entity.setLevel(level);
-        entity.setName(name);
+        entity.setLevelRank(level);
+        entity.setLevelName(name);
         entity.setStatus(1);
         return entity;
     }

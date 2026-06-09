@@ -19,43 +19,46 @@ public class BalanceLog implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
     /**
      * 用户ID
      */
     private Long userId;
-    
+
     /**
-     * 金额变动（正数为增加，负数为扣减）
+     * 变动类型：RECHARGE-充值，CONSUME-消费，REFUND-退款，WITHDRAW-提现
      */
-    private BigDecimal amount;
-    
+    private String changeType;
+
+    /**
+     * 变动金额
+     */
+    private BigDecimal changeAmount;
+
+    /**
+     * 变动前余额
+     */
+    private BigDecimal balanceBefore;
+
     /**
      * 变动后余额
      */
-    private BigDecimal balance;
-    
-    /**
-     * 类型（RECHARGE-充值，CONSUME-消费）
-     */
-    private String type;
-    
-    /**
-     * 原因
-     */
-    private String reason;
-    
+    private BigDecimal balanceAfter;
+
     /**
      * 关联订单号
      */
     private String orderNo;
-    
-    private Integer deleted;
-    
+
+    /**
+     * 备注
+     */
+    private String remark;
+
     private LocalDateTime createTime;
 }

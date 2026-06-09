@@ -12,12 +12,14 @@ public class CouponDiscountCandidateDTO {
     private Long userCouponId;
     private Long couponTemplateId;
     private String couponType;
-    private String status;
+    private String couponStatus;
     private BigDecimal eligibleAmount;
     private BigDecimal thresholdAmount;
     private BigDecimal discountAmount;
     private BigDecimal discountRate;
     private BigDecimal maxDiscountAmount;
-    private String stackStrategy;
+    private Boolean canStackBalance;
+    private Boolean canStackPoints;
+    private Boolean canStackOtherCoupon;
     private String ruleSnapshotJson;
 }

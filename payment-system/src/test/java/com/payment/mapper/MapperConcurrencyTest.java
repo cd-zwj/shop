@@ -121,21 +121,24 @@ class MapperConcurrencyTest {
 
     // ──── 辅助 ────
 
-    private CouponTemplate buildTemplate(int perUserLimit, int totalStock, int receivedCount) {
+    private CouponTemplate buildTemplate(int perUserLimit, int totalQuantity, int receivedQuantity) {
         CouponTemplate t = new CouponTemplate();
         t.setTemplateNo("TPL_" + System.nanoTime());
         t.setTenantId(9L);
-        t.setOwnerType("TENANT");
-        t.setName("测试券");
+        t.setTemplateScope("TENANT");
+        t.setTemplateName("测试券");
         t.setCouponType("FULL_REDUCTION");
         t.setThresholdAmount(BigDecimal.valueOf(100));
         t.setDiscountAmount(BigDecimal.valueOf(20));
-        t.setTotalStock(totalStock);
-        t.setReceivedCount(receivedCount);
+        t.setTotalQuantity(totalQuantity);
+        t.setReceivedQuantity(receivedQuantity);
         t.setUsedQuantity(0);
         t.setPerUserLimit(perUserLimit);
-        t.setStackStrategy("EXCLUSIVE");
-        t.setVersion(0);
+        t.setCanStackBalance(Boolean.FALSE);
+        t.setCanStackPoints(Boolean.FALSE);
+        t.setCanStackOtherCoupon(Boolean.FALSE);
+        t.setApplicableProductScope("ALL");
+        t.setValidType("FIXED_DAYS");
         t.setStatus("ACTIVE");
         t.setDeleted(0);
         t.setCreateTime(LocalDateTime.now());
@@ -146,13 +149,13 @@ class MapperConcurrencyTest {
     private void insertUserCoupon(Long templateId, Long platformUserId) {
         UserCoupon uc = new UserCoupon();
         uc.setCouponNo("UC_" + System.nanoTime());
-        uc.setCouponTemplateId(templateId);
+        uc.setTemplateId(templateId);
         uc.setTenantId(9L);
         uc.setPlatformUserId(platformUserId);
-        uc.setStatus("RECEIVED");
+        uc.setSourceType("RECEIVE");
+        uc.setCouponStatus("RECEIVED");
         uc.setExpireTime(LocalDateTime.now().plusDays(7));
         uc.setVersion(0);
-        uc.setDeleted(0);
         uc.setCreateTime(LocalDateTime.now());
         uc.setUpdateTime(LocalDateTime.now());
         userCouponMapper.insert(uc);

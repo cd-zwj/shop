@@ -638,10 +638,9 @@ public class AppOrderServiceImpl implements AppOrderService {
 
         PointsRule pointsRule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, salesOrder.getTenantId())
-                .eq(PointsRule::getDeleted, 0)
-                .eq(PointsRule::getEnabled, 1));
-        if (pointsRule != null && pointsRule.getPointsRatio() != null && pointsRule.getPointsRatio() > 0) {
-            int points = salesOrder.getTotalAmount().intValue() * pointsRule.getPointsRatio();
+                .eq(PointsRule::getStatus, 1));
+        if (pointsRule != null && pointsRule.getPointsAmount() != null && pointsRule.getPointsAmount() > 0) {
+            int points = pointsRule.getPointsAmount();
             memberPointsAccountService.grantPoints(
                     salesOrder.getTenantId(),
                     salesOrder.getPlatformUserId(),

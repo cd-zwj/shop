@@ -16,10 +16,12 @@ public class MemberLevelVO implements Serializable {
 
     private Long id;
     private Long tenantId;
-    private Integer level;
-    private String name;
-    private BigDecimal thresholdAmount;
+    private String levelNo;
+    private String levelName;
+    private Integer levelRank;
+    private Integer upgradeGrowth;
     private BigDecimal discountRate;
+    private String benefitJson;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

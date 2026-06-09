@@ -45,7 +45,7 @@ public class MemberServiceImpl implements MemberService {
         return levelMapper.selectList(new LambdaQueryWrapper<MemberLevel>()
                 .eq(MemberLevel::getTenantId, tenantId)
                 .eq(MemberLevel::getStatus, ENABLED)
-                .orderByAsc(MemberLevel::getLevel));
+                .orderByAsc(MemberLevel::getLevelRank));
     }
 
     @Override
@@ -73,9 +73,9 @@ public class MemberServiceImpl implements MemberService {
 
         MemberLevel entity = new MemberLevel();
         entity.setTenantId(tenantId);
-        entity.setLevel(level);
-        entity.setName(name.trim());
-        entity.setThresholdAmount(thresholdAmount);
+        entity.setLevelRank(level);
+        entity.setLevelName(name.trim());
+        entity.setUpgradeGrowth(thresholdAmount.intValue());
         entity.setDiscountRate(discountRate);
         entity.setStatus(ENABLED);
         levelMapper.insert(entity);
@@ -88,7 +88,7 @@ public class MemberServiceImpl implements MemberService {
         TenantMember member = requireMember(tenantId, memberId);
         MemberLevel level = levelMapper.selectOne(new LambdaQueryWrapper<MemberLevel>()
                 .eq(MemberLevel::getTenantId, tenantId)
-                .eq(MemberLevel::getLevel, memberLevel)
+                .eq(MemberLevel::getLevelRank, memberLevel)
                 .eq(MemberLevel::getStatus, ENABLED));
         if (level == null) {
             throw new BusinessException("会员等级不存在或未启用");
@@ -184,16 +184,16 @@ public class MemberServiceImpl implements MemberService {
         List<MemberLevel> levels = levelMapper.selectList(new LambdaQueryWrapper<MemberLevel>()
                 .eq(MemberLevel::getTenantId, tenantId)
                 .eq(MemberLevel::getStatus, ENABLED)
-                .orderByDesc(MemberLevel::getThresholdAmount));
+                .orderByDesc(MemberLevel::getUpgradeGrowth));
         // 从最高门槛开始匹配，找到第一个达标等级
         for (MemberLevel lv : levels) {
-            if (lv.getThresholdAmount() != null && totalSpend.compareTo(lv.getThresholdAmount()) >= 0) {
+            if (lv.getUpgradeGrowth() != null && totalSpend.compareTo(new BigDecimal(lv.getUpgradeGrowth())) >= 0) {
                 // 如果目标等级高于当前等级才升级
-                if (member.getMemberLevel() == null || lv.getLevel() > member.getMemberLevel()) {
-                    member.setMemberLevel(lv.getLevel());
+                if (member.getMemberLevel() == null || lv.getLevelRank() > member.getMemberLevel()) {
+                    member.setMemberLevel(lv.getLevelRank());
                     memberMapper.updateById(member);
                     log.info("会员自动升级: tenantId={}, userId={}, newLevel={}, totalSpend={}",
-                            tenantId, platformUserId, lv.getLevel(), totalSpend);
+                            tenantId, platformUserId, lv.getLevelRank(), totalSpend);
                 }
                 break;
             }
@@ -203,13 +203,13 @@ public class MemberServiceImpl implements MemberService {
     private void ensureLevelNotExists(Long tenantId, Integer level, String name) {
         MemberLevel byLevel = levelMapper.selectOne(new LambdaQueryWrapper<MemberLevel>()
                 .eq(MemberLevel::getTenantId, tenantId)
-                .eq(MemberLevel::getLevel, level));
+                .eq(MemberLevel::getLevelRank, level));
         if (byLevel != null) {
             throw new BusinessException("会员等级数值已存在");
         }
         MemberLevel byName = levelMapper.selectOne(new LambdaQueryWrapper<MemberLevel>()
                 .eq(MemberLevel::getTenantId, tenantId)
-                .eq(MemberLevel::getName, name));
+                .eq(MemberLevel::getLevelName, name));
         if (byName != null) {
             throw new BusinessException("会员等级名称已存在");
         }

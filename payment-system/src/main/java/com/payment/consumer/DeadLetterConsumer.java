@@ -105,13 +105,12 @@ public class DeadLetterConsumer {
     private void handleRechargeOrderExpiration(String orderNo) {
         try {
             LambdaQueryWrapper<RechargeOrder> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(RechargeOrder::getOrderNo, orderNo)
-                    .eq(RechargeOrder::getDeleted, 0);
+            wrapper.eq(RechargeOrder::getOrderNo, orderNo);
             RechargeOrder order = rechargeOrderMapper.selectOne(wrapper);
 
             if (order != null) {
-                if (order.getPayStatus() == 0) {
-                    order.setPayStatus(2);
+                if ("PENDING".equals(order.getPayStatus())) {
+                    order.setPayStatus("FAIL");
                     rechargeOrderMapper.updateById(order);
                     log.info("充值订单超时未支付，已自动取消：{}", orderNo);
                 } else {

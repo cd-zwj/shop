@@ -20,14 +20,14 @@ public class LoginFailRecord implements Serializable {
     private Long id;
 
     /**
-     * 登录账号
+     * 账号类型：USERNAME-用户名，PHONE-手机号，AUTH_KEY-第三方认证Key
      */
-    private String account;
+    private String accountType;
 
     /**
-     * 登录IP
+     * 账号值
      */
-    private String ip;
+    private String accountValue;
 
     /**
      * 连续失败次数
@@ -40,14 +40,19 @@ public class LoginFailRecord implements Serializable {
     private LocalDateTime lastFailTime;
 
     /**
-     * 锁定截止时间
+     * 锁定开始时间
      */
-    private LocalDateTime lockedUntil;
+    private LocalDateTime lockStartTime;
 
     /**
-     * 租户ID
+     * 锁定结束时间
      */
-    private Long tenantId;
+    private LocalDateTime lockEndTime;
+
+    /**
+     * 锁定状态：UNLOCKED-未锁定，LOCKED-已锁定
+     */
+    private String lockStatus;
 
     private LocalDateTime createTime;
 

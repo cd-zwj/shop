@@ -19,35 +19,38 @@ public class RechargeRule implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
     /**
      * 充值金额
      */
     private BigDecimal rechargeAmount;
-    
+
     /**
      * 赠送金额
      */
-    private BigDecimal bonusAmount;
-    
+    private BigDecimal giftAmount;
+
     /**
-     * 是否启用（0-否，1-是）
+     * 赠送积分
      */
-    private Integer enabled;
-    
+    private Integer giftPoints;
+
+    /**
+     * 状态：0-禁用，1-启用
+     */
+    private Integer status;
+
     /**
      * 排序
      */
     private Integer sortOrder;
-    
-    private Integer deleted;
-    
+
     private LocalDateTime createTime;
-    
+
     private LocalDateTime updateTime;
 }

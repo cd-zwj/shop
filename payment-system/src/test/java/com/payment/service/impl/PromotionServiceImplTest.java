@@ -38,7 +38,7 @@ class PromotionServiceImplTest {
         ArgumentCaptor<PromotionActivity> captor = ArgumentCaptor.forClass(PromotionActivity.class);
         verify(activityMapper).insert(captor.capture());
         assertEquals(9L, captor.getValue().getTenantId());
-        assertEquals(CouponOwnerTypeEnum.TENANT.name(), captor.getValue().getOwnerType());
+        assertEquals(CouponOwnerTypeEnum.TENANT.name(), captor.getValue().getActivityScope());
         assertEquals(ActivityTypeEnum.FULL_REDUCTION.name(), captor.getValue().getActivityType());
         assertEquals("DRAFT", captor.getValue().getStatus());
         assertEquals(0, captor.getValue().getDeleted());
@@ -51,13 +51,13 @@ class PromotionServiceImplTest {
         PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
         PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, mock(ActivityRuleMapper.class));
         PromotionActivity activity = activeActivity(11L, null, ActivityTypeEnum.FULL_REDUCTION.name());
-        activity.setOwnerType(CouponOwnerTypeEnum.PLATFORM.name());
+        activity.setActivityScope(CouponOwnerTypeEnum.PLATFORM.name());
         when(activityMapper.selectList(any())).thenReturn(List.of(activity));
 
         List<PromotionActivity> result = service.listPlatformActivities("ACTIVE");
 
         assertEquals(1, result.size());
-        assertEquals(CouponOwnerTypeEnum.PLATFORM.name(), result.get(0).getOwnerType());
+        assertEquals(CouponOwnerTypeEnum.PLATFORM.name(), result.get(0).getActivityScope());
     }
 
     @Test
@@ -225,9 +225,9 @@ class PromotionServiceImplTest {
         PromotionActivity activity = new PromotionActivity();
         activity.setId(id);
         activity.setTenantId(tenantId);
-        activity.setOwnerType(CouponOwnerTypeEnum.TENANT.name());
+        activity.setActivityScope(CouponOwnerTypeEnum.TENANT.name());
         activity.setActivityType(type);
-        activity.setName("活动");
+        activity.setActivityName("活动");
         activity.setStartTime(LocalDateTime.now().minusDays(1));
         activity.setEndTime(LocalDateTime.now().plusDays(1));
         activity.setStatus("ACTIVE");
@@ -238,8 +238,8 @@ class PromotionServiceImplTest {
     private PromotionActivityCreateDTO activityCreateDTO() {
         PromotionActivityCreateDTO dto = new PromotionActivityCreateDTO();
         dto.setTenantId(9L);
-        dto.setOwnerType(CouponOwnerTypeEnum.TENANT.name());
-        dto.setName("满减活动");
+        dto.setActivityScope(CouponOwnerTypeEnum.TENANT.name());
+        dto.setActivityName("满减活动");
         dto.setActivityType(ActivityTypeEnum.FULL_REDUCTION.name());
         dto.setStartTime(LocalDateTime.now().minusDays(1));
         dto.setEndTime(LocalDateTime.now().plusDays(7));

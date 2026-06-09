@@ -20,20 +20,19 @@ public class UserCoupon implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String couponNo;
-    private Long couponTemplateId;
+    private Long templateId;
     private Long tenantId;
     private Long platformUserId;
-    private String status;
-    private LocalDateTime receiveTime;
-    private LocalDateTime expireTime;
-    private Long lockOrderId;
-    private String lockOrderNo;
+    private String sourceType;
+    private String sourceBizNo;
+    private String couponStatus;
+    private String orderNo;
     private LocalDateTime lockTime;
-    private LocalDateTime usedTime;
-    private LocalDateTime releaseTime;
+    private LocalDateTime useTime;
+    private LocalDateTime expireTime;
     @Version
     private Integer version;
-    private Integer deleted;
+    private LocalDateTime receiveTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

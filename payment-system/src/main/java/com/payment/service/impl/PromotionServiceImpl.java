@@ -47,7 +47,7 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException("商户ID不能为空");
         }
         List<PromotionActivity> activities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
-                .eq(PromotionActivity::getOwnerType, CouponOwnerTypeEnum.TENANT.name())
+                .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.TENANT.name())
                 .eq(PromotionActivity::getTenantId, tenantId)
                 .eq(PromotionActivity::getDeleted, 0)
                 .eq(status != null && !status.isBlank(), PromotionActivity::getStatus, status)
@@ -58,7 +58,7 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     public List<PromotionActivity> listPlatformActivities(String status) {
         List<PromotionActivity> activities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
-                .eq(PromotionActivity::getOwnerType, CouponOwnerTypeEnum.PLATFORM.name())
+                .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.PLATFORM.name())
                 .eq(PromotionActivity::getDeleted, 0)
                 .eq(status != null && !status.isBlank(), PromotionActivity::getStatus, status)
                 .orderByDesc(PromotionActivity::getCreateTime));
@@ -81,7 +81,7 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     public List<ActivityRule> listPlatformRules(Long activityId) {
         PromotionActivity activity = requireActivity(activityId);
-        if (!CouponOwnerTypeEnum.PLATFORM.name().equals(activity.getOwnerType())) {
+        if (!CouponOwnerTypeEnum.PLATFORM.name().equals(activity.getActivityScope())) {
             throw new BusinessException("营销活动不是平台活动");
         }
         List<ActivityRule> rules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
@@ -98,9 +98,9 @@ public class PromotionServiceImpl implements PromotionService {
         LocalDateTime now = LocalDateTime.now();
         PromotionActivity activity = new PromotionActivity();
         activity.setActivityNo(BizNoGenerator.generate("PA"));
-        activity.setTenantId(CouponOwnerTypeEnum.PLATFORM.name().equals(dto.getOwnerType()) ? null : dto.getTenantId());
-        activity.setOwnerType(dto.getOwnerType());
-        activity.setName(dto.getName().trim());
+        activity.setTenantId(CouponOwnerTypeEnum.PLATFORM.name().equals(dto.getActivityScope()) ? null : dto.getTenantId());
+        activity.setActivityScope(dto.getActivityScope());
+        activity.setActivityName(dto.getActivityName().trim());
         activity.setActivityType(dto.getActivityType());
         activity.setStartTime(dto.getStartTime());
         activity.setEndTime(dto.getEndTime());
@@ -184,12 +184,12 @@ public class PromotionServiceImpl implements PromotionService {
         if (dto == null) {
             throw new BusinessException("营销活动不能为空");
         }
-        CouponOwnerTypeEnum ownerType = parseEnum(CouponOwnerTypeEnum.class, dto.getOwnerType(), "营销活动归属类型不合法");
+        CouponOwnerTypeEnum activityScope = parseEnum(CouponOwnerTypeEnum.class, dto.getActivityScope(), "营销活动归属类型不合法");
         parseEnum(ActivityTypeEnum.class, dto.getActivityType(), "营销活动类型不合法");
-        if (dto.getName() == null || dto.getName().isBlank()) {
+        if (dto.getActivityName() == null || dto.getActivityName().isBlank()) {
             throw new BusinessException("营销活动名称不能为空");
         }
-        if (ownerType == CouponOwnerTypeEnum.TENANT && (dto.getTenantId() == null || dto.getTenantId() <= 0)) {
+        if (activityScope == CouponOwnerTypeEnum.TENANT && (dto.getTenantId() == null || dto.getTenantId() <= 0)) {
             throw new BusinessException("商户活动必须绑定商户");
         }
         validateActivityWindow(dto.getStartTime(), dto.getEndTime());
@@ -252,9 +252,9 @@ public class PromotionServiceImpl implements PromotionService {
                 .le(PromotionActivity::getStartTime, now)
                 .ge(PromotionActivity::getEndTime, now)
                 .and(wrapper -> wrapper
-                        .eq(PromotionActivity::getOwnerType, CouponOwnerTypeEnum.PLATFORM.name())
+                        .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.PLATFORM.name())
                         .or(inner -> inner
-                                .eq(PromotionActivity::getOwnerType, CouponOwnerTypeEnum.TENANT.name())
+                                .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.TENANT.name())
                                 .eq(PromotionActivity::getTenantId, tenantId)))
                 .orderByDesc(PromotionActivity::getCreateTime));
         return activities == null ? Collections.emptyList() : activities;

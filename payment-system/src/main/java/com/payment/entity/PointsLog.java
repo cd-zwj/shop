@@ -18,43 +18,46 @@ public class PointsLog implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
     /**
      * 用户ID
      */
     private Long userId;
-    
+
     /**
-     * 积分变动（正数为增加，负数为扣减）
+     * 变动类型：EARN-获得，USE-使用，EXPIRE-过期，EXCHANGE-兑换
      */
-    private Integer points;
-    
+    private String changeType;
+
     /**
-     * 变动后余额
+     * 变动积分
      */
-    private Integer balance;
-    
+    private Integer changePoints;
+
     /**
-     * 类型（GRANT-发放，DEDUCT-扣减）
+     * 变动前积分
      */
-    private String type;
-    
+    private Integer pointsBefore;
+
     /**
-     * 原因
+     * 变动后积分
      */
-    private String reason;
-    
+    private Integer pointsAfter;
+
     /**
      * 关联订单号
      */
     private String orderNo;
-    
-    private Integer deleted;
-    
+
+    /**
+     * 备注
+     */
+    private String remark;
+
     private LocalDateTime createTime;
 }

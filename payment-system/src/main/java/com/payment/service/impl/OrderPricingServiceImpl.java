@@ -10,7 +10,6 @@ import com.payment.dto.pricing.PromotionDiscountCandidateDTO;
 import com.payment.enums.CouponTypeEnum;
 import com.payment.enums.DiscountSourceEnum;
 import com.payment.enums.PointsDeductStatusEnum;
-import com.payment.enums.StackStrategyEnum;
 import com.payment.enums.UserCouponStatusEnum;
 import com.payment.service.OrderPricingService;
 import org.springframework.stereotype.Service;
@@ -34,46 +33,34 @@ public class OrderPricingServiceImpl implements OrderPricingService {
         result.setTotalAmount(totalAmount);
 
         // 根据叠加策略决定计算顺序
-        StackStrategyEnum strategy = request.getSelectedCoupon() != null
-                ? StackStrategyEnum.fromString(request.getSelectedCoupon().getStackStrategy())
-                : StackStrategyEnum.EXCLUSIVE;
+        boolean couponCanStack = request.getSelectedCoupon() != null
+                && Boolean.TRUE.equals(request.getSelectedCoupon().getCanStackOtherCoupon());
 
         BigDecimal activityDiscount;
         BigDecimal couponDiscount;
 
-        switch (strategy) {
-            case COUPON_FIRST:
-                // 先算券折扣（基于原价），再算活动折扣（基于券后金额）
-                couponDiscount = applyCoupon(request.getSelectedCoupon(), totalAmount, BigDecimal.ZERO, result);
-                BigDecimal afterCoupon = totalAmount.subtract(couponDiscount);
-                activityDiscount = applyActivities(request.getPromotionCandidates(), result, afterCoupon);
-                break;
-            case EXCLUSIVE:
-                // 券与活动互斥：两者都有折扣时取更大的
-                activityDiscount = applyActivities(request.getPromotionCandidates(), result);
-                couponDiscount = applyCoupon(request.getSelectedCoupon(),
-                        totalAmount.subtract(activityDiscount), activityDiscount, result);
-                if (activityDiscount.compareTo(BigDecimal.ZERO) > 0
-                        && couponDiscount.compareTo(BigDecimal.ZERO) > 0) {
-                    // 两者都有折扣，取更大的，丢弃较小的
-                    if (couponDiscount.compareTo(activityDiscount) >= 0) {
-                        removeLastActivitySnapshots(result, request.getPromotionCandidates() == null
-                                ? 0 : request.getPromotionCandidates().size());
-                        activityDiscount = BigDecimal.ZERO;
-                    } else {
-                        removeLastCouponSnapshot(result);
-                        couponDiscount = BigDecimal.ZERO;
-                    }
+        if (couponCanStack) {
+            // 可叠加：先活动再券，两者叠加
+            activityDiscount = applyActivities(request.getPromotionCandidates(), result);
+            couponDiscount = applyCoupon(request.getSelectedCoupon(),
+                    totalAmount.subtract(activityDiscount), activityDiscount, result);
+        } else {
+            // 券与活动互斥：两者都有折扣时取更大的
+            activityDiscount = applyActivities(request.getPromotionCandidates(), result);
+            couponDiscount = applyCoupon(request.getSelectedCoupon(),
+                    totalAmount.subtract(activityDiscount), activityDiscount, result);
+            if (activityDiscount.compareTo(BigDecimal.ZERO) > 0
+                    && couponDiscount.compareTo(BigDecimal.ZERO) > 0) {
+                // 两者都有折扣，取更大的，丢弃较小的
+                if (couponDiscount.compareTo(activityDiscount) >= 0) {
+                    removeLastActivitySnapshots(result, request.getPromotionCandidates() == null
+                            ? 0 : request.getPromotionCandidates().size());
+                    activityDiscount = BigDecimal.ZERO;
+                } else {
+                    removeLastCouponSnapshot(result);
+                    couponDiscount = BigDecimal.ZERO;
                 }
-                break;
-            case STACKABLE:
-            case ACTIVITY_FIRST:
-            default:
-                // 当前默认行为：先活动再券，两者叠加
-                activityDiscount = applyActivities(request.getPromotionCandidates(), result);
-                couponDiscount = applyCoupon(request.getSelectedCoupon(),
-                        totalAmount.subtract(activityDiscount), activityDiscount, result);
-                break;
+            }
         }
 
         BigDecimal pointsDeduct = calculatePointsDeduct(request,
@@ -140,10 +127,10 @@ public class OrderPricingServiceImpl implements OrderPricingService {
     }
 
     private BigDecimal applyCoupon(CouponDiscountCandidateDTO coupon, BigDecimal orderEligibleAmount, BigDecimal activityDiscount, OrderPricingResultVO result) {
-        if (coupon == null || !UserCouponStatusEnum.RECEIVED.name().equals(coupon.getStatus())) {
+        if (coupon == null || !UserCouponStatusEnum.RECEIVED.name().equals(coupon.getCouponStatus())) {
             return BigDecimal.ZERO;
         }
-        if (StackStrategyEnum.fromString(coupon.getStackStrategy()) == StackStrategyEnum.EXCLUSIVE
+        if (!Boolean.TRUE.equals(coupon.getCanStackOtherCoupon())
                 && activityDiscount.compareTo(BigDecimal.ZERO) > 0) {
             return BigDecimal.ZERO;
         }

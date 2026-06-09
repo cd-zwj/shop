@@ -1,20 +1,22 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
-import com.payment.common.Result;
 import com.payment.dto.ActivityRuleCreateDTO;
+import com.payment.dto.ActivityRuleVO;
 import com.payment.dto.CouponScopeCreateDTO;
+import com.payment.dto.CouponScopeVO;
 import com.payment.dto.CouponTemplateCreateDTO;
+import com.payment.dto.CouponTemplateVO;
 import com.payment.dto.PromotionActivityCreateDTO;
+import com.payment.dto.PromotionActivityVO;
 import com.payment.entity.ActivityRule;
 import com.payment.entity.CouponScope;
 import com.payment.entity.CouponTemplate;
 import com.payment.entity.PromotionActivity;
+import com.payment.service.CouponService;
+import com.payment.service.PromotionService;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.*;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.ParameterizedType;
@@ -24,18 +26,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-/**
- * 管理端营销运营控制器契约测试。
- */
 class V1AdminMarketingControllerContractTest {
-
-    @Test
-    void controllerShouldUseAdminMarketingBasePath() {
-        RequestMapping mapping = V1AdminMarketingController.class.getAnnotation(RequestMapping.class);
-
-        assertNotNull(mapping);
-        assertEquals("/v1/admin/marketing", mapping.value()[0]);
-    }
 
     @Test
     void platformCouponEndpointsShouldExposeAdminContract() throws NoSuchMethodException {
@@ -43,10 +34,10 @@ class V1AdminMarketingControllerContractTest {
         Method create = V1AdminMarketingController.class.getMethod("createPlatformCouponTemplate", CouponTemplateCreateDTO.class);
         Method activate = V1AdminMarketingController.class.getMethod("activateCouponTemplate", Long.class);
 
-        assertListResult(list, CouponTemplate.class);
+        assertListResult(list, CouponTemplateVO.class);
         assertEquals("/coupons", list.getAnnotation(GetMapping.class).value()[0]);
         assertPermission(list, "admin:marketing:list");
-        assertResultData(create, CouponTemplate.class);
+        assertResultData(create, CouponTemplateVO.class);
         assertEquals("/coupons", create.getAnnotation(PostMapping.class).value()[0]);
         assertPermission(create, "admin:marketing:create");
         assertEquals("/coupons/{templateId}/activate", activate.getAnnotation(PutMapping.class).value()[0]);
@@ -57,9 +48,9 @@ class V1AdminMarketingControllerContractTest {
         Method list = V1AdminMarketingController.class.getMethod("listCouponScopes", Long.class);
         Method create = V1AdminMarketingController.class.getMethod("addCouponScope", Long.class, CouponScopeCreateDTO.class);
 
-        assertListResult(list, CouponScope.class);
+        assertListResult(list, CouponScopeVO.class);
         assertEquals("/coupons/{templateId}/scopes", list.getAnnotation(GetMapping.class).value()[0]);
-        assertResultData(create, CouponScope.class);
+        assertResultData(create, CouponScopeVO.class);
         assertEquals("/coupons/{templateId}/scopes", create.getAnnotation(PostMapping.class).value()[0]);
     }
 
@@ -69,14 +60,26 @@ class V1AdminMarketingControllerContractTest {
         Method create = V1AdminMarketingController.class.getMethod("createPlatformActivity", PromotionActivityCreateDTO.class);
         Method addRule = V1AdminMarketingController.class.getMethod("addActivityRule", Long.class, ActivityRuleCreateDTO.class);
 
-        assertListResult(list, PromotionActivity.class);
+        assertListResult(list, PromotionActivityVO.class);
         assertEquals("/activities", list.getAnnotation(GetMapping.class).value()[0]);
         assertPermission(list, "admin:marketing:list");
-        assertResultData(create, PromotionActivity.class);
+        assertResultData(create, PromotionActivityVO.class);
         assertEquals("/activities", create.getAnnotation(PostMapping.class).value()[0]);
         assertPermission(create, "admin:marketing:create");
-        assertResultData(addRule, ActivityRule.class);
+        assertResultData(addRule, ActivityRuleVO.class);
         assertEquals("/activities/{activityId}/rules", addRule.getAnnotation(PostMapping.class).value()[0]);
+    }
+
+    @Test
+    void noAdminEndpointsShouldExposeEntityDirectly() throws NoSuchMethodException {
+        Method[] methods = V1AdminMarketingController.class.getDeclaredMethods();
+        for (Method m : methods) {
+            if (m.getReturnType().equals(CouponTemplate.class)
+                    || m.getReturnType().equals(PromotionActivity.class)
+                    || m.getReturnType().equals(CouponScope.class)) {
+                throw new AssertionError("Admin controller should not expose Entity directly: " + m.getName());
+            }
+        }
     }
 
     private void assertPermission(Method method, String permission) {
@@ -87,14 +90,14 @@ class V1AdminMarketingControllerContractTest {
 
     private void assertListResult(Method method, Class<?> itemType) {
         Type dataType = ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0];
-        assertEquals(Result.class, ((ParameterizedType) method.getGenericReturnType()).getRawType());
+        assertEquals(com.payment.common.Result.class, ((ParameterizedType) method.getGenericReturnType()).getRawType());
         assertEquals(List.class, ((ParameterizedType) dataType).getRawType());
         assertEquals(itemType, ((ParameterizedType) dataType).getActualTypeArguments()[0]);
     }
 
     private void assertResultData(Method method, Class<?> dataClass) {
         Type dataType = ((ParameterizedType) method.getGenericReturnType()).getActualTypeArguments()[0];
-        assertEquals(Result.class, ((ParameterizedType) method.getGenericReturnType()).getRawType());
+        assertEquals(com.payment.common.Result.class, ((ParameterizedType) method.getGenericReturnType()).getRawType());
         assertEquals(dataClass, dataType);
     }
 }

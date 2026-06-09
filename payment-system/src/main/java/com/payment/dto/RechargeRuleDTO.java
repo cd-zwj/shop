@@ -13,28 +13,28 @@ import java.math.BigDecimal;
 @Data
 public class RechargeRuleDTO implements Serializable {
     private static final long serialVersionUID = 1L;
-    
+
     private Long id;
-    
+
     /**
      * 充值金额
      */
     @NotNull(message = "充值金额不能为空")
     @DecimalMin(value = "0.01", message = "充值金额必须大于0")
     private BigDecimal rechargeAmount;
-    
+
     /**
      * 赠送金额
      */
     @NotNull(message = "赠送金额不能为空")
     @DecimalMin(value = "0", message = "赠送金额不能为负数")
-    private BigDecimal bonusAmount;
-    
+    private BigDecimal giftAmount;
+
     /**
      * 是否启用（0-否，1-是）
      */
     private Integer enabled;
-    
+
     /**
      * 排序
      */

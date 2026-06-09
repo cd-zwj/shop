@@ -12,8 +12,8 @@ import java.time.LocalDateTime;
 public class AppCouponTemplateVO {
     private Long id;
     private Long tenantId;
-    private String ownerType;
-    private String name;
+    private String templateScope;
+    private String templateName;
     private String couponType;
     private BigDecimal thresholdAmount;
     private BigDecimal discountAmount;
@@ -27,6 +27,6 @@ public class AppCouponTemplateVO {
     private LocalDateTime receiveEndTime;
     private LocalDateTime validStartTime;
     private LocalDateTime validEndTime;
-    private Integer validDaysAfterReceive;
+    private Integer validDays;
     private String description;
 }

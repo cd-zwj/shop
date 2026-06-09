@@ -55,10 +55,10 @@ public class V1MerchantFinanceController {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
-                .eq(PointsRule::getDeleted, 0));
+                .eq(PointsRule::getStatus, 1));
         V1MerchantPointsRuleDTO dto = new V1MerchantPointsRuleDTO();
-        dto.setPointsRatio(rule == null ? 0 : rule.getPointsRatio());
-        dto.setEnabled(rule != null && rule.getEnabled() != null && rule.getEnabled() == 1);
+        dto.setPointsRatio(rule == null ? 0 : rule.getPointsAmount());
+        dto.setEnabled(rule != null && rule.getStatus() != null && rule.getStatus() == 1);
         return Result.success(dto);
     }
 
@@ -67,15 +67,14 @@ public class V1MerchantFinanceController {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
-                .eq(PointsRule::getDeleted, 0));
+                .eq(PointsRule::getStatus, 1));
         if (rule == null) {
             rule = new PointsRule();
             rule.setTenantId(tenantId);
-            rule.setDeleted(0);
             rule.setCreateTime(LocalDateTime.now());
         }
-        rule.setPointsRatio(dto.getPointsRatio());
-        rule.setEnabled(Boolean.TRUE.equals(dto.getEnabled()) ? 1 : 0);
+        rule.setPointsAmount(dto.getPointsRatio());
+        rule.setStatus(Boolean.TRUE.equals(dto.getEnabled()) ? 1 : 0);
         rule.setUpdateTime(LocalDateTime.now());
         if (rule.getId() == null) {
             pointsRuleMapper.insert(rule);

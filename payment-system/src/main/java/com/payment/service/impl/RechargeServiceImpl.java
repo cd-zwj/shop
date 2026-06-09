@@ -59,8 +59,7 @@ public class RechargeServiceImpl implements RechargeService {
     public List<RechargeRule> getRechargeRules(Long tenantId) {
         LambdaQueryWrapper<RechargeRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RechargeRule::getTenantId, tenantId)
-                .eq(RechargeRule::getEnabled, 1)
-                .eq(RechargeRule::getDeleted, 0)
+                .eq(RechargeRule::getStatus, 1)
                 .orderByAsc(RechargeRule::getSortOrder);
         return rechargeRuleMapper.selectList(wrapper);
     }
@@ -70,14 +69,10 @@ public class RechargeServiceImpl implements RechargeService {
     public void setRechargeRules(List<RechargeRuleDTO> rules) {
         Long tenantId = TenantContextHolder.getTenantId();
         
-        // 删除旧规则（软删除）
+        // 删除旧规则（软删除） — DDL 无 deleted 列，直接物理删除
         LambdaQueryWrapper<RechargeRule> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(RechargeRule::getTenantId, tenantId);
-        List<RechargeRule> oldRules = rechargeRuleMapper.selectList(wrapper);
-        for (RechargeRule oldRule : oldRules) {
-            oldRule.setDeleted(1);
-            rechargeRuleMapper.updateById(oldRule);
-        }
+        rechargeRuleMapper.delete(wrapper);
         
         // 添加新规则
         for (int i = 0; i < rules.size(); i++) {
@@ -86,8 +81,7 @@ public class RechargeServiceImpl implements RechargeService {
             BeanUtils.copyProperties(dto, rule);
             rule.setTenantId(tenantId);
             rule.setSortOrder(i);
-            rule.setEnabled(dto.getEnabled() != null ? dto.getEnabled() : 1);
-            rule.setDeleted(0);
+            rule.setStatus(dto.getEnabled() != null ? dto.getEnabled() : 1);
             rule.setCreateTime(LocalDateTime.now());
             rule.setUpdateTime(LocalDateTime.now());
             rechargeRuleMapper.insert(rule);
@@ -103,13 +97,13 @@ public class RechargeServiceImpl implements RechargeService {
         
         // 查询充值规则
         RechargeRule rule = rechargeRuleMapper.selectById(ruleId);
-        if (rule == null || rule.getDeleted() == 1) {
+        if (rule == null) {
             throw new BusinessException("充值规则不存在");
         }
         if (!rule.getTenantId().equals(tenantId)) {
             throw new BusinessException("充值规则不属于当前商家");
         }
-        if (rule.getEnabled() == 0) {
+        if (rule.getStatus() == 0) {
             throw new BusinessException("充值规则已禁用");
         }
         
@@ -118,12 +112,10 @@ public class RechargeServiceImpl implements RechargeService {
         order.setTenantId(tenantId);
         order.setUserId(userId);
         order.setOrderNo("R" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 8));
-        order.setRuleId(ruleId);
         order.setRechargeAmount(rule.getRechargeAmount());
-        order.setBonusAmount(rule.getBonusAmount());
-        order.setTotalAmount(rule.getRechargeAmount().add(rule.getBonusAmount()));
-        order.setPayStatus(0);
-        order.setDeleted(0);
+        order.setGiftAmount(rule.getGiftAmount());
+        order.setActualAmount(rule.getRechargeAmount().add(rule.getGiftAmount()));
+        order.setPayStatus("PENDING");
         order.setCreateTime(LocalDateTime.now());
         
         rechargeOrderMapper.insert(order);
@@ -143,8 +135,8 @@ public class RechargeServiceImpl implements RechargeService {
             log.error("发送充值订单延迟消息失败：{}", order.getOrderNo(), e);
         }
         
-        log.info("用户 {} 创建充值订单 {}，充值金额 {}，赠送金额 {}", 
-                userId, order.getOrderNo(), order.getRechargeAmount(), order.getBonusAmount());
+        log.info("用户 {} 创建充值订单 {}，充值金额 {}，赠送金额 {}",
+                userId, order.getOrderNo(), order.getRechargeAmount(), order.getGiftAmount());
         
         return order;
     }
@@ -152,11 +144,11 @@ public class RechargeServiceImpl implements RechargeService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleRechargeCallback(String orderNo) {
-        // 幂等：原子地将 pay_status 从 0 更新为 1，只有首个线程 affectedRows == 1
+        // 幂等：原子地将 pay_status 从 PENDING 更新为 SUCCESS，只有首个线程 affectedRows == 1
         int affected = rechargeOrderMapper.update(null, new LambdaUpdateWrapper<RechargeOrder>()
                 .eq(RechargeOrder::getOrderNo, orderNo)
-                .eq(RechargeOrder::getPayStatus, 0)
-                .set(RechargeOrder::getPayStatus, 1)
+                .eq(RechargeOrder::getPayStatus, "PENDING")
+                .set(RechargeOrder::getPayStatus, "SUCCESS")
                 .set(RechargeOrder::getPayTime, LocalDateTime.now()));
         if (affected == 0) {
             RechargeOrder existing = rechargeOrderMapper.selectOne(new LambdaQueryWrapper<RechargeOrder>()
@@ -171,7 +163,7 @@ public class RechargeServiceImpl implements RechargeService {
         // 查询订单用于入账
         RechargeOrder order = rechargeOrderMapper.selectOne(new LambdaQueryWrapper<RechargeOrder>()
                 .eq(RechargeOrder::getOrderNo, orderNo));
-        BigDecimal totalAmount = order.getRechargeAmount().add(order.getBonusAmount());
+        BigDecimal totalAmount = order.getRechargeAmount().add(order.getGiftAmount());
         addUserBalance(order.getUserId(), order.getTenantId(), totalAmount, "RECHARGE", "充值", orderNo);
         log.info("充值订单 {} 支付成功，用户 {} 余额增加 {}", orderNo, order.getUserId(), totalAmount);
     }
@@ -225,12 +217,11 @@ public class RechargeServiceImpl implements RechargeService {
         BalanceLog log = new BalanceLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);
-        log.setAmount(amount.negate());
-        log.setBalance(userBalance.getBalance());
-        log.setType("CONSUME");
-        log.setReason("订单支付");
+        log.setChangeAmount(amount.negate());
+        log.setBalanceAfter(userBalance.getBalance());
+        log.setChangeType("CONSUME");
+        log.setRemark("订单支付");
         log.setOrderNo(orderNo);
-        log.setDeleted(0);
         log.setCreateTime(LocalDateTime.now());
         balanceLogMapper.insert(log);
         
@@ -243,7 +234,6 @@ public class RechargeServiceImpl implements RechargeService {
         LambdaQueryWrapper<BalanceLog> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(BalanceLog::getUserId, userId)
                 .eq(BalanceLog::getTenantId, tenantId)
-                .eq(BalanceLog::getDeleted, 0)
                 .orderByDesc(BalanceLog::getCreateTime);
         return balanceLogMapper.selectPage(page, wrapper);
     }
@@ -283,12 +273,11 @@ public class RechargeServiceImpl implements RechargeService {
         BalanceLog log = new BalanceLog();
         log.setTenantId(tenantId);
         log.setUserId(userId);
-        log.setAmount(amount);
-        log.setBalance(userBalance.getBalance());
-        log.setType(type);
-        log.setReason(reason);
+        log.setChangeAmount(amount);
+        log.setBalanceAfter(userBalance.getBalance());
+        log.setChangeType(type);
+        log.setRemark(reason);
         log.setOrderNo(orderNo);
-        log.setDeleted(0);
         log.setCreateTime(LocalDateTime.now());
         balanceLogMapper.insert(log);
     }

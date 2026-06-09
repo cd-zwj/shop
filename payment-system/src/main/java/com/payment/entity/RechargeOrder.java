@@ -19,53 +19,63 @@ public class RechargeOrder implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
+    /**
+     * 充值订单号
+     */
+    private String orderNo;
+
     /**
      * 用户ID
      */
     private Long userId;
-    
-    /**
-     * 订单号
-     */
-    private String orderNo;
-    
-    /**
-     * 充值规则ID
-     */
-    private Long ruleId;
-    
+
     /**
      * 充值金额
      */
     private BigDecimal rechargeAmount;
-    
+
     /**
      * 赠送金额
      */
-    private BigDecimal bonusAmount;
-    
+    private BigDecimal giftAmount;
+
     /**
-     * 总金额
+     * 赠送积分
      */
-    private BigDecimal totalAmount;
-    
+    private Integer giftPoints;
+
     /**
-     * 支付状态（0-待支付，1-已支付）
+     * 实际到账金额
      */
-    private Integer payStatus;
-    
+    private BigDecimal actualAmount;
+
+    /**
+     * 支付方式：WECHAT-微信，ALIPAY-支付宝
+     */
+    private String payType;
+
+    /**
+     * 支付状态：PENDING-待支付，SUCCESS-成功，FAIL-失败
+     */
+    private String payStatus;
+
+    /**
+     * 第三方订单号
+     */
+    private String thirdPartyOrderNo;
+
     /**
      * 支付时间
      */
     private LocalDateTime payTime;
-    
-    private Integer deleted;
-    
+
     private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
 }

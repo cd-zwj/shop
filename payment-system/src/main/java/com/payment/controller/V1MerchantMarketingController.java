@@ -235,26 +235,23 @@ public class V1MerchantMarketingController {
     private CouponTemplateCreateDTO toTenantCouponTemplateDTO(Long tenantId, CouponTemplateCreateDTO source) {
         CouponTemplateCreateDTO target = new CouponTemplateCreateDTO();
         if (source != null) {
-            target.setName(source.getName());
+            target.setTemplateName(source.getTemplateName());
             target.setCouponType(source.getCouponType());
             target.setThresholdAmount(source.getThresholdAmount());
             target.setDiscountAmount(source.getDiscountAmount());
             target.setDiscountRate(source.getDiscountRate());
             target.setMaxDiscountAmount(source.getMaxDiscountAmount());
-            target.setTotalStock(source.getTotalStock());
+            target.setTotalQuantity(source.getTotalQuantity());
             target.setPerUserLimit(source.getPerUserLimit());
             target.setReceiveStartTime(source.getReceiveStartTime());
             target.setReceiveEndTime(source.getReceiveEndTime());
-            target.setValidDaysAfterReceive(source.getValidDaysAfterReceive());
+            target.setValidDays(source.getValidDays());
             target.setValidStartTime(source.getValidStartTime());
             target.setValidEndTime(source.getValidEndTime());
-            target.setMinMemberLevel(source.getMinMemberLevel());
-            target.setExcludeMemberTagIds(source.getExcludeMemberTagIds());
-            target.setStackStrategy(source.getStackStrategy());
             target.setDescription(source.getDescription());
         }
         target.setTenantId(tenantId);
-        target.setOwnerType(CouponOwnerTypeEnum.TENANT.name());
+        target.setTemplateScope(CouponOwnerTypeEnum.TENANT.name());
         return target;
     }
 
@@ -273,14 +270,14 @@ public class V1MerchantMarketingController {
     private PromotionActivityCreateDTO toTenantActivityDTO(Long tenantId, PromotionActivityCreateDTO source) {
         PromotionActivityCreateDTO target = new PromotionActivityCreateDTO();
         if (source != null) {
-            target.setName(source.getName());
+            target.setActivityName(source.getActivityName());
             target.setActivityType(source.getActivityType());
             target.setStartTime(source.getStartTime());
             target.setEndTime(source.getEndTime());
             target.setDescription(source.getDescription());
         }
         target.setTenantId(tenantId);
-        target.setOwnerType(CouponOwnerTypeEnum.TENANT.name());
+        target.setActivityScope(CouponOwnerTypeEnum.TENANT.name());
         return target;
     }
 
