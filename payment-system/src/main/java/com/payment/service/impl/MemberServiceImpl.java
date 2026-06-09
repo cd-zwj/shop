@@ -116,14 +116,15 @@ public class MemberServiceImpl implements MemberService {
         String trimmedName = name.trim();
         MemberTag existing = tagMapper.selectOne(new LambdaQueryWrapper<MemberTag>()
                 .eq(MemberTag::getTenantId, tenantId)
-                .eq(MemberTag::getName, trimmedName));
+                .eq(MemberTag::getTagName, trimmedName));
         if (existing != null) {
             throw new BusinessException("会员标签已存在");
         }
 
         MemberTag tag = new MemberTag();
         tag.setTenantId(tenantId);
-        tag.setName(trimmedName);
+        tag.setTagName(trimmedName);
+        tag.setTagType("MANUAL");
         tag.setStatus(ENABLED);
         tagMapper.insert(tag);
         return tag;
@@ -136,15 +137,18 @@ public class MemberServiceImpl implements MemberService {
         requireTag(tenantId, tagId);
 
         MemberAccountTag existing = accountTagMapper.selectOne(new LambdaQueryWrapper<MemberAccountTag>()
-                .eq(MemberAccountTag::getMemberId, memberId)
+                .eq(MemberAccountTag::getTenantId, tenantId)
+                .eq(MemberAccountTag::getPlatformUserId, memberId)
                 .eq(MemberAccountTag::getTagId, tagId));
         if (existing != null) {
             return;
         }
 
         MemberAccountTag relation = new MemberAccountTag();
-        relation.setMemberId(memberId);
+        relation.setTenantId(tenantId);
+        relation.setPlatformUserId(memberId);
         relation.setTagId(tagId);
+        relation.setSourceType("MANUAL");
         accountTagMapper.insert(relation);
     }
 
@@ -154,7 +158,8 @@ public class MemberServiceImpl implements MemberService {
         requireMember(tenantId, memberId);
         requireTag(tenantId, tagId);
         accountTagMapper.delete(new LambdaQueryWrapper<MemberAccountTag>()
-                .eq(MemberAccountTag::getMemberId, memberId)
+                .eq(MemberAccountTag::getTenantId, tenantId)
+                .eq(MemberAccountTag::getPlatformUserId, memberId)
                 .eq(MemberAccountTag::getTagId, tagId));
     }
 

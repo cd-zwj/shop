@@ -320,42 +320,37 @@ public class PointsServiceImpl implements PointsService {
         if (tenantId == null) {
             throw new BusinessException("租户信息不存在");
         }
-        
-        // 验证商品是否存在
-        Product product = productMapper.selectOne(
-                new LambdaQueryWrapper<Product>()
-                        .eq(Product::getId, dto.getProductId())
-                        .eq(Product::getTenantId, tenantId)
-                        .eq(Product::getDeleted, 0)
-        );
-        
-        if (product == null) {
-            throw new BusinessException("商品不存在");
-        }
-        
+
         // 检查是否已存在兑换配置
         ExchangeProduct existProduct = exchangeProductMapper.selectOne(
                 new LambdaQueryWrapper<ExchangeProduct>()
-                        .eq(ExchangeProduct::getProductId, dto.getProductId())
+                        .eq(ExchangeProduct::getProductName, dto.getProductName())
                         .eq(ExchangeProduct::getTenantId, tenantId)
                         .eq(ExchangeProduct::getDeleted, 0)
         );
-        
+
         if (existProduct != null) {
             throw new BusinessException("该商品已配置为兑换商品");
         }
-        
+
         // 创建兑换商品
         ExchangeProduct exchangeProduct = new ExchangeProduct();
-        BeanUtils.copyProperties(dto, exchangeProduct);
         exchangeProduct.setTenantId(tenantId);
+        exchangeProduct.setProductName(dto.getProductName());
+        exchangeProduct.setProductImage(dto.getProductImage());
+        exchangeProduct.setPointsRequired(dto.getPointsRequired());
+        exchangeProduct.setStock(dto.getStock());
+        exchangeProduct.setExchangeLimit(dto.getExchangeLimit());
+        exchangeProduct.setDescription(dto.getDescription());
+        exchangeProduct.setStatus(dto.getStatus());
+        exchangeProduct.setSortOrder(dto.getSortOrder());
         exchangeProduct.setDeleted(0);
         exchangeProduct.setCreateTime(LocalDateTime.now());
         exchangeProduct.setUpdateTime(LocalDateTime.now());
         exchangeProductMapper.insert(exchangeProduct);
-        
-        log.info("创建积分兑换商品，tenantId={}, productId={}, pointsRequired={}", 
-                tenantId, dto.getProductId(), dto.getPointsRequired());
+
+        log.info("创建积分兑换商品，tenantId={}, productName={}, pointsRequired={}",
+                tenantId, dto.getProductName(), dto.getPointsRequired());
     }
     
     @Override
@@ -389,13 +384,18 @@ public class PointsServiceImpl implements PointsService {
         }
         
         // 更新兑换商品
+        exchangeProduct.setProductName(dto.getProductName());
+        exchangeProduct.setProductImage(dto.getProductImage());
         exchangeProduct.setPointsRequired(dto.getPointsRequired());
         exchangeProduct.setStock(dto.getStock());
+        exchangeProduct.setExchangeLimit(dto.getExchangeLimit());
+        exchangeProduct.setDescription(dto.getDescription());
         exchangeProduct.setStatus(dto.getStatus());
+        exchangeProduct.setSortOrder(dto.getSortOrder());
         exchangeProduct.setUpdateTime(LocalDateTime.now());
         exchangeProductMapper.updateById(exchangeProduct);
-        
-        log.info("更新积分兑换商品，id={}, pointsRequired={}, stock={}, status={}", 
+
+        log.info("更新积分兑换商品，id={}, pointsRequired={}, stock={}, status={}",
                 id, dto.getPointsRequired(), dto.getStock(), dto.getStatus());
     }
     

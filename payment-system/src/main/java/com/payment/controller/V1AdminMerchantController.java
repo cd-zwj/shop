@@ -4,12 +4,15 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.dto.MerchantBalanceVO;
 import com.payment.dto.MerchantDTO;
 import com.payment.dto.MerchantDetailVO;
 import com.payment.dto.MerchantListVO;
+import com.payment.entity.MerchantBalance;
 import com.payment.entity.Tenant;
 import org.springframework.beans.BeanUtils;
 import com.payment.service.V1AdminService;
+import com.payment.service.WithdrawalService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.*;
 public class V1AdminMerchantController {
 
     private final V1AdminService v1AdminService;
+    private final WithdrawalService withdrawalService;
 
     @SaCheckPermission("admin:merchant:list")
     @GetMapping
@@ -69,5 +73,17 @@ public class V1AdminMerchantController {
     public Result<Void> disableMerchant(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1AdminService.disableMerchant(tenantId);
         return Result.success();
+    }
+
+    @SaCheckPermission("admin:merchant:balance")
+    @GetMapping("/{tenantId}/balance")
+    public Result<MerchantBalanceVO> getMerchantBalance(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
+        MerchantBalance balance = withdrawalService.getMerchantBalance(tenantId);
+        if (balance == null) {
+            return Result.success(null);
+        }
+        MerchantBalanceVO vo = new MerchantBalanceVO();
+        BeanUtils.copyProperties(balance, vo);
+        return Result.success(vo);
     }
 }

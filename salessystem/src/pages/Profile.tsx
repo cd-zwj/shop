@@ -32,9 +32,9 @@ export default function Profile() {
     {
       title: '账户设置',
       items: [
-        { icon: MapPin, label: '收货地址', desc: '管理配送地址', path: '#' },
+        { icon: MapPin, label: '收货地址', desc: '管理配送地址', path: '/addresses' },
         { icon: Shield, label: '账号安全', desc: '修改密码、实名认证', path: '#' },
-        { icon: BellIcon, label: '消息通知', desc: '系统动态与福利提醒', path: '#' },
+        { icon: BellIcon, label: '消息通知', desc: '系统动态与福利提醒', path: '/notifications' },
       ],
     },
   ] as const;

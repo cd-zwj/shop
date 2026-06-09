@@ -18,35 +18,58 @@ public class ExchangeProduct implements Serializable {
 
     @TableId(type = IdType.AUTO)
     private Long id;
-    
+
     /**
      * 租户ID
      */
     private Long tenantId;
-    
+
     /**
-     * 商品ID
+     * 商品名称
      */
-    private Long productId;
-    
+    private String productName;
+
+    /**
+     * 商品图片
+     */
+    private String productImage;
+
     /**
      * 所需积分
      */
     private Integer pointsRequired;
-    
+
     /**
      * 兑换库存
      */
     private Integer stock;
-    
+
+    /**
+     * 兑换限制（每人）
+     */
+    private Integer exchangeLimit;
+
+    /**
+     * 商品描述
+     */
+    private String description;
+
     /**
      * 状态（0-下架，1-上架）
      */
     private Integer status;
-    
+
+    /**
+     * 排序
+     */
+    private Integer sortOrder;
+
+    /**
+     * 是否删除：0-否，1-是
+     */
     private Integer deleted;
-    
+
     private LocalDateTime createTime;
-    
+
     private LocalDateTime updateTime;
 }

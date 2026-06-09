@@ -15,10 +15,14 @@ public class ExchangeProductVO implements Serializable {
 
     private Long id;
     private Long tenantId;
-    private Long productId;
+    private String productName;
+    private String productImage;
     private Integer pointsRequired;
     private Integer stock;
+    private Integer exchangeLimit;
+    private String description;
     private Integer status;
+    private Integer sortOrder;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

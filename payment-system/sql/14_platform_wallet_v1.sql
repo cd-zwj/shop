@@ -262,6 +262,10 @@ CREATE TABLE IF NOT EXISTS `member_points_log` (
   `points_before` INT NOT NULL COMMENT '变动前积分',
   `points_after` INT NOT NULL COMMENT '变动后积分',
   `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
+  `status` VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED' COMMENT '状态：PRE_HOLD-预占，CONFIRMED-确认，RELEASED-释放',
+  `confirm_time` DATETIME DEFAULT NULL COMMENT '确认时间',
+  `release_time` DATETIME DEFAULT NULL COMMENT '释放时间',
+  `release_reason` VARCHAR(255) DEFAULT NULL COMMENT '释放原因',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_points_tenant_user_time` (`tenant_id`, `platform_user_id`, `create_time`)

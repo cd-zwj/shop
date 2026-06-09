@@ -19,7 +19,26 @@ public class MemberTag implements Serializable {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long tenantId;
-    private String name;
+    /**
+     * 标签编码
+     */
+    private String tagCode;
+    /**
+     * 标签名称
+     */
+    private String tagName;
+    /**
+     * 标签类型：MANUAL-手动，RULE-规则，SYSTEM-系统
+     */
+    private String tagType;
+    /**
+     * 标签颜色
+     */
+    private String tagColor;
+    /**
+     * 标签描述
+     */
+    private String description;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

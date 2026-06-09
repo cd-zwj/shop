@@ -118,3 +118,6 @@ export type {
 // 退款类型
 export type { RefundCreateDTO, Refund } from './refund';
 
+// 收货地址 & 通知类型
+export type { Address, AddressPayload, AppNotification } from './addressNotification';
+

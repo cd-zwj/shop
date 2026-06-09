@@ -82,6 +82,8 @@ import Points from './pages/Points';
 import { ToastProvider } from './context/ToastContext';
 
 import ApplyRefund from './pages/ApplyRefund';
+import AddressList from './pages/AddressList';
+import Notifications from './pages/Notifications';
 import MerchantRefunds from './pages/merchant/MerchantRefunds';
 import MerchantCoupons from './pages/merchant/MerchantCoupons';
 import MerchantActivities from './pages/merchant/MerchantActivities';
@@ -327,6 +329,8 @@ function AppContent() {
             <Route path="/success" element={<AuthGuard><Success /></AuthGuard>} />
             <Route path="/coupons" element={<AuthGuard><CouponCenter /></AuthGuard>} />
             <Route path="/points/:tenantId" element={<AuthGuard><Points /></AuthGuard>} />
+            <Route path="/addresses" element={<AuthGuard><AddressList /></AuthGuard>} />
+            <Route path="/notifications" element={<AuthGuard><Notifications /></AuthGuard>} />
             
             {/* --- Admin routes (admin role required) --- */}
             <Route path="/admin" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDashboard /></RoleGuard></AuthGuard>} />

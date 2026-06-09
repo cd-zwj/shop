@@ -91,7 +91,7 @@ class MemberServiceImplTest {
 
         ArgumentCaptor<MemberAccountTag> captor = ArgumentCaptor.forClass(MemberAccountTag.class);
         verify(accountTagMapper).insert(captor.capture());
-        assertEquals(100L, captor.getValue().getMemberId());
+        assertEquals(100L, captor.getValue().getPlatformUserId());
         assertEquals(18L, captor.getValue().getTagId());
     }
 
@@ -157,7 +157,8 @@ class MemberServiceImplTest {
         MemberTag tag = new MemberTag();
         tag.setId(id);
         tag.setTenantId(tenantId);
-        tag.setName(name);
+        tag.setTagName(name);
+        tag.setTagType("MANUAL");
         tag.setStatus(1);
         return tag;
     }

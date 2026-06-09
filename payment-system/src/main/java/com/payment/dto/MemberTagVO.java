@@ -15,7 +15,11 @@ public class MemberTagVO implements Serializable {
 
     private Long id;
     private Long tenantId;
-    private String name;
+    private String tagCode;
+    private String tagName;
+    private String tagType;
+    private String tagColor;
+    private String description;
     private Integer status;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
