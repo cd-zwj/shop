@@ -83,8 +83,8 @@ class LoginSecurityServiceImplTest {
         LoginFailRecordMapper mapper = mock(LoginFailRecordMapper.class);
         LoginSecurityServiceImpl service = new LoginSecurityServiceImpl(mapper);
 
-        // 第一次 update 成功（已有记录）
-        when(mapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        // 窗口重置检查返回 0（未过期），原子递增返回 1
+        when(mapper.update(any(), any(LambdaUpdateWrapper.class))).thenReturn(0).thenReturn(1);
 
         // findByAccount 返回 failCount=5，尚未锁定
         LoginFailRecord record = new LoginFailRecord();
@@ -96,7 +96,7 @@ class LoginSecurityServiceImplTest {
 
         service.recordFailure("user@test.com", "192.168.1.1");
 
-        // 验证触发了锁定的 update 调用（共两次 update：递增 + 锁定）
+        // 验证 2 次 update：窗口重置检查 + 原子递增锁定
         verify(mapper, org.mockito.Mockito.times(2)).update(any(), any(LambdaUpdateWrapper.class));
     }
 

@@ -64,10 +64,10 @@ INSERT INTO `product_stock` (`tenant_id`, `product_id`, `quantity`, `version`, `
 
 -- ========== 测试优惠券模板 ==========
 
-INSERT INTO `coupon_template` (`template_no`, `tenant_id`, `template_scope`, `name`, `coupon_type`, `threshold_amount`, `discount_amount`, `total_stock`, `per_user_limit`, `stack_strategy`, `status`, `deleted`) VALUES
-('TPL001', 1, 'TENANT', '新人专享券', 'FIXED_REDUCTION', 50.00, 10.00, 100, 1, 'EXCLUSIVE', 'ACTIVE', 0),
-('TPL002', 1, 'TENANT', '满100打8折', 'DISCOUNT_RATE', 100.00, NULL, 50, 2, 'STACKABLE', 'ACTIVE', 0),
-('TPL003', 1, 'TENANT', '无门槛5元券', 'NO_THRESHOLD', 0.00, 5.00, 200, 3, 'EXCLUSIVE', 'ACTIVE', 0);
+INSERT INTO `coupon_template` (`template_no`, `tenant_id`, `template_scope`, `template_name`, `coupon_type`, `threshold_amount`, `discount_amount`, `total_quantity`, `per_user_limit`, `can_stack_balance`, `can_stack_points`, `can_stack_other_coupon`, `applicable_product_scope`, `status`) VALUES
+('TPL001', 1, 'TENANT', '新人专享券', 'FULL_REDUCTION', 50.00, 10.00, 100, 1, 0, 0, 0, 'ALL', 'ACTIVE'),
+('TPL002', 1, 'TENANT', '满100打8折', 'DISCOUNT', 100.00, NULL, 50, 2, 1, 1, 0, 'ALL', 'ACTIVE'),
+('TPL003', 1, 'TENANT', '无门槛5元券', 'CASH', 0.00, 5.00, 200, 3, 0, 0, 0, 'ALL', 'ACTIVE');
 
 -- ========== 测试订单 ==========
 
@@ -82,14 +82,14 @@ INSERT INTO `sales_order_item` (`order_id`, `order_no`, `tenant_id`, `product_id
 
 -- ========== 会员积分账户 ==========
 
-INSERT INTO `member_points_account` (`tenant_id`, `platform_user_id`, `points`, `total_earned`, `total_consumed`, `version`, `deleted`) VALUES
-(1, 3, 500, 500, 0, 0, 0),
-(1, 4, 100, 100, 0, 0, 0);
+INSERT INTO `member_points_account` (`tenant_id`, `platform_user_id`, `points`, `total_earned`, `total_used`, `version`, `status`) VALUES
+(1, 3, 500, 500, 0, 0, 'ACTIVE'),
+(1, 4, 100, 100, 0, 0, 'ACTIVE');
 
 -- ========== 会员等级 ==========
 
-INSERT INTO `member_level` (`tenant_id`, `level_rank`, `level_name`, `threshold_amount`, `discount_rate`, `benefit_json`, `status`, `deleted`) VALUES
-(1, 1, '普通会员', 0.00, 1.00, NULL, 1, 0),
-(1, 2, '银卡会员', 500.00, 0.95, '{"freeShipping": false}', 1, 0),
-(1, 3, '金卡会员', 2000.00, 0.90, '{"freeShipping": true}', 1, 0),
-(1, 4, '钻石会员', 10000.00, 0.85, '{"freeShipping": true, "priority": true}', 1, 0);
+INSERT INTO `member_level` (`tenant_id`, `level_no`, `level_rank`, `level_name`, `upgrade_growth`, `discount_rate`, `benefit_json`, `status`) VALUES
+(1, 'LV001', 1, '普通会员', 0, 1.00, NULL, 1),
+(1, 'LV002', 2, '银卡会员', 500, 0.95, '{"freeShipping": false}', 1),
+(1, 'LV003', 3, '金卡会员', 2000, 0.90, '{"freeShipping": true}', 1),
+(1, 'LV004', 4, '钻石会员', 10000, 0.85, '{"freeShipping": true, "priority": true}', 1);

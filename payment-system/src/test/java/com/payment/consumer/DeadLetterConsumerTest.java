@@ -57,7 +57,7 @@ class DeadLetterConsumerTest {
         Channel channel = mock(Channel.class);
 
         RechargeOrder order = new RechargeOrder();
-        order.setPayStatus("0");
+        order.setPayStatus("PENDING");
 
         when(rechargeOrderMapper.selectOne(any())).thenReturn(order);
 
