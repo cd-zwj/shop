@@ -59,7 +59,12 @@ public class Product implements Serializable {
      * 商品描述
      */
     private String description;
-    
+
+    /**
+     * 门店ID
+     */
+    private Long storeId;
+
     /**
      * 状态：0-下架，1-上架
      */

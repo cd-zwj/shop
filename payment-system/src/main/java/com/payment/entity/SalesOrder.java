@@ -33,6 +33,12 @@ public class SalesOrder implements Serializable {
     private String source;
     private String walletStrategy;
     private LocalDateTime expireTime;
+
+    /**
+     * 门店ID
+     */
+    private Long storeId;
+
     private Integer deleted;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

@@ -29,6 +29,7 @@ SOURCE 19_message_retry.sql;
 SOURCE 20_payment_bill_status_remark.sql;
 SOURCE 25_mq_compensation.sql;
 SOURCE 26_coupon_records_and_rules.sql;
+SOURCE 27_new_modules.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;
