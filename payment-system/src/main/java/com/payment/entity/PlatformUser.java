@@ -3,6 +3,7 @@ package com.payment.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -19,6 +20,7 @@ public class PlatformUser implements Serializable {
     private String username;
     private String phone;
     private String email;
+    @JsonIgnore
     private String passwordHash;
     private Integer emailVerified;
     private Integer status;

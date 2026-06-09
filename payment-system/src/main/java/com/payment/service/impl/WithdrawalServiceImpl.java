@@ -106,10 +106,18 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 throw new BusinessException("商家余额不足，无法通过提现申请");
             }
 
-            balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
-            balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
-            balance.setUpdateTime(LocalDateTime.now());
-            merchantBalanceMapper.updateById(balance);
+            // 扣减余额（乐观锁重试）
+            for (int attempt = 0; attempt < 3; attempt++) {
+                balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
+                balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
+                balance.setUpdateTime(LocalDateTime.now());
+                if (merchantBalanceMapper.updateById(balance) > 0) break;
+                balance = getMerchantBalance(withdrawal.getTenantId());
+                if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
+                    throw new BusinessException("商家余额不足，无法通过提现申请");
+                }
+                if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            }
 
             withdrawal.setStatus(1);
             log.info("提现审核通过 withdrawalId={}, tenantId={}, amount={}",
@@ -300,10 +308,18 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new BusinessException("商家余额不足，无法通过提现申请");
         }
 
-        balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
-        balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
-        balance.setUpdateTime(LocalDateTime.now());
-        merchantBalanceMapper.updateById(balance);
+        // 扣减余额（乐观锁重试）
+        for (int attempt = 0; attempt < 3; attempt++) {
+            balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
+            balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
+            balance.setUpdateTime(LocalDateTime.now());
+            if (merchantBalanceMapper.updateById(balance) > 0) break;
+            balance = getMerchantBalance(withdrawal.getTenantId());
+            if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
+                throw new BusinessException("商家余额不足，无法通过提现申请");
+            }
+            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+        }
 
         withdrawal.setStatus(1);
         withdrawal.setApproveTime(LocalDateTime.now());
