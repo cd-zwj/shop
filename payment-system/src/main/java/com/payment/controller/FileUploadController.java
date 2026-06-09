@@ -1,16 +1,20 @@
 package com.payment.controller;
 
+import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.util.MinioUtil;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 文件上传控制器 - 支持分片上传
@@ -20,7 +24,16 @@ import java.util.Map;
 @RequestMapping("/api/file")
 @Tag(name = "文件上传", description = "文件上传相关接口，支持分片上传")
 public class FileUploadController {
-    
+
+    private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
+            "image/jpeg", "image/png", "image/gif", "image/webp",
+            "application/pdf"
+    );
+
+    private static final Set<String> ALLOWED_EXTENSIONS = Set.of(
+            "jpg", "jpeg", "png", "gif", "webp", "pdf"
+    );
+
     @Autowired
     private MinioUtil minioUtil;
     
@@ -63,6 +76,8 @@ public class FileUploadController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "fileMd5", required = false) String fileMd5) {
         try {
+            validateFileType(file);
+
             // 如果提供了MD5，先检查文件是否存在
             if (fileMd5 != null && !fileMd5.isEmpty()) {
                 String existingUrl = minioUtil.checkFileExists(fileMd5, file.getOriginalFilename());
@@ -98,6 +113,8 @@ public class FileUploadController {
             @RequestParam("totalChunks") int totalChunks,
             @RequestParam("fileMd5") String fileMd5) {
         try {
+            validateFileType(file);
+
             Map<String, Object> result = minioUtil.uploadFileChunk(file, fileId, chunkNumber, totalChunks, fileMd5);
             return Result.success(result);
         } catch (Exception e) {
@@ -118,6 +135,21 @@ public class FileUploadController {
         } catch (Exception e) {
             log.error("获取上传进度失败: fileId={}", fileId, e);
             return Result.error("获取上传进度失败，请稍后重试");
+        }
+    }
+
+    private void validateFileType(MultipartFile file) {
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
+            throw new BusinessException("不支持的文件类型，仅支持 JPEG、PNG、GIF、WebP 图片和 PDF 文档");
+        }
+
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null) {
+            String extension = StringUtils.getFilenameExtension(originalFilename);
+            if (extension == null || !ALLOWED_EXTENSIONS.contains(extension.toLowerCase(Locale.ROOT))) {
+                throw new BusinessException("不支持的文件扩展名，仅支持 .jpg、.jpeg、.png、.gif、.webp、.pdf");
+            }
         }
     }
 }
