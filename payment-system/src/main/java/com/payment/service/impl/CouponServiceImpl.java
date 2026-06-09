@@ -34,7 +34,9 @@ import com.payment.mapper.MemberAccountTagMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.mapper.UserCouponMapper;
 import com.payment.service.CouponService;
+import com.payment.service.UserBehaviorLogService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,6 +56,7 @@ import com.payment.util.BizNoGenerator;
 /**
  * 优惠券服务实现类。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CouponServiceImpl implements CouponService {
@@ -72,6 +75,7 @@ public class CouponServiceImpl implements CouponService {
     private final CouponReleaseRecordMapper releaseRecordMapper;
     private final CouponWriteOffRecordMapper writeOffRecordMapper;
     private final CouponExpireRecordMapper expireRecordMapper;
+    private final UserBehaviorLogService userBehaviorLogService;
 
     @Override
     public List<CouponTemplate> listTemplates(Long tenantId, String status) {
@@ -320,6 +324,17 @@ public class CouponServiceImpl implements CouponService {
         result.setTenantId(coupon.getTenantId());
         result.setCouponStatus(coupon.getCouponStatus());
         result.setExpireTime(coupon.getExpireTime());
+
+        // 记录优惠券领取行为（埋点失败不影响主流程）
+        try {
+            userBehaviorLogService.recordBehavior(
+                    platformUserId, tenantId, "FAVORITE",
+                    "COUPON", couponTemplateId,
+                    "{\"userCouponId\":" + coupon.getId() + ",\"couponNo\":\"" + coupon.getCouponNo() + "\"}");
+        } catch (Exception e) {
+            log.warn("记录 COUPON 领取行为日志失败, templateId={}", couponTemplateId, e);
+        }
+
         return result;
     }
 

@@ -514,7 +514,8 @@ class CouponServiceImplTest {
                 lockRecordMapper,
                 releaseRecordMapper,
                 writeOffRecordMapper,
-                mock(CouponExpireRecordMapper.class)
+                mock(CouponExpireRecordMapper.class),
+                mock(com.payment.service.UserBehaviorLogService.class)
         );
     }
 
@@ -538,7 +539,8 @@ class CouponServiceImplTest {
                 lockRecordMapper,
                 releaseRecordMapper,
                 writeOffRecordMapper,
-                expireRecordMapper
+                expireRecordMapper,
+                mock(com.payment.service.UserBehaviorLogService.class)
         );
     }
 

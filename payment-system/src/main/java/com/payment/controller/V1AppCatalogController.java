@@ -6,10 +6,12 @@ import com.payment.entity.Product;
 import com.payment.entity.Tenant;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.TenantMapper;
+import com.payment.service.UserBehaviorLogService;
 import com.payment.vo.ProductVO;
 import com.payment.vo.TenantVO;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
 /**
  * v1 商户与商品浏览接口。
  */
+@Slf4j
 @RestController
 @RequestMapping("/v1/app")
 @RequiredArgsConstructor
@@ -25,6 +28,7 @@ public class V1AppCatalogController {
 
     private final TenantMapper tenantMapper;
     private final ProductMapper productMapper;
+    private final UserBehaviorLogService userBehaviorLogService;
 
     @GetMapping("/tenants")
     public Result<List<TenantVO>> listTenants() {
@@ -53,6 +57,17 @@ public class V1AppCatalogController {
 
     @GetMapping("/products/{productId}")
     public Result<ProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
-        return Result.success(ProductVO.from(productMapper.selectById(productId)));
+        Product product = productMapper.selectById(productId);
+        // 记录商品浏览行为（埋点失败不影响主流程）
+        try {
+            if (product != null) {
+                userBehaviorLogService.recordBehavior(
+                        null, product.getTenantId(), "VIEW",
+                        "PRODUCT", productId, null);
+            }
+        } catch (Exception e) {
+            log.warn("记录 VIEW 行为日志失败, productId={}", productId, e);
+        }
+        return Result.success(ProductVO.from(product));
     }
 }

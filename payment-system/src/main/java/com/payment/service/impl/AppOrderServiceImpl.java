@@ -42,9 +42,11 @@ import com.payment.service.OrderPricingService;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.service.PromotionService;
 import com.payment.service.UnifiedWalletService;
+import com.payment.service.UserBehaviorLogService;
 import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -62,6 +64,7 @@ import java.util.stream.Collectors;
 /**
  * 用户端订单服务实现类，用于实现用户端订单相关业务逻辑。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AppOrderServiceImpl implements AppOrderService {
@@ -81,6 +84,7 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final CouponService couponService;
     private final PromotionService promotionService;
     private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
+    private final UserBehaviorLogService userBehaviorLogService;
 
     /**
      * 创建订单。
@@ -151,6 +155,15 @@ public class AppOrderServiceImpl implements AppOrderService {
             settlePaidOrder(salesOrder);
             result.setOrderStatus(OrderStatusEnum.PAID.name());
             result.setPayStatus(PayStatusEnum.SUCCESS.name());
+        }
+
+        // 记录购买行为（埋点失败不影响主流程）
+        try {
+            userBehaviorLogService.recordBehavior(
+                    platformUserId, dto.getTenantId(), "PURCHASE",
+                    "PRODUCT", null, "{\"orderNo\":\"" + orderNo + "\",\"itemCount\":" + orderLines.size() + "}");
+        } catch (Exception e) {
+            log.warn("记录 PURCHASE 行为日志失败, orderNo={}", orderNo, e);
         }
 
         return result;
