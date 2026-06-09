@@ -21,6 +21,8 @@ public class RabbitMQConfig {
     public static final String V1_RECHARGE_SUCCESS_QUEUE = "payment.v1.recharge.success";
     public static final String V1_ORDER_PAID_QUEUE = "payment.v1.order.paid";
     public static final String PRODUCT_INDEX_QUEUE = "payment.product.index";
+    public static final String SCAN_REQUEST_QUEUE = "payment.scan.request";
+    public static final String SCAN_RESULT_QUEUE = "payment.scan.result";
     
     /**
      * 充值订单延迟队列（消息过期后进入死信队列）
@@ -61,15 +63,15 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue scanRequestQueue() {
-        return new Queue("payment.scan.request", true);
+        return new Queue(SCAN_REQUEST_QUEUE, true, false, false, dlxQueueArgs());
     }
-    
+
     /**
      * 扫码处理结果队列
      */
     @Bean
     public Queue scanResultQueue() {
-        return new Queue("payment.scan.result", true);
+        return new Queue(SCAN_RESULT_QUEUE, true, false, false, dlxQueueArgs());
     }
 
     /**
@@ -77,7 +79,7 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue v1RechargeSuccessQueue() {
-        return new Queue(V1_RECHARGE_SUCCESS_QUEUE, true);
+        return new Queue(V1_RECHARGE_SUCCESS_QUEUE, true, false, false, dlxQueueArgs());
     }
 
     /**
@@ -85,7 +87,7 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue v1OrderPaidQueue() {
-        return new Queue(V1_ORDER_PAID_QUEUE, true);
+        return new Queue(V1_ORDER_PAID_QUEUE, true, false, false, dlxQueueArgs());
     }
 
     /**
@@ -93,7 +95,7 @@ public class RabbitMQConfig {
      */
     @Bean
     public Queue productIndexQueue() {
-        return new Queue(PRODUCT_INDEX_QUEUE, true);
+        return new Queue(PRODUCT_INDEX_QUEUE, true, false, false, dlxQueueArgs());
     }
     
     /**
@@ -120,6 +122,13 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(deadLetterQueue())
                 .to(deadLetterExchange())
                 .with(DEAD_LETTER_ROUTING_KEY);
+    }
+
+    private Map<String, Object> dlxQueueArgs() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE);
+        args.put("x-dead-letter-routing-key", DEAD_LETTER_ROUTING_KEY);
+        return args;
     }
 }
 

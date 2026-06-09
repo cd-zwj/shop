@@ -1,10 +1,8 @@
 package com.payment.service.impl;
 
 import com.payment.util.JsonUtils;
-import com.payment.config.RabbitMQConfig;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.PaymentBill;
-import com.payment.entity.PaymentCallbackRecord;
 import com.payment.entity.MessageOutbox;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
@@ -16,7 +14,6 @@ import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -40,7 +37,6 @@ class PaymentBillV1ServiceImplTest {
         PaymentCallbackRecordMapper callbackRecordMapper = mock(PaymentCallbackRecordMapper.class);
         CompensationTaskMapper compensationTaskMapper = mock(CompensationTaskMapper.class);
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
         RefundService refundService = mock(RefundService.class);
         PaymentProvider provider = mock(PaymentProvider.class);
 
@@ -58,7 +54,6 @@ class PaymentBillV1ServiceImplTest {
                 callbackRecordMapper,
                 compensationTaskMapper,
                 messageOutboxMapper,
-                rabbitTemplate,
                 List.of(provider),
                 refundService
         );
@@ -75,16 +70,15 @@ class PaymentBillV1ServiceImplTest {
         verify(paymentBillMapper).updateById(billCaptor.capture());
         assertEquals(PayStatusEnum.SUCCESS.name(), billCaptor.getValue().getPayStatus());
         verify(refundService).prepareLateCallbackRefund(any(PaymentBill.class), eq(PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED));
-        verify(rabbitTemplate, never()).convertAndSend(eq(RabbitMQConfig.V1_ORDER_PAID_QUEUE), any(String.class));
+        verify(messageOutboxMapper, never()).insert(any(MessageOutbox.class));
     }
 
     @Test
-    void closedRechargeLateCallbackShouldRecoverAndPublishRechargeSuccess() {
+    void closedRechargeLateCallbackShouldRecoverAndInsertOutboxRecord() {
         PaymentBillMapper paymentBillMapper = mock(PaymentBillMapper.class);
         PaymentCallbackRecordMapper callbackRecordMapper = mock(PaymentCallbackRecordMapper.class);
         CompensationTaskMapper compensationTaskMapper = mock(CompensationTaskMapper.class);
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
         RefundService refundService = mock(RefundService.class);
         PaymentProvider provider = mock(PaymentProvider.class);
 
@@ -107,7 +101,6 @@ class PaymentBillV1ServiceImplTest {
                 callbackRecordMapper,
                 compensationTaskMapper,
                 messageOutboxMapper,
-                rabbitTemplate,
                 List.of(provider),
                 refundService
         );
@@ -121,7 +114,7 @@ class PaymentBillV1ServiceImplTest {
         service.handleCallback("ALIPAY_PAGE", dto);
 
         verify(refundService, never()).prepareLateCallbackRefund(any(), any());
-        verify(rabbitTemplate).convertAndSend(eq(RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE), any(String.class));
+        verify(messageOutboxMapper).insert(any(MessageOutbox.class));
     }
 
     private PaymentBill buildClosedBill(String billNo, String bizType, PaymentStatusReasonEnum reasonEnum) {

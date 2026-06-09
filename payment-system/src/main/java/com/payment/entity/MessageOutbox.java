@@ -26,4 +26,44 @@ public class MessageOutbox implements Serializable {
     private LocalDateTime nextRetryTime;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+
+    public MessageOutbox withSendSuccess() {
+        MessageOutbox updated = copy();
+        updated.setSendStatus(com.payment.enums.OutboxSendStatusEnum.SENT.name());
+        updated.setUpdateTime(LocalDateTime.now());
+        return updated;
+    }
+
+    public MessageOutbox withSendFailure(int maxRetryCount, long retryBaseDelaySeconds) {
+        MessageOutbox updated = copy();
+        int nextRetryCount = updated.getRetryCount() == null ? 1 : updated.getRetryCount() + 1;
+        updated.setRetryCount(nextRetryCount);
+        updated.setUpdateTime(LocalDateTime.now());
+
+        if (nextRetryCount >= maxRetryCount) {
+            updated.setSendStatus(com.payment.enums.OutboxSendStatusEnum.DEAD.name());
+            updated.setNextRetryTime(null);
+        } else {
+            updated.setSendStatus(com.payment.enums.OutboxSendStatusEnum.FAILED.name());
+            updated.setNextRetryTime(LocalDateTime.now().plusSeconds(retryBaseDelaySeconds * (1L << Math.min(nextRetryCount, 6))));
+        }
+        return updated;
+    }
+
+    private MessageOutbox copy() {
+        MessageOutbox copy = new MessageOutbox();
+        copy.setId(id);
+        copy.setMessageId(messageId);
+        copy.setBizType(bizType);
+        copy.setBizNo(bizNo);
+        copy.setExchangeName(exchangeName);
+        copy.setRoutingKey(routingKey);
+        copy.setMessageBody(messageBody);
+        copy.setSendStatus(sendStatus);
+        copy.setRetryCount(retryCount);
+        copy.setNextRetryTime(nextRetryTime);
+        copy.setCreateTime(createTime);
+        copy.setUpdateTime(updateTime);
+        return copy;
+    }
 }

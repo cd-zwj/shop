@@ -14,9 +14,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -29,13 +31,9 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * V1 商户与商品浏览集成测试。
- * <p>
- * 验证：获取商户列表 -> 商户详情 -> 商品列表 -> 商品详情 的浏览链路，
- * 以及返回结构的正确性。
- */
-@WebMvcTest(V1AppCatalogController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Import({TestSaTokenConfig.class, GlobalExceptionHandler.class})
 @DisplayName("V1 商户与商品浏览集成测试")
 class V1AppCatalogIntegrationTest {
@@ -260,7 +258,7 @@ class V1AppCatalogIntegrationTest {
     }
 
     private Product buildProduct(Long id, Long tenantId, String code, String name,
-                                  BigDecimal price, String unit, String category, Integer status) {
+                                 BigDecimal price, String unit, String category, Integer status) {
         Product p = new Product();
         p.setId(id);
         p.setTenantId(tenantId);
@@ -270,9 +268,6 @@ class V1AppCatalogIntegrationTest {
         p.setUnit(unit);
         p.setCategory(category);
         p.setStatus(status);
-        p.setDeleted(0);
-        p.setCreateTime(LocalDateTime.of(2024, 1, 1, 0, 0, 0));
-        p.setUpdateTime(LocalDateTime.of(2024, 1, 1, 0, 0, 0));
         return p;
     }
 }

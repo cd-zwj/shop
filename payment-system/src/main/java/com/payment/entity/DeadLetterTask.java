@@ -17,7 +17,14 @@ public class DeadLetterTask implements Serializable {
     private Long id;
     private String messageId;
     private String queueName;
+    private String exchangeName;
+    private String routingKey;
+    private String headersJson;
     private String messageBody;
     private String failReason;
+    private String handleStatus;
+    private Integer retryCount;
+    private LocalDateTime lastHandleTime;
     private LocalDateTime createTime;
+    private LocalDateTime updateTime;
 }

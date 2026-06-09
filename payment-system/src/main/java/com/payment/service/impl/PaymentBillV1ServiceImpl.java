@@ -30,7 +30,7 @@ import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
@@ -49,7 +50,6 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     private final PaymentCallbackRecordMapper callbackRecordMapper;
     private final CompensationTaskMapper compensationTaskMapper;
     private final MessageOutboxMapper messageOutboxMapper;
-    private final RabbitTemplate rabbitTemplate;
     private final List<PaymentProvider> paymentProviders;
     private final RefundService refundService;
 
@@ -325,11 +325,10 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         outbox.setMessageBody(JsonUtils.toJson(body));
         outbox.setSendStatus(OutboxSendStatusEnum.PENDING.name());
         outbox.setRetryCount(0);
+        outbox.setNextRetryTime(LocalDateTime.now());
         messageOutboxMapper.insert(outbox);
 
-        rabbitTemplate.convertAndSend(queueName, outbox.getMessageBody());
-        outbox.setSendStatus(OutboxSendStatusEnum.SENT.name());
-        messageOutboxMapper.updateById(outbox);
+        log.info("Outbox record inserted with PENDING status, bizNo={}, outboxId={}", paymentBill.getBizNo(), outbox.getId());
     }
 
     private PaymentProvider getProvider(String channelCode) {

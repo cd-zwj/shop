@@ -6,6 +6,7 @@ import com.payment.dto.AppCreateOrderItemDTO;
 import com.payment.dto.OrderPaymentVO;
 import com.payment.dto.PayResponseDTO;
 import com.payment.dto.WalletAccountVO;
+import com.payment.dto.pricing.OrderPricingResultVO;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.Product;
 import com.payment.entity.SalesOrder;
@@ -95,6 +96,7 @@ class AppOrderServiceImplTest {
         ));
         when(unifiedWalletService.getWallet(100L)).thenReturn(buildWallet("0.00"));
         when(merchantWalletService.getWallet(9L, 100L)).thenReturn(buildWallet("0.00"));
+        when(orderPricingService.calculate(any())).thenReturn(buildPricingResult("11.00", "11.00"));
 
         doAnswer(invocation -> {
             SalesOrder salesOrder = invocation.getArgument(0);
@@ -180,6 +182,7 @@ class AppOrderServiceImplTest {
         when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(3L, 9L, "奶茶", "12.00")));
         when(unifiedWalletService.getWallet(100L)).thenReturn(buildWallet("20.00"));
         when(merchantWalletService.getWallet(9L, 100L)).thenReturn(buildWallet("0.00"));
+        when(orderPricingService.calculate(any())).thenReturn(buildPricingResult("12.00", "12.00"));
 
         doAnswer(invocation -> {
             SalesOrder salesOrder = invocation.getArgument(0);
@@ -247,6 +250,7 @@ class AppOrderServiceImplTest {
 
         assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
         verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
+        verify(orderPricingService, never()).calculate(any());
     }
 
     @Test
@@ -484,5 +488,15 @@ class AppOrderServiceImplTest {
         item.setProductId(productId);
         item.setQuantity(quantity);
         return item;
+    }
+
+    private OrderPricingResultVO buildPricingResult(String totalAmount, String payableAmount) {
+        OrderPricingResultVO result = new OrderPricingResultVO();
+        result.setTotalAmount(new BigDecimal(totalAmount));
+        result.setPayableAmount(new BigDecimal(payableAmount));
+        result.setActivityDiscountAmount(BigDecimal.ZERO);
+        result.setCouponDiscountAmount(BigDecimal.ZERO);
+        result.setPointsDeductAmount(BigDecimal.ZERO);
+        return result;
     }
 }

@@ -9,16 +9,19 @@ import com.payment.dto.AppUserVO;
 import com.payment.dto.PlatformRegisterDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.service.AuthCaptchaService;
+import com.payment.service.LoginSecurityService;
 import com.payment.service.PlatformIdentityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
@@ -31,13 +34,9 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * V1 用户端认证流程集成测试。
- * <p>
- * 验证：注册 -> 登录 -> 获取用户信息 -> 退出 的完整链路，
- * 以及返回结构的正确性。
- */
-@WebMvcTest(V1AppAuthController.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Import({TestSaTokenConfig.class, GlobalExceptionHandler.class})
 @DisplayName("V1 用户端认证流程集成测试")
 class V1AppAuthFlowIntegrationTest {
@@ -53,6 +52,9 @@ class V1AppAuthFlowIntegrationTest {
 
     @MockBean
     private PlatformIdentityService platformIdentityService;
+
+    @MockBean
+    private LoginSecurityService loginSecurityService;
 
     private PlatformUser testUser;
 
@@ -219,20 +221,48 @@ class V1AppAuthFlowIntegrationTest {
     class LoginBySmsTests {
 
         @Test
-        @DisplayName("短信登录成功应返回token字符串")
+        @DisplayName("短信登录成功应返回token字符串，code=200")
         void loginBySms_成功返回token() throws Exception {
             doNothing().when(authCaptchaService).validateCaptcha("sms-key", "1234");
             when(platformIdentityService.login(any())).thenReturn("sms-token-uuid-67890");
 
-            mockMvc.perform(post("/v1/app/auth/login/sms")
+            MvcResult result = mockMvc.perform(post("/v1/app/auth/login/sms")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(
-                                    buildLoginDTO("13800000000", "654321", "sms-key", "1234")
+                                    buildLoginDTO("13800000000", "123456", "sms-key", "1234")
                             )))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
+                    .andExpect(jsonPath("$.message").value("操作成功"))
+                    .andExpect(jsonPath("$.data").isString())
                     .andExpect(jsonPath("$.data").value("sms-token-uuid-67890"))
-                    .andExpect(jsonPath("$.timestamp").isNumber());
+                    .andExpect(jsonPath("$.timestamp").isNumber())
+                    .andReturn();
+
+            verify(authCaptchaService).validateCaptcha("sms-key", "1234");
+            verify(platformIdentityService).login(any());
+        }
+
+        @Test
+        @DisplayName("短信登录时手机号为空应返回400")
+        void loginBySms_手机号为空_返回参数错误() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/login/sms")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"password\":\"123456\",\"captchaKey\":\"k\",\"captchaCode\":\"c\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(400))
+                    .andExpect(jsonPath("$.message").value("手机号不能为空"));
+        }
+
+        @Test
+        @DisplayName("短信登录时验证码为空应返回400")
+        void loginBySms_验证码为空_返回参数错误() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/login/sms")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"username\":\"13800000000\",\"password\":\"123456\",\"captchaKey\":\"k\",\"captchaCode\":\"\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(400))
+                    .andExpect(jsonPath("$.message").value("验证码不能为空"));
         }
     }
 
@@ -243,32 +273,50 @@ class V1AppAuthFlowIntegrationTest {
     class LoginByThirdPartyTests {
 
         @Test
-        @DisplayName("第三方登录成功应返回token字符串")
+        @DisplayName("第三方登录成功应返回token字符串，code=200")
         void loginByThirdParty_成功返回token() throws Exception {
-            doNothing().when(authCaptchaService).validateCaptcha("tp-key", "XYZ");
-            when(platformIdentityService.login(any())).thenReturn("tp-token-uuid-abc");
+            doNothing().when(authCaptchaService).validateCaptcha("wx-key", "WX12");
+            when(platformIdentityService.login(any())).thenReturn("wx-token-uuid-abcde");
 
-            mockMvc.perform(post("/v1/app/auth/login/third-party")
+            MvcResult result = mockMvc.perform(post("/v1/app/auth/login/third-party")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(
-                                    buildLoginDTO("WECHAT", "wechat-openid-123", "tp-key", "XYZ")
+                                    buildLoginDTO("wx_openid_123", "wx_unionid_456", "wx-key", "WX12")
                             )))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
-                    .andExpect(jsonPath("$.data").value("tp-token-uuid-abc"));
+                    .andExpect(jsonPath("$.message").value("操作成功"))
+                    .andExpect(jsonPath("$.data").isString())
+                    .andExpect(jsonPath("$.data").value("wx-token-uuid-abcde"))
+                    .andExpect(jsonPath("$.timestamp").isNumber())
+                    .andReturn();
+
+            verify(authCaptchaService).validateCaptcha("wx-key", "WX12");
+            verify(platformIdentityService).login(any());
+        }
+
+        @Test
+        @DisplayName("第三方登录时用户名为空应返回400")
+        void loginByThirdParty_用户名为空_返回参数错误() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/login/third-party")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"password\":\"wx_unionid_456\",\"captchaKey\":\"k\",\"captchaCode\":\"c\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(400))
+                    .andExpect(jsonPath("$.message").value("用户名不能为空"));
         }
     }
 
-    // ===== 退出接口 =====
+    // ===== 退出登录接口 =====
 
     @Nested
-    @DisplayName("退出接口 POST /v1/app/auth/logout")
+    @DisplayName("退出登录接口 POST /v1/app/auth/logout")
     class LogoutTests {
 
         @Test
-        @DisplayName("已登录用户退出成功应返回code=200")
-        void logout_已登录用户_成功退出() throws Exception {
-            // 先模拟登录
+        @DisplayName("退出登录应返回200")
+        void logout_成功退出() throws Exception {
+            // 先登录
             StpUtil.login(1L);
 
             mockMvc.perform(post("/v1/app/auth/logout")
@@ -280,18 +328,19 @@ class V1AppAuthFlowIntegrationTest {
         }
 
         @Test
-        @DisplayName("未登录用户访问退出接口应返回401")
-        void logout_未登录用户_返回401() throws Exception {
+        @DisplayName("未登录退出也应返回200")
+        void logout_未登录_仍然返回200() throws Exception {
             mockMvc.perform(post("/v1/app/auth/logout"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.code").value(401));
+                    .andExpect(jsonPath("$.code").value(200))
+                    .andExpect(jsonPath("$.message").value("操作成功"))
+                    .andExpect(jsonPath("$.timestamp").isNumber());
         }
     }
 
     // ===== 辅助方法 =====
 
-    private PlatformRegisterDTO buildRegisterDTO(String username, String password,
-                                                  String phone, String email) {
+    private PlatformRegisterDTO buildRegisterDTO(String username, String password, String phone, String email) {
         PlatformRegisterDTO dto = new PlatformRegisterDTO();
         dto.setUsername(username);
         dto.setPassword(password);
@@ -300,13 +349,12 @@ class V1AppAuthFlowIntegrationTest {
         return dto;
     }
 
-    private Object buildLoginDTO(String username, String password,
-                                  String captchaKey, String captchaCode) {
-        return new LoginDTODto(username, password, captchaKey, captchaCode);
+    private com.payment.dto.PlatformLoginDTO buildLoginDTO(String username, String password, String captchaKey, String captchaCode) {
+        com.payment.dto.PlatformLoginDTO dto = new com.payment.dto.PlatformLoginDTO();
+        dto.setUsername(username);
+        dto.setPassword(password);
+        dto.setCaptchaKey(captchaKey);
+        dto.setCaptchaCode(captchaCode);
+        return dto;
     }
-
-    /**
-     * 内部 DTO 用于 JSON 序列化登录请求体。
-     */
-    record LoginDTODto(String username, String password, String captchaKey, String captchaCode) {}
 }

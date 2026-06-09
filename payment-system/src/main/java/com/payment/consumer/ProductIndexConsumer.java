@@ -45,6 +45,7 @@ public class ProductIndexConsumer {
             log.info("同步商品索引成功，tenantId={}, productId={}", message.getTenantId(), message.getId());
         } catch (Exception e) {
             log.error("处理商品索引消息失败，tenantId={}, productId={}", message.getTenantId(), message.getId(), e);
+            throw e;
         } finally {
             TenantContextHolder.clear();
         }

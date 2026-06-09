@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.entity.MessageIdempotent;
 import com.payment.mapper.MessageIdempotentMapper;
 import com.payment.service.MessageIdempotentService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,14 +16,18 @@ import java.time.LocalDateTime;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MessageIdempotentServiceImpl implements MessageIdempotentService {
-    
-    @Autowired
-    private MessageIdempotentMapper messageIdempotentMapper;
+
+    private final MessageIdempotentMapper messageIdempotentMapper;
     
     @Override
     public boolean isProcessed(String messageId, String queueName) {
-        MessageIdempotent record = messageIdempotentMapper.selectById(messageId);
+        MessageIdempotent record = messageIdempotentMapper.selectOne(
+                new LambdaQueryWrapper<MessageIdempotent>()
+                        .eq(MessageIdempotent::getMessageId, messageId)
+                        .eq(MessageIdempotent::getQueueName, queueName)
+        );
         return record != null;
     }
     
