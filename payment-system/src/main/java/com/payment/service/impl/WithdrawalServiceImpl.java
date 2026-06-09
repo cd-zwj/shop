@@ -58,6 +58,19 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new BusinessException("可提现余额不足");
         }
 
+        // 冻结余额（乐观锁重试）：balance → frozenBalance
+        for (int attempt = 0; attempt < 3; attempt++) {
+            balance.setBalance(balance.getBalance().subtract(dto.getAmount()));
+            balance.setFrozenBalance(balance.getFrozenBalance().add(dto.getAmount()));
+            balance.setUpdateTime(LocalDateTime.now());
+            if (merchantBalanceMapper.updateById(balance) > 0) break;
+            balance = getMerchantBalance(tenantId);
+            if (balance == null || balance.getBalance().compareTo(dto.getAmount()) < 0) {
+                throw new BusinessException("可提现余额不足");
+            }
+            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+        }
+
         Withdrawal withdrawal = new Withdrawal();
         BeanUtils.copyProperties(dto, withdrawal);
         withdrawal.setTenantId(tenantId);
@@ -102,19 +115,19 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
         if (Boolean.TRUE.equals(dto.getApproved())) {
             MerchantBalance balance = getMerchantBalance(withdrawal.getTenantId());
-            if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
-                throw new BusinessException("商家余额不足，无法通过提现申请");
+            if (balance == null || balance.getFrozenBalance().compareTo(withdrawal.getAmount()) < 0) {
+                throw new BusinessException("冻结余额不足，无法通过提现申请");
             }
 
-            // 扣减余额（乐观锁重试）
+            // 解冻并提现（乐观锁重试）：frozenBalance → totalWithdrawal
             for (int attempt = 0; attempt < 3; attempt++) {
-                balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
+                balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
                 balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
                 balance.setUpdateTime(LocalDateTime.now());
                 if (merchantBalanceMapper.updateById(balance) > 0) break;
                 balance = getMerchantBalance(withdrawal.getTenantId());
-                if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
-                    throw new BusinessException("商家余额不足，无法通过提现申请");
+                if (balance == null || balance.getFrozenBalance().compareTo(withdrawal.getAmount()) < 0) {
+                    throw new BusinessException("冻结余额不足，无法通过提现申请");
                 }
                 if (attempt == 2) throw new BusinessException("操作冲突，请重试");
             }
@@ -125,6 +138,18 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         } else {
             if (dto.getRejectReason() == null || dto.getRejectReason().trim().isEmpty()) {
                 throw new BusinessException("拒绝原因不能为空");
+            }
+            // 拒绝时解冻余额（乐观锁重试）：frozenBalance → balance
+            MerchantBalance balance = getMerchantBalance(withdrawal.getTenantId());
+            if (balance != null && balance.getFrozenBalance().compareTo(withdrawal.getAmount()) >= 0) {
+                for (int attempt = 0; attempt < 3; attempt++) {
+                    balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
+                    balance.setBalance(balance.getBalance().add(withdrawal.getAmount()));
+                    balance.setUpdateTime(LocalDateTime.now());
+                    if (merchantBalanceMapper.updateById(balance) > 0) break;
+                    balance = getMerchantBalance(withdrawal.getTenantId());
+                    if (attempt == 2) log.warn("拒绝提现解冻余额失败，请手动处理 withdrawalId={}", dto.getWithdrawalId());
+                }
             }
             withdrawal.setStatus(2);
             withdrawal.setRejectReason(dto.getRejectReason());
@@ -304,19 +329,19 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
 
         MerchantBalance balance = getMerchantBalance(withdrawal.getTenantId());
-        if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
-            throw new BusinessException("商家余额不足，无法通过提现申请");
+        if (balance == null || balance.getFrozenBalance().compareTo(withdrawal.getAmount()) < 0) {
+            throw new BusinessException("冻结余额不足，无法通过提现申请");
         }
 
-        // 扣减余额（乐观锁重试）
+        // 解冻并提现（乐观锁重试）：frozenBalance → totalWithdrawal
         for (int attempt = 0; attempt < 3; attempt++) {
-            balance.setBalance(balance.getBalance().subtract(withdrawal.getAmount()));
+            balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
             balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
             balance.setUpdateTime(LocalDateTime.now());
             if (merchantBalanceMapper.updateById(balance) > 0) break;
             balance = getMerchantBalance(withdrawal.getTenantId());
-            if (balance == null || balance.getBalance().compareTo(withdrawal.getAmount()) < 0) {
-                throw new BusinessException("商家余额不足，无法通过提现申请");
+            if (balance == null || balance.getFrozenBalance().compareTo(withdrawal.getAmount()) < 0) {
+                throw new BusinessException("冻结余额不足，无法通过提现申请");
             }
             if (attempt == 2) throw new BusinessException("操作冲突，请重试");
         }
@@ -344,6 +369,19 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
         if (withdrawal.getStatus() != 0) {
             throw new BusinessException("提现申请已审核");
+        }
+
+        // 拒绝时解冻余额（乐观锁重试）：frozenBalance → balance
+        MerchantBalance balance = getMerchantBalance(withdrawal.getTenantId());
+        if (balance != null && balance.getFrozenBalance().compareTo(withdrawal.getAmount()) >= 0) {
+            for (int attempt = 0; attempt < 3; attempt++) {
+                balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
+                balance.setBalance(balance.getBalance().add(withdrawal.getAmount()));
+                balance.setUpdateTime(LocalDateTime.now());
+                if (merchantBalanceMapper.updateById(balance) > 0) break;
+                balance = getMerchantBalance(withdrawal.getTenantId());
+                if (attempt == 2) log.warn("拒绝提现解冻余额失败，请手动处理 withdrawalId={}", withdrawalId);
+            }
         }
 
         withdrawal.setStatus(2);

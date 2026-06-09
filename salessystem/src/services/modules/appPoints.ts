@@ -4,9 +4,9 @@ import type { PageResult } from '../../types/api';
 
 export const appPointsService = {
   /** 积分余额 */
-  getPointsBalance() {
+  getPointsBalance(tenantId: number) {
     return request<PointsBalance>({
-      url: '/v1/app/tenants/points/balance',
+      url: `/v1/app/tenants/${tenantId}/points`,
       method: 'get',
       authRole: 'user',
     });

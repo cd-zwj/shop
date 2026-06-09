@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Coins, ArrowLeft, Clock, ShoppingBag, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appPointsService } from '../services/modules/appPoints';
@@ -16,6 +16,8 @@ type ProductWithTenant = Product & { tenantId: number };
 export default function Points() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { tenantId: tenantIdParam } = useParams<{ tenantId: string }>();
+  const tenantId = Number(tenantIdParam);
 
   const [balance, setBalance] = useState<PointsBalance | null>(null);
   const [logs, setLogs] = useState<PointsLog[]>([]);
@@ -32,21 +34,26 @@ export default function Points() {
 
   // Fetch initial data
   const loadPointsData = async () => {
+    if (!tenantId || isNaN(tenantId)) {
+      showToast('缺少商户参数', 'error');
+      setIsLoading(false);
+      return;
+    }
     try {
-      const balanceData = await appPointsService.getPointsBalance();
+      const balanceData = await appPointsService.getPointsBalance(tenantId);
       setBalance(balanceData);
 
       // Load products for lookup
       let productsList: Product[] = [];
       try {
-        const list = await appCatalogService.listTenantProducts(balanceData.tenantId);
-        productsList = list.map((p) => ({ ...p, tenantId: balanceData.tenantId }));
+        const list = await appCatalogService.listTenantProducts(tenantId);
+        productsList = list.map((p) => ({ ...p, tenantId }));
       } catch (e) {
         // Silently ignore tenant products load failure
       }
 
       // Load exchange products
-      const exchanges = await appPointsService.getExchangeProducts(balanceData.tenantId);
+      const exchanges = await appPointsService.getExchangeProducts(tenantId);
       setExchangeProducts(exchanges);
 
       // Resolve product details
@@ -66,7 +73,7 @@ export default function Points() {
             missingProductIds.map((id) => appCatalogService.getProduct(id))
           );
           missingDetails.forEach((p) => {
-            if (p) resolvedDetails[p.id] = { ...p, tenantId: balanceData.tenantId } as ProductWithTenant;
+            if (p) resolvedDetails[p.id] = { ...p, tenantId } as ProductWithTenant;
           });
         } catch (e) {
         // Silently ignore missing product details resolution failure
@@ -76,7 +83,7 @@ export default function Points() {
       setProductDetails(resolvedDetails);
 
       // Load logs
-      const logsData = await appPointsService.getPointsLogs(balanceData.tenantId, 1, 20);
+      const logsData = await appPointsService.getPointsLogs(tenantId, 1, 20);
       setLogs(logsData.records ?? []);
       setTotalPages(logsData.pages ?? 1);
     } catch (e) {
@@ -98,7 +105,7 @@ export default function Points() {
 
     setIsExchanging(ep.id);
     try {
-      await appPointsService.exchangeProduct(balance!.tenantId, ep.id);
+      await appPointsService.exchangeProduct(tenantId, ep.id);
       showToast('积分兑换成功！已生成兑换订单。', 'success');
       
       // Reload balance, logs and exchange list

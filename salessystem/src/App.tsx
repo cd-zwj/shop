@@ -326,7 +326,7 @@ function AppContent() {
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/success" element={<AuthGuard><Success /></AuthGuard>} />
             <Route path="/coupons" element={<AuthGuard><CouponCenter /></AuthGuard>} />
-            <Route path="/points" element={<AuthGuard><Points /></AuthGuard>} />
+            <Route path="/points/:tenantId" element={<AuthGuard><Points /></AuthGuard>} />
             
             {/* --- Admin routes (admin role required) --- */}
             <Route path="/admin" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDashboard /></RoleGuard></AuthGuard>} />

@@ -11,7 +11,7 @@ export const fileUploadService = {
         fileMd5,
         fileName,
       },
-      authRole: true,
+      authRole: 'user',
     });
   },
 
@@ -29,7 +29,7 @@ export const fileUploadService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      authRole: true,
+      authRole: 'user',
     });
 
     const data = response.data as {

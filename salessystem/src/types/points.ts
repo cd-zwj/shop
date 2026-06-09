@@ -1,7 +1,11 @@
 export interface PointsBalance {
+  id: number;
   points: number;
-  userId: number;
-  tenantId: number;
+  totalEarned: number;
+  totalUsed: number;
+  status: number;
+  createTime: string;
+  updateTime: string;
 }
 
 export interface PointsLog {
