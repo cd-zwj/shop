@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
-  KeyRound,
   Mail,
   Phone,
   ShieldCheck,
@@ -57,7 +56,6 @@ function ChangePasswordCard() {
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [apiAvailable, setApiAvailable] = useState(true);
 
   const canSubmit =
     oldPassword.length > 0 &&
@@ -92,31 +90,12 @@ function ChangePasswordCard() {
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: unknown) {
-      // 404 说明后端 Controller 尚未实现
       const message =
         err instanceof Error ? err.message : String(err);
-      if (message.includes('404') || message.includes('Not Found')) {
-        setApiAvailable(false);
-      } else {
-        showToast(message || '修改密码失败', 'error');
-      }
+      showToast(message || '修改密码失败', 'error');
     } finally {
       setSubmitting(false);
     }
-  }
-
-  if (!apiAvailable) {
-    return (
-      <div className="flex flex-col items-center gap-4 rounded-3xl border border-amber-200 bg-amber-50/60 px-6 py-10 text-center">
-        <KeyRound className="h-8 w-8 text-amber-500" />
-        <p className="text-sm font-bold text-amber-700">
-          修改密码功能开发中
-        </p>
-        <p className="text-xs text-amber-500">
-          后端接口 `POST /v1/app/account-security/change-password` 尚未实现，上线后将自动可用。
-        </p>
-      </div>
-    );
   }
 
   return (
@@ -259,7 +238,6 @@ export default function AccountSecurity() {
       const data = await appAccountSecurityService.getSecuritySummary();
       setSecurity(data);
     } catch {
-      // 接口未实现时静默降级，不影响页面渲染
       setSecurity(null);
     } finally {
       setLoading(false);

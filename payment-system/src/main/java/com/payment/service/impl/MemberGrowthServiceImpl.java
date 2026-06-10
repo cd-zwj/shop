@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.entity.MemberGrowthLog;
@@ -102,17 +103,13 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
 
     @Override
     public int getTotalGrowth(Long platformUserId, Long tenantId) {
-        // 聚合所有 EARN + ADJUST 正向记录，减去 DEDUCT 负向记录
-        // changeGrowth 字段已包含正负值，直接 SUM
-        List<MemberGrowthLog> logs = growthLogMapper.selectList(
-                new LambdaQueryWrapper<MemberGrowthLog>()
-                        .eq(MemberGrowthLog::getPlatformUserId, platformUserId)
-                        .eq(MemberGrowthLog::getTenantId, tenantId)
-                        .select(MemberGrowthLog::getChangeGrowth)
-        );
-        return logs.stream()
-                .mapToInt(MemberGrowthLog::getChangeGrowth)
-                .sum();
+        // SQL SUM 聚合，避免全量拉取记录到内存
+        QueryWrapper<MemberGrowthLog> wrapper = new QueryWrapper<>();
+        wrapper.eq("tenant_id", tenantId)
+               .eq("platform_user_id", platformUserId)
+               .select("IFNULL(SUM(change_growth), 0) AS change_growth");
+        MemberGrowthLog result = growthLogMapper.selectOne(wrapper);
+        return result != null && result.getChangeGrowth() != null ? result.getChangeGrowth() : 0;
     }
 
     @Override

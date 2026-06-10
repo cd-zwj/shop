@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS `tenant_member` (
   `platform_user_id` BIGINT(20) NOT NULL COMMENT '平台用户ID',
   `member_no` VARCHAR(32) NOT NULL COMMENT '会员编号',
   `member_status` TINYINT(1) NOT NULL DEFAULT '1' COMMENT '会员状态: 0-禁用, 1-启用',
+  `member_level` INT DEFAULT 1 COMMENT '会员等级（关联 member_level.id）',
   `register_source` VARCHAR(32) DEFAULT NULL COMMENT '注册来源',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -312,3 +313,9 @@ CREATE TABLE IF NOT EXISTS `dead_letter_task` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_dead_letter_message_id` (`message_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='死信任务表';
+
+-- ========================================
+-- 兼容已有数据库：给 tenant_member 补 member_level 列
+-- ========================================
+ALTER TABLE `tenant_member`
+  ADD COLUMN IF NOT EXISTS `member_level` INT DEFAULT 1 COMMENT '会员等级（关联 member_level.id）';
