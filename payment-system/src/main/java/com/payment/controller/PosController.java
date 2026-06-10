@@ -8,6 +8,7 @@ import com.payment.util.TenantContextHolder;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -15,7 +16,13 @@ import java.util.Map;
 
 /**
  * POS收银控制器
+ * <p>
+ * POS 收银功能待 V1 迁移。
+ *
+ * @deprecated 待 V1 迁移完成后移除
  */
+@Deprecated
+@Profile({"dev", "test"})
 @Slf4j
 @RestController
 @RequestMapping("/pos")

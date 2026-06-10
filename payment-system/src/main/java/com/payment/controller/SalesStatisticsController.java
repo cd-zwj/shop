@@ -11,6 +11,7 @@ import com.payment.util.TenantContextHolder;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,7 +21,14 @@ import java.util.List;
 
 /**
  * 销售数据统计控制器
+ * <p>
+ * 已被 {@code V1MerchantFinanceController} + {@code V1AdminDashboardController} 部分替代，
+ * 销售排行/趋势/导出功能待 V1 迁移。
+ *
+ * @deprecated 待 V1 迁移完成后移除
  */
+@Deprecated
+@Profile({"dev", "test"})
 @Slf4j
 @RestController
 @RequestMapping("/api/sales")
