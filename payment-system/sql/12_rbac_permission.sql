@@ -130,6 +130,12 @@ INSERT INTO sys_permission (permission_code, permission_name, module, descriptio
 ('admin:withdrawal:approve', '审核通过提现', 'admin', '审核通过提现申请'),
 ('admin:withdrawal:reject', '拒绝提现', 'admin', '拒绝提现申请');
 
+-- 营销管理权限 (marketing模块) - 管理端
+INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
+('admin:marketing:list', '营销活动列表', 'admin', '查看营销活动列表'),
+('admin:marketing:create', '创建营销活动', 'admin', '创建营销活动'),
+('admin:marketing:update', '更新营销活动', 'admin', '更新营销活动');
+
 -- AI功能权限
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
 ('ai:chat', 'AI对话', 'ai', 'AI智能对话功能'),
@@ -174,6 +180,11 @@ SELECT 2, id FROM sys_permission WHERE permission_code IN (
 -- 管理员角色权限 (role_id = 3) - 拥有所有权限
 INSERT INTO sys_role_permission (role_id, permission_id)
 SELECT 3, id FROM sys_permission;
+
+-- 管理员营销模块权限（幂等，重复授权不影响）
+INSERT INTO sys_role_permission (role_id, permission_id)
+SELECT 3, id FROM sys_permission WHERE permission_code IN
+    ('admin:marketing:list', 'admin:marketing:create', 'admin:marketing:update');
 
 -- =============================================
 -- 更新现有用户的角色 (根据 userType)

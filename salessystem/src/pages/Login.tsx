@@ -20,6 +20,8 @@ import { appAuthService } from '../services/modules/appAuth';
 import { ApiError } from '../types/api';
 import type { AuthRole } from '../types/auth';
 
+const SMS_COOLDOWN_SECONDS = 60;
+
 export default function Login() {
   const navigate = useNavigate();
   const { loginAdmin, loginMerchant, loginUser } = useAuth();
@@ -27,6 +29,10 @@ export default function Login() {
   const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [smsCode, setSmsCode] = useState('');
+  const [smsCooldown, setSmsCooldown] = useState(0);
+  const [isSendingSms, setIsSendingSms] = useState(false);
   const [captchaCode, setCaptchaCode] = useState('');
   const [captchaKey, setCaptchaKey] = useState('');
   const [captchaImage, setCaptchaImage] = useState('');
@@ -51,6 +57,15 @@ export default function Login() {
     void loadCaptcha();
   }, []);
 
+  // SMS cooldown countdown
+  useEffect(() => {
+    if (smsCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setSmsCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [smsCooldown]);
+
   async function loadCaptcha() {
     setIsCaptchaLoading(true);
 
@@ -66,7 +81,49 @@ export default function Login() {
     }
   }
 
+  async function handleSendSmsCode() {
+    if (!phone.trim()) {
+      setError('请输入手机号');
+      return;
+    }
+    if (!/^1[3-9]\d{9}$/.test(phone.trim())) {
+      setError('请输入正确的手机号');
+      return;
+    }
+    if (!captchaCode.trim()) {
+      setError('请输入图形验证码');
+      return;
+    }
+    if (!captchaKey) {
+      setError('验证码未准备好，请刷新后重试');
+      return;
+    }
+
+    setIsSendingSms(true);
+    setError('');
+
+    try {
+      await appAuthService.sendSmsCode({
+        phone: phone.trim(),
+        captchaKey,
+        captchaCode: captchaCode.trim(),
+      });
+      setSmsCooldown(SMS_COOLDOWN_SECONDS);
+      void loadCaptcha();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '验证码发送失败，请稍后重试');
+      void loadCaptcha();
+    } finally {
+      setIsSendingSms(false);
+    }
+  }
+
   async function handleLogin() {
+    if (selectedRole === 'user' && loginMethod === 'sms') {
+      await handleSmsLogin();
+      return;
+    }
+
     if (!username.trim() || !password.trim() || !captchaCode.trim()) {
       setError('请输入完整的登录信息');
       return;
@@ -105,6 +162,43 @@ export default function Login() {
     }
   }
 
+  async function handleSmsLogin() {
+    if (!phone.trim()) {
+      setError('请输入手机号');
+      return;
+    }
+    if (!smsCode.trim()) {
+      setError('请输入短信验证码');
+      return;
+    }
+    if (!captchaCode.trim()) {
+      setError('请输入图形验证码');
+      return;
+    }
+    if (!captchaKey) {
+      setError('验证码未准备好，请刷新后重试');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await loginUser('sms', {
+        phone: phone.trim(),
+        smsCode: smsCode.trim(),
+        captchaKey,
+        captchaCode: captchaCode.trim(),
+      });
+      navigate('/');
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
+      void loadCaptcha();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function handleThirdPartyLogin() {
     if (!username.trim() || !password.trim() || !captchaCode.trim()) {
       setError('请先填写账号、凭证和图形验证码，再触发第三方登录');
@@ -134,12 +228,7 @@ export default function Login() {
     }
   }
 
-  const identifierPlaceholder =
-    selectedRole === 'user' && loginMethod === 'sms' ? '手机号 / 用户名' : '用户名 / Email';
-  const passwordPlaceholder =
-    selectedRole === 'user' && loginMethod === 'sms'
-      ? '短信验证码（当前后端仍复用 password 字段）'
-      : '请输入密码';
+  const isSmsMode = selectedRole === 'user' && loginMethod === 'sms';
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 p-4">
@@ -245,38 +334,97 @@ export default function Login() {
             </div>
 
             <div className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  登录账号
-                </label>
-                <div className="group relative">
-                  <Mail className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(event) => setUsername(event.target.value)}
-                    placeholder={identifierPlaceholder}
-                    className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
-                  />
-                </div>
-              </div>
+              {isSmsMode ? (
+                <>
+                  {/* Phone number input */}
+                  <div className="flex flex-col gap-2">
+                    <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      手机号
+                    </label>
+                    <div className="group relative">
+                      <Smartphone className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value)}
+                        placeholder="请输入手机号"
+                        maxLength={11}
+                        className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  {selectedRole === 'user' && loginMethod === 'sms' ? '验证码' : '密码'}
-                </label>
-                <div className="group relative">
-                  <Lock className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
-                  <input
-                    type={selectedRole === 'user' && loginMethod === 'sms' ? 'text' : 'password'}
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={passwordPlaceholder}
-                    className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
-                  />
-                </div>
-              </div>
+                  {/* SMS code input with send button */}
+                  <div className="flex flex-col gap-2">
+                    <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      短信验证码
+                    </label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_148px]">
+                      <div className="group relative">
+                        <MessageSquare className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                        <input
+                          type="text"
+                          value={smsCode}
+                          onChange={(event) => setSmsCode(event.target.value)}
+                          placeholder="请输入短信验证码"
+                          maxLength={6}
+                          className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleSendSmsCode()}
+                        disabled={isSendingSms || smsCooldown > 0}
+                        className="flex h-[58px] items-center justify-center rounded-[20px] border-2 border-slate-100 bg-slate-50/70 px-4 text-sm font-black transition-all hover:border-primary hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {isSendingSms
+                          ? '发送中...'
+                          : smsCooldown > 0
+                            ? `${smsCooldown}s`
+                            : '获取验证码'}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Username / email input */}
+                  <div className="flex flex-col gap-2">
+                    <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      登录账号
+                    </label>
+                    <div className="group relative">
+                      <Mail className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                      <input
+                        type="text"
+                        value={username}
+                        onChange={(event) => setUsername(event.target.value)}
+                        placeholder="用户名 / Email"
+                        className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
 
+                  {/* Password input */}
+                  <div className="flex flex-col gap-2">
+                    <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      密码
+                    </label>
+                    <div className="group relative">
+                      <Lock className="absolute left-5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-300 transition-colors group-focus-within:text-primary" />
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="请输入密码"
+                        className="w-full rounded-[20px] border-2 border-slate-100 bg-slate-50/50 py-4 pl-14 pr-6 font-bold text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-primary focus:bg-white"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Captcha (shared by both modes) */}
               <div className="flex flex-col gap-2">
                 <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   图形验证码
@@ -314,7 +462,7 @@ export default function Login() {
               )}
 
               <button
-                onClick={handleLogin}
+                onClick={() => void handleLogin()}
                 disabled={isSubmitting}
                 className="flex w-full items-center justify-center gap-3 rounded-[24px] bg-primary py-5 text-lg font-black text-white shadow-2xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
               >
@@ -325,14 +473,14 @@ export default function Login() {
               {selectedRole === 'user' && (
                 <div className="flex items-center justify-center gap-4 py-2">
                   <button
-                    onClick={handleThirdPartyLogin}
+                    onClick={() => void handleThirdPartyLogin()}
                     disabled={isSubmitting}
                     className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 shadow-sm transition-all hover:bg-slate-100"
                   >
                     <Github size={20} />
                   </button>
                   <button
-                    onClick={handleThirdPartyLogin}
+                    onClick={() => void handleThirdPartyLogin()}
                     disabled={isSubmitting}
                     className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400 shadow-sm transition-all hover:bg-slate-100"
                   >
@@ -359,3 +507,4 @@ export default function Login() {
     </div>
   );
 }
+

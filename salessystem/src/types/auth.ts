@@ -18,6 +18,19 @@ export interface PlatformLoginDTO {
   captchaCode: string;
 }
 
+export interface SmsSendCodeDTO {
+  phone: string;
+  captchaKey: string;
+  captchaCode: string;
+}
+
+export interface SmsLoginDTO {
+  phone: string;
+  smsCode: string;
+  captchaKey: string;
+  captchaCode: string;
+}
+
 export interface LoginCaptchaVO {
   captchaKey: string;
   captchaImage: string;

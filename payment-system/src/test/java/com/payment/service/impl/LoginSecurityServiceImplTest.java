@@ -118,8 +118,8 @@ class LoginSecurityServiceImplTest {
         service.recordFailure("user@test.com", "10.0.0.1");
 
         verify(mapper).insert(any(LoginFailRecord.class));
-        // 仅 1 次 update（递增），未触发锁定
-        verify(mapper).update(any(), any(LambdaUpdateWrapper.class));
+        // 窗口重置检查 + 原子递增 = 2 次 update
+        verify(mapper, org.mockito.Mockito.times(2)).update(any(), any(LambdaUpdateWrapper.class));
     }
 
     @Test

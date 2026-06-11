@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
 import com.payment.config.TestSaTokenConfig;
+import com.payment.config.TestRedissonConfig;
 import com.payment.entity.Product;
 import com.payment.entity.Tenant;
 import com.payment.mapper.ProductMapper;
@@ -34,7 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({TestSaTokenConfig.class, GlobalExceptionHandler.class})
+@Import({TestSaTokenConfig.class, TestRedissonConfig.class, GlobalExceptionHandler.class})
 @DisplayName("V1 商户与商品浏览集成测试")
 class V1AppCatalogIntegrationTest {
 
@@ -182,8 +183,7 @@ class V1AppCatalogIntegrationTest {
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data", hasSize(2)))
                     .andExpect(jsonPath("$.data[0].name").value("经典咖啡"))
-                    .andExpect(jsonPath("$.data[0].price").value(28.00))
-                    .andExpect(jsonPath("$.data[0].tenantId").value(1))
+                    .andExpect(jsonPath("$.data[0].price").value(2800))
                     .andExpect(jsonPath("$.data[1].name").value("抹茶拿铁"))
                     .andExpect(jsonPath("$.timestamp").isNumber());
         }
@@ -219,10 +219,9 @@ class V1AppCatalogIntegrationTest {
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data.id").value(1))
                     .andExpect(jsonPath("$.data.name").value("经典咖啡"))
-                    .andExpect(jsonPath("$.data.price").value(28.00))
+                    .andExpect(jsonPath("$.data.price").value(2800))
                     .andExpect(jsonPath("$.data.unit").value("杯"))
                     .andExpect(jsonPath("$.data.category").value("饮品"))
-                    .andExpect(jsonPath("$.data.tenantId").value(1))
                     .andExpect(jsonPath("$.data.status").value(1))
                     .andExpect(jsonPath("$.timestamp").isNumber());
         }

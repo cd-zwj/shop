@@ -78,12 +78,36 @@ describe('appAuthService', () => {
     });
   });
 
+
+  describe('sendSmsCode', () => {
+    it('应调用 POST /v1/app/auth/sms/send-code 并携带 phone + captcha', async () => {
+      // Arrange
+      const payload = {
+        phone: '13800138000',
+        captchaKey: 'key',
+        captchaCode: 'code',
+      };
+      mockRequest.mockResolvedValue(undefined);
+
+      // Act
+      await appAuthService.sendSmsCode(payload);
+
+      // Assert
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/auth/sms/send-code',
+        method: 'post',
+        data: payload,
+        authRole: false,
+      });
+    });
+  });
+
   describe('loginBySms', () => {
     it('应调用 POST /v1/app/auth/login/sms', async () => {
       // Arrange
       const payload = {
-        username: '13800138000',
-        password: '',
+        phone: '13800138000',
+        smsCode: '123456',
         captchaKey: 'key',
         captchaCode: 'code',
       };

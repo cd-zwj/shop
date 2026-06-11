@@ -15,7 +15,7 @@ import type {
   AdminSession,
   AuthRole,
   MerchantSession,
-  PlatformLoginDTO,
+  PlatformLoginDTO, SmsLoginDTO,
   PlatformRegisterDTO,
   PlatformUser,
 } from '../types/auth';
@@ -45,7 +45,7 @@ interface AuthContextValue {
   currentUser: PlatformUser | null;
   merchantSession: MerchantSession | null;
   adminSession: AdminSession | null;
-  loginUser: (method: UserLoginMethod, payload: PlatformLoginDTO) => Promise<PlatformUser>;
+  loginUser: (method: UserLoginMethod, payload: PlatformLoginDTO | SmsLoginDTO) => Promise<PlatformUser>;
   loginMerchant: (payload: PlatformLoginDTO) => Promise<MerchantSession>;
   loginAdmin: (payload: PlatformLoginDTO) => Promise<AdminSession>;
   registerUser: (payload: PlatformRegisterDTO) => Promise<PlatformUser>;
@@ -155,15 +155,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAdminSessionState(null);
   }
 
-  async function loginUser(method: UserLoginMethod, payload: PlatformLoginDTO) {
+  async function loginUser(method: UserLoginMethod, payload: PlatformLoginDTO | SmsLoginDTO) {
     await activateRole('user');
 
-    const token =
-      method === 'password'
-        ? await appAuthService.loginByPassword(payload)
-        : method === 'sms'
-          ? await appAuthService.loginBySms(payload)
-          : await appAuthService.loginByThirdParty(payload);
+    let token: string;
+    if (method === 'password') {
+      token = await appAuthService.loginByPassword(payload as PlatformLoginDTO);
+    } else if (method === 'sms') {
+      token = await appAuthService.loginBySms(payload as SmsLoginDTO);
+    } else {
+      token = await appAuthService.loginByThirdParty(payload as PlatformLoginDTO);
+    }
 
     setToken('user', token);
     const profile = await appUserService.getCurrentUser();

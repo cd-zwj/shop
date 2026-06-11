@@ -36,28 +36,7 @@ public class RabbitMQConfig {
         return new Queue(RECHARGE_ORDER_DELAY_QUEUE, true, false, false, args);
     }
 
-    /**
-     * 订单创建队列（带死信配置）
-     */
-    @Bean
-    public Queue orderCreatedQueue() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE);
-        args.put("x-dead-letter-routing-key", DEAD_LETTER_ROUTING_KEY);
-        return new Queue("payment.order.created", true, false, false, args);
-    }
-    
-    /**
-     * 订单支付成功队列（带死信配置）
-     */
-    @Bean
-    public Queue orderPaidQueue() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-dead-letter-exchange", DEAD_LETTER_EXCHANGE);
-        args.put("x-dead-letter-routing-key", DEAD_LETTER_ROUTING_KEY);
-        return new Queue("payment.order.paid", true, false, false, args);
-    }
-    
+
     /**
      * 扫码请求队列
      */

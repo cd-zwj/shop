@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { LoginCaptchaVO, PlatformLoginDTO, PlatformRegisterDTO, PlatformUser } from '../../types/auth';
+import type { LoginCaptchaVO, PlatformLoginDTO, PlatformRegisterDTO, PlatformUser, SmsLoginDTO, SmsSendCodeDTO } from '../../types/auth';
 
 export const appAuthService = {
   getCaptcha() {
@@ -28,7 +28,16 @@ export const appAuthService = {
     });
   },
 
-  loginBySms(payload: PlatformLoginDTO) {
+  sendSmsCode(payload: SmsSendCodeDTO) {
+    return request<void>({
+      url: '/v1/app/auth/sms/send-code',
+      method: 'post',
+      data: payload,
+      authRole: false,
+    });
+  },
+
+  loginBySms(payload: SmsLoginDTO) {
     return request<string>({
       url: '/v1/app/auth/login/sms',
       method: 'post',

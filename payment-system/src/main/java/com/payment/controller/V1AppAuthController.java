@@ -6,10 +6,13 @@ import com.payment.common.Result;
 import com.payment.dto.AppUserVO;
 import com.payment.dto.PlatformLoginDTO;
 import com.payment.dto.PlatformRegisterDTO;
+import com.payment.dto.SmsLoginDTO;
+import com.payment.dto.SmsSendCodeDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.service.AuthCaptchaService;
 import com.payment.service.LoginSecurityService;
 import com.payment.service.PlatformIdentityService;
+import com.payment.service.SmsCodeService;
 import com.payment.service.login.PlatformLoginRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -27,6 +30,7 @@ public class V1AppAuthController {
     private final AuthCaptchaService authCaptchaService;
     private final PlatformIdentityService platformIdentityService;
     private final LoginSecurityService loginSecurityService;
+    private final SmsCodeService smsCodeService;
 
     @RateLimit(prefix = "auth:register", window = 3600, maxRequests = 5, includeIp = true, message = "注册过于频繁，请稍后再试")
     @PostMapping("/register")
@@ -51,19 +55,27 @@ public class V1AppAuthController {
         }
     }
 
-    @RateLimit(prefix = "auth:login", key = "#dto.username", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
+    @RateLimit(prefix = "auth:sms:send", key = "#dto.phone", window = 60, maxRequests = 3, includeIp = true, message = "验证码发送过于频繁，请稍后再试")
+    @PostMapping("/sms/send-code")
+    public Result<Void> sendSmsCode(@Valid @RequestBody SmsSendCodeDTO dto) {
+        authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());
+        smsCodeService.sendLoginCode(dto.getPhone());
+        return Result.success();
+    }
+
+    @RateLimit(prefix = "auth:login", key = "#dto.phone", window = 300, maxRequests = 10, includeIp = true, message = "登录尝试过于频繁，请稍后再试")
     @PostMapping("/login/sms")
-    public Result<String> loginBySms(@Valid @RequestBody PlatformLoginDTO dto,
+    public Result<String> loginBySms(@Valid @RequestBody SmsLoginDTO dto,
                                      HttpServletRequest request) {
         authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());
-        loginSecurityService.checkNotLocked(dto.getUsername());
+        loginSecurityService.checkNotLocked(dto.getPhone());
         try {
             String token = platformIdentityService.login(
-                    PlatformLoginRequest.sms(dto.getUsername(), dto.getPassword()));
-            loginSecurityService.clearFailures(dto.getUsername());
+                    PlatformLoginRequest.sms(dto.getPhone(), dto.getSmsCode()));
+            loginSecurityService.clearFailures(dto.getPhone());
             return Result.success(token);
         } catch (RuntimeException e) {
-            loginSecurityService.recordFailure(dto.getUsername(), request.getRemoteAddr());
+            loginSecurityService.recordFailure(dto.getPhone(), request.getRemoteAddr());
             throw e;
         }
     }

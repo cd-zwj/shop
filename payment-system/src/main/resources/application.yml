@@ -182,6 +182,11 @@ app:
       code-ttl-minutes: ${MAIL_CODE_TTL_MINUTES:10}
       send-cooldown-seconds: ${MAIL_SEND_COOLDOWN_SECONDS:60}
       max-daily-send-count: ${MAIL_MAX_DAILY_SEND_COUNT:20}
+    sms:
+      enabled: ${SMS_ENABLED:true}
+      provider: ${SMS_PROVIDER:mock}
+      sign-name: ${SMS_SIGN_NAME:}
+      template-code: ${SMS_TEMPLATE_CODE:}
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

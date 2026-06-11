@@ -93,8 +93,8 @@ public class MemberServiceImpl implements MemberService {
         if (level == null) {
             throw new BusinessException("会员等级不存在或未启用");
         }
-        // 统一存储 member_level.id（主键），而非 levelRank
-        member.setMemberLevel(level.getId().intValue());
+        // 存储 levelRank 而非主键 id，保持会员等级语义一致
+        member.setMemberLevel(level.getLevelRank());
         memberMapper.updateById(member);
     }
 
@@ -194,19 +194,22 @@ public class MemberServiceImpl implements MemberService {
         // 从最高门槛开始匹配，找到第一个达标等级
         for (MemberLevel lv : levels) {
             if (lv.getUpgradeGrowth() != null && totalSpend.compareTo(new BigDecimal(lv.getUpgradeGrowth())) >= 0) {
-                // 如果目标等级高于当前等级才升级（比较 rank，但存储 id）
+                // 如果目标等级高于当前等级才升级（member_level 存 levelRank）
                 int currentRank = 0;
                 if (member.getMemberLevel() != null) {
-                    MemberLevel curLevel = levelMapper.selectById(member.getMemberLevel());
+                    MemberLevel curLevel = levelMapper.selectOne(new LambdaQueryWrapper<MemberLevel>()
+                            .eq(MemberLevel::getTenantId, tenantId)
+                            .eq(MemberLevel::getLevelRank, member.getMemberLevel())
+                            .eq(MemberLevel::getStatus, ENABLED));
                     if (curLevel != null) {
                         currentRank = curLevel.getLevelRank();
                     }
                 }
                 if (lv.getLevelRank() > currentRank) {
-                    member.setMemberLevel(lv.getId().intValue());
+                    member.setMemberLevel(lv.getLevelRank());
                     memberMapper.updateById(member);
-                    log.info("会员自动升级: tenantId={}, userId={}, newLevelId={}, newLevelRank={}, totalSpend={}",
-                            tenantId, platformUserId, lv.getId(), lv.getLevelRank(), totalSpend);
+                    log.info("会员自动升级: tenantId={}, userId={}, newLevelRank={}, totalSpend={}",
+                            tenantId, platformUserId, lv.getLevelRank(), totalSpend);
                 }
                 break;
             }

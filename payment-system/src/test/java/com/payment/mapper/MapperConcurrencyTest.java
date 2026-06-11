@@ -37,7 +37,7 @@ class MapperConcurrencyTest {
         public DataSource dataSource() {
             return new EmbeddedDatabaseBuilder()
                     .setType(EmbeddedDatabaseType.H2)
-                    .setName("testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE")
+                    .setName("mapper_concurrency_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE")
                     .addScript("schema-test.sql")
                     .build();
         }

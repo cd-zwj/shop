@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
 import com.payment.config.TestSaTokenConfig;
+import com.payment.config.TestRedissonConfig;
 import com.payment.entity.PlatformUser;
 import com.payment.service.PlatformIdentityService;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({TestSaTokenConfig.class, GlobalExceptionHandler.class})
+@Import({TestSaTokenConfig.class, TestRedissonConfig.class, GlobalExceptionHandler.class})
 @DisplayName("V1 用户信息接口集成测试")
 class V1AppUserIntegrationTest {
 

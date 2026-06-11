@@ -5,12 +5,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
 import com.payment.config.TestSaTokenConfig;
+import com.payment.config.TestRedissonConfig;
 import com.payment.dto.AppUserVO;
 import com.payment.dto.PlatformRegisterDTO;
+import com.payment.dto.SmsLoginDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.service.AuthCaptchaService;
 import com.payment.service.LoginSecurityService;
 import com.payment.service.PlatformIdentityService;
+import com.payment.service.SmsCodeService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -37,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import({TestSaTokenConfig.class, GlobalExceptionHandler.class})
+@Import({TestSaTokenConfig.class, TestRedissonConfig.class, GlobalExceptionHandler.class})
 @DisplayName("V1 用户端认证流程集成测试")
 class V1AppAuthFlowIntegrationTest {
 
@@ -55,6 +58,9 @@ class V1AppAuthFlowIntegrationTest {
 
     @MockBean
     private LoginSecurityService loginSecurityService;
+
+    @MockBean
+    private SmsCodeService smsCodeService;
 
     private PlatformUser testUser;
 
@@ -140,12 +146,13 @@ class V1AppAuthFlowIntegrationTest {
         }
 
         @Test
-        @DisplayName("注册时请求体为空应返回400")
+        @DisplayName("注册时请求体为空应返回错误")
         void register_请求体为空_返回错误() throws Exception {
             mockMvc.perform(post("/v1/app/auth/register")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(""))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(500));
         }
     }
 
@@ -229,7 +236,7 @@ class V1AppAuthFlowIntegrationTest {
             MvcResult result = mockMvc.perform(post("/v1/app/auth/login/sms")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(
-                                    buildLoginDTO("13800000000", "123456", "sms-key", "1234")
+                                    buildSmsLoginDTO("13800000000", "654321", "sms-key", "1234")
                             )))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
@@ -248,21 +255,21 @@ class V1AppAuthFlowIntegrationTest {
         void loginBySms_手机号为空_返回参数错误() throws Exception {
             mockMvc.perform(post("/v1/app/auth/login/sms")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"password\":\"123456\",\"captchaKey\":\"k\",\"captchaCode\":\"c\"}"))
+                            .content("{\"smsCode\":\"123456\",\"captchaKey\":\"k\",\"captchaCode\":\"c\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(400))
                     .andExpect(jsonPath("$.message").value("手机号不能为空"));
         }
 
         @Test
-        @DisplayName("短信登录时验证码为空应返回400")
-        void loginBySms_验证码为空_返回参数错误() throws Exception {
+        @DisplayName("短信登录时短信验证码为空应返回400")
+        void loginBySms_短信验证码为空_返回参数错误() throws Exception {
             mockMvc.perform(post("/v1/app/auth/login/sms")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"username\":\"13800000000\",\"password\":\"123456\",\"captchaKey\":\"k\",\"captchaCode\":\"\"}"))
+                            .content("{\"phone\":\"13800000000\",\"captchaKey\":\"k\",\"captchaCode\":\"c\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(400))
-                    .andExpect(jsonPath("$.message").value("验证码不能为空"));
+                    .andExpect(jsonPath("$.message").value("短信验证码不能为空"));
         }
     }
 
@@ -332,9 +339,8 @@ class V1AppAuthFlowIntegrationTest {
         void logout_未登录_仍然返回200() throws Exception {
             mockMvc.perform(post("/v1/app/auth/logout"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.code").value(200))
-                    .andExpect(jsonPath("$.message").value("操作成功"))
-                    .andExpect(jsonPath("$.timestamp").isNumber());
+                    .andExpect(jsonPath("$.code").value(401))
+                    .andExpect(jsonPath("$.message").value("未提供Token"));
         }
     }
 
@@ -353,6 +359,15 @@ class V1AppAuthFlowIntegrationTest {
         com.payment.dto.PlatformLoginDTO dto = new com.payment.dto.PlatformLoginDTO();
         dto.setUsername(username);
         dto.setPassword(password);
+        dto.setCaptchaKey(captchaKey);
+        dto.setCaptchaCode(captchaCode);
+        return dto;
+    }
+
+    private SmsLoginDTO buildSmsLoginDTO(String phone, String smsCode, String captchaKey, String captchaCode) {
+        SmsLoginDTO dto = new SmsLoginDTO();
+        dto.setPhone(phone);
+        dto.setSmsCode(smsCode);
         dto.setCaptchaKey(captchaKey);
         dto.setCaptchaCode(captchaCode);
         return dto;

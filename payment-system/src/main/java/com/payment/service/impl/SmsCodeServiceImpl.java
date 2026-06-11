@@ -4,6 +4,7 @@ import cn.hutool.core.util.RandomUtil;
 import com.payment.common.BusinessException;
 import com.payment.config.SmsAuthProperties;
 import com.payment.service.SmsCodeService;
+import com.payment.service.sms.SmsSender;
 import com.payment.util.RedisUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class SmsCodeServiceImpl implements SmsCodeService {
 
     private final RedisUtils redisUtils;
     private final SmsAuthProperties smsAuthProperties;
+    private final SmsSender smsSender;
 
     /**
      * 发送登录编码。
@@ -53,9 +55,12 @@ public class SmsCodeServiceImpl implements SmsCodeService {
         redisUtils.set(SMS_CODE_PREFIX + normalizedPhone, code, Duration.ofMinutes(smsAuthProperties.getCodeTtlMinutes()));
         redisUtils.set(cooldownKey, "1", Duration.ofSeconds(smsAuthProperties.getSendCooldownSeconds()));
 
-        // 当前阶段先走 mock 发送，方便前后端联调；后续可替换为真实短信供应商实现。
-        log.info("发送短信登录验证码，phone={}, provider={}",
-                normalizedPhone, smsAuthProperties.getProvider());
+        try {
+            smsSender.send(normalizedPhone, code);
+        } catch (Exception e) {
+            log.error("短信发送失败, phone={}", normalizedPhone, e);
+            throw new BusinessException("短信发送失败，请稍后重试");
+        }
     }
 
     /**
