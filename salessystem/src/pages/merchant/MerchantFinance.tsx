@@ -22,6 +22,7 @@ import type {
 import type { PageResult } from '../../types/api';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
+import { Pagination } from '../../components/Pagination';
 
 const DEFAULT_SUMMARY: MerchantWalletSummary = {
   tenantId: 0,
@@ -502,30 +503,13 @@ export default function MerchantFinance() {
               </table>
             </div>
 
-            {txTotal > 10 && (
-              <div className="flex items-center justify-between pt-2">
-                <span className="text-xs font-medium text-slate-400">共 {txTotal} 条</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={txPage <= 1}
-                    onClick={() => setTxPage((p) => Math.max(1, p - 1))}
-                    className="rounded-xl px-3 py-1.5 text-xs font-black bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    上一页
-                  </button>
-                  <span className="text-xs font-bold text-slate-600">
-                    {txPage} / {Math.ceil(txTotal / 10)}
-                  </span>
-                  <button
-                    disabled={txPage >= Math.ceil(txTotal / 10)}
-                    onClick={() => setTxPage((p) => p + 1)}
-                    className="rounded-xl px-3 py-1.5 text-xs font-black bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    下一页
-                  </button>
-                </div>
-              </div>
-            )}
+            <Pagination
+              current={txPage}
+              total={txTotal}
+              pageSize={10}
+              onChange={setTxPage}
+              className="pt-2"
+            />
           </>
         )}
       </section>

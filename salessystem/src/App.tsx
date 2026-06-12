@@ -32,6 +32,7 @@ import {
   HeartHandshake
 } from 'lucide-react';
 import { cn } from './lib/utils';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import Home from './pages/Home';
 import Discovery from './pages/Discovery';
@@ -381,10 +382,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <Router>
-        <AppContent />
-      </Router>
-    </ToastProvider>
+    <ErrorBoundary variant="fullscreen">
+      <ToastProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
