@@ -15,6 +15,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
 import com.payment.service.ProductInventoryService;
+import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class PaymentV1Consumer {
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsRuleMapper pointsRuleMapper;
     private final MemberService memberService;
+    private final UserNotificationService notificationService;
 
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
@@ -114,6 +116,17 @@ public class PaymentV1Consumer {
             memberService.checkAndAutoUpgrade(salesOrder.getTenantId(), salesOrder.getPlatformUserId());
         } catch (Exception e) {
             log.warn("会员自动升级检查失败, orderNo={}, userId={}", orderNo, salesOrder.getPlatformUserId(), e);
+        }
+
+        // 通知用户：订单支付成功
+        try {
+            notificationService.send(
+                    salesOrder.getPlatformUserId(),
+                    "订单支付成功",
+                    "您的订单 " + orderNo + " 已支付成功，金额 ¥" + salesOrder.getTotalAmount(),
+                    "ORDER");
+        } catch (Exception e) {
+            log.warn("发送订单支付成功通知失败, orderNo={}", orderNo, e);
         }
     }
 }

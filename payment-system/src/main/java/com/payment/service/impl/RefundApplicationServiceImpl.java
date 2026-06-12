@@ -14,6 +14,7 @@ import com.payment.mapper.RefundApplicationMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.PointsService;
 import com.payment.service.RefundApplicationService;
+import com.payment.service.UserNotificationService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +38,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     private final SalesOrderMapper salesOrderMapper;
     private final PointsService pointsService;
     private final ExchangeProductMapper exchangeProductMapper;
+    private final UserNotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -83,6 +85,18 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         }
 
         log.info("退款申请已创建: refundNo={}, orderNo={}, amount={}", app.getRefundNo(), app.getOrderNo(), app.getRefundAmount());
+
+        // 通知用户：退款申请已提交
+        try {
+            notificationService.send(
+                    platformUserId,
+                    "退款申请已提交",
+                    "您的退款申请 " + app.getRefundNo() + " 已提交，金额 ¥" + app.getRefundAmount() + "，等待审核",
+                    "REFUND");
+        } catch (Exception e) {
+            log.warn("发送退款申请通知失败, refundNo={}", app.getRefundNo(), e);
+        }
+
         return app;
     }
 

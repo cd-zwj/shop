@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.AdminDashboardOverviewVO;
+import com.payment.dto.AdminTrendVO;
 import com.payment.dto.AdminOrderListVO;
 import com.payment.dto.AdminPaymentBillVO;
 import com.payment.dto.AdminPlatformUserVO;
@@ -54,6 +55,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -163,6 +167,119 @@ public class V1AdminServiceImpl implements V1AdminService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add));
         vo.setPendingWithdrawals(withdrawalService.listWithdrawalsForAdmin(1, 1, null, 0, null, null).getTotal());
         return vo;
+    }
+
+    @Override
+    public AdminTrendVO getTrend(String startDate, String endDate, String granularity) {
+        LocalDate end = endDate != null ? LocalDate.parse(endDate) : LocalDate.now();
+        LocalDate start = startDate != null ? LocalDate.parse(startDate) : end.minusDays(29);
+        String gran = (granularity == null || granularity.isBlank()) ? "DAY" : granularity.toUpperCase();
+
+        // 订单聚合
+        String dateExpr = dateExpr(gran);
+        List<Map<String, Object>> orderRows = salesOrderMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<SalesOrder>()
+                        .select(dateExpr + " AS period",
+                                "COUNT(*) AS orderCount",
+                                "COALESCE(SUM(total_amount), 0) AS orderAmount")
+                        .eq("deleted", 0)
+                        .ge("create_time", start.atStartOfDay())
+                        .lt("create_time", end.plusDays(1).atStartOfDay())
+                        .groupBy(dateExpr)
+                        .orderByAsc("period"));
+
+        // 用户增长聚合（platform_user 在 IGNORE_TABLES 中，无租户条件，查全平台注册）
+        List<Map<String, Object>> userRows = platformUserMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PlatformUser>()
+                        .select(dateExpr + " AS period", "COUNT(*) AS newUsers")
+                        .eq("deleted", 0)
+                        .ge("create_time", start.atStartOfDay())
+                        .lt("create_time", end.plusDays(1).atStartOfDay())
+                        .groupBy(dateExpr)
+                        .orderByAsc("period"));
+
+        // 用 Map<String, Object[]> 保留 BigDecimal 精度：[orderCount, orderAmount, newUsers]
+        Map<String, Object[]> dataMap = new HashMap<>();
+        for (Map<String, Object> row : orderRows) {
+            String period = String.valueOf(row.get("period"));
+            Object[] v = dataMap.computeIfAbsent(period, k -> new Object[]{0L, BigDecimal.ZERO, 0L});
+            v[0] = row.get("orderCount") instanceof Number ? ((Number) row.get("orderCount")).longValue() : 0L;
+            v[1] = row.get("orderAmount") instanceof Number ? new BigDecimal(row.get("orderAmount").toString()) : BigDecimal.ZERO;
+        }
+        for (Map<String, Object> row : userRows) {
+            String period = String.valueOf(row.get("period"));
+            Object[] v = dataMap.computeIfAbsent(period, k -> new Object[]{0L, BigDecimal.ZERO, 0L});
+            v[2] = row.get("newUsers") instanceof Number ? ((Number) row.get("newUsers")).longValue() : 0L;
+        }
+
+        // 按粒度遍历并填充空位
+        List<AdminTrendVO.TrendPoint> points = new ArrayList<>();
+        for (LocalDate d = startDateForGranularity(start, gran);
+             !d.isAfter(end);
+             d = nextDate(d, gran)) {
+
+            String key = dateToKey(d, gran);
+            Object[] v = dataMap.getOrDefault(key, new Object[]{0L, BigDecimal.ZERO, 0L});
+            AdminTrendVO.TrendPoint p = new AdminTrendVO.TrendPoint();
+            p.setDate(key);
+            p.setOrderCount(v[0] instanceof Number ? ((Number) v[0]).longValue() : 0L);
+            p.setOrderAmount(v[1] instanceof BigDecimal ? (BigDecimal) v[1] : BigDecimal.ZERO);
+            p.setNewUsers(v[2] instanceof Number ? ((Number) v[2]).longValue() : 0L);
+            points.add(p);
+        }
+
+        AdminTrendVO vo = new AdminTrendVO();
+        vo.setPoints(points);
+        return vo;
+    }
+
+    /** 按粒度生成 SQL 日期表达式。 */
+    private String dateExpr(String gran) {
+        return switch (gran) {
+            case "WEEK" -> "DATE_FORMAT(create_time, '%x-%v')";   // ISO 年-周
+            case "MONTH" -> "DATE_FORMAT(create_time, '%Y-%m')";  // 年-月
+            default -> "DATE(create_time)";                        // 默认日
+        };
+    }
+
+    /** 按粒度返回遍历起点（WEEK 对齐到周一）。 */
+    private LocalDate startDateForGranularity(LocalDate start, String gran) {
+        if ("WEEK".equals(gran)) {
+            return start.with(java.time.DayOfWeek.MONDAY);
+        }
+        return start;
+    }
+
+    /** 按粒度步进到下一个区间。 */
+    private LocalDate nextDate(LocalDate current, String gran) {
+        return switch (gran) {
+            case "WEEK" -> current.plusWeeks(1);
+            case "MONTH" -> current.plusMonths(1);
+            default -> current.plusDays(1);
+        };
+    }
+
+    /** 将 LocalDate 转为与 SQL 聚合键一致的字符串。 */
+    private String dateToKey(LocalDate d, String gran) {
+        return switch (gran) {
+            case "WEEK" -> {
+                java.time.temporal.WeekFields wf = java.time.temporal.WeekFields.ISO;
+                int week = d.get(wf.weekOfWeekBasedYear());
+                int year = d.get(wf.weekBasedYear());
+                yield String.format("%04d-%02d", year, week);
+            }
+            case "MONTH" -> d.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+            default -> d.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+        };
+    }
+
+    private AdminTrendVO.TrendPoint emptyPoint(String date) {
+        AdminTrendVO.TrendPoint p = new AdminTrendVO.TrendPoint();
+        p.setDate(date);
+        p.setOrderCount(0L);
+        p.setOrderAmount(BigDecimal.ZERO);
+        p.setNewUsers(0L);
+        return p;
     }
 
     @Override

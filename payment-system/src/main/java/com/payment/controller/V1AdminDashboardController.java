@@ -3,10 +3,12 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
 import com.payment.dto.AdminDashboardOverviewVO;
+import com.payment.dto.AdminTrendVO;
 import com.payment.service.V1AdminService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -31,5 +33,14 @@ public class V1AdminDashboardController {
     @GetMapping("/dashboard/overview")
     public Result<AdminDashboardOverviewVO> getOverview() {
         return Result.success(v1AdminService.getDashboardOverview());
+    }
+
+    @SaCheckPermission("admin:dashboard")
+    @GetMapping("/dashboard/trend")
+    public Result<AdminTrendVO> getTrend(
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false, defaultValue = "DAY") String granularity) {
+        return Result.success(v1AdminService.getTrend(startDate, endDate, granularity));
     }
 }

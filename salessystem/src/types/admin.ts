@@ -24,6 +24,17 @@ export interface AdminDashboardOverview {
   pendingWithdrawals: number;
 }
 
+export interface AdminTrendPoint {
+  date: string;
+  orderCount: number;
+  orderAmount: number;
+  newUsers: number;
+}
+
+export interface AdminTrendData {
+  points: AdminTrendPoint[];
+}
+
 export interface AdminMerchantListItem {
   id: number;
   tenantCode: string;

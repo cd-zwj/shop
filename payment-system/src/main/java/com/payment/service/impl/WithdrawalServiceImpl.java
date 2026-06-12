@@ -12,9 +12,11 @@ import com.payment.entity.Tenant;
 import com.payment.entity.User;
 import com.payment.entity.Withdrawal;
 import com.payment.mapper.MerchantBalanceMapper;
+import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.mapper.UserMapper;
 import com.payment.mapper.WithdrawalMapper;
+import com.payment.service.UserNotificationService;
 import com.payment.service.WithdrawalService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
@@ -45,6 +47,12 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
     @Autowired
     private UserMapper userMapper;
+
+    @Autowired
+    private TenantEmployeeMapper tenantEmployeeMapper;
+
+    @Autowired
+    private UserNotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -352,6 +360,9 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
         log.info("提现审核通过 withdrawalId={}, tenantId={}, amount={}",
                 withdrawalId, withdrawal.getTenantId(), withdrawal.getAmount());
+
+        notifyMerchantEmployee(withdrawal.getTenantId(), "提现审批通过",
+                "您的提现申请 ¥" + withdrawal.getAmount() + " 已审批通过，资金将尽快到账", "PAYMENT");
     }
 
     @Override
@@ -391,5 +402,47 @@ public class WithdrawalServiceImpl implements WithdrawalService {
 
         log.info("提现审核拒绝 withdrawalId={}, tenantId={}, reason={}",
                 withdrawalId, withdrawal.getTenantId(), reason);
+
+        notifyMerchantEmployee(withdrawal.getTenantId(), "提现审批被拒绝",
+                "您的提现申请 ¥" + withdrawal.getAmount() + " 被拒绝，原因：" + reason, "PAYMENT");
+    }
+
+    /**
+     * 向商户的管理员员工发送通知（Withdrawal 无 platformUserId）。
+     * 策略：优先找角色为管理员的启用员工，退而求其次取最早加入的启用员工。
+     */
+    private void notifyMerchantEmployee(Long tenantId, String title, String content, String category) {
+        try {
+            // 优先：角色为管理员的启用员工
+            com.payment.entity.TenantEmployee employee = findAdminEmployee(tenantId);
+            if (employee == null) {
+                // 兜底：最早加入的启用员工
+                employee = tenantEmployeeMapper.selectOne(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.payment.entity.TenantEmployee>()
+                                .eq(com.payment.entity.TenantEmployee::getTenantId, tenantId)
+                                .eq(com.payment.entity.TenantEmployee::getStatus, 1)
+                                .orderByAsc(com.payment.entity.TenantEmployee::getCreateTime)
+                                .last("LIMIT 1"));
+            }
+            if (employee != null && employee.getPlatformUserId() != null) {
+                notificationService.send(employee.getPlatformUserId(), title, content, category);
+            } else {
+                log.debug("商户无可用员工可通知, tenantId={}", tenantId);
+            }
+        } catch (Exception e) {
+            log.warn("发送提现通知失败, tenantId={}", tenantId, e);
+        }
+    }
+
+    /**
+     * 查找商户下角色为管理员的启用员工。
+     */
+    private com.payment.entity.TenantEmployee findAdminEmployee(Long tenantId) {
+        return tenantEmployeeMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.payment.entity.TenantEmployee>()
+                        .eq(com.payment.entity.TenantEmployee::getTenantId, tenantId)
+                        .eq(com.payment.entity.TenantEmployee::getStatus, 1)
+                        .like(com.payment.entity.TenantEmployee::getEmployeeRole, "admin")
+                        .last("LIMIT 1"));
     }
 }

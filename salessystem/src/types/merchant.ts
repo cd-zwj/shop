@@ -109,5 +109,24 @@ export interface MerchantWithdrawalApplyPayload {
   accountName: string;
 }
 
+export interface MerchantTransaction {
+  id: number;
+  bizType: string;
+  bizNo?: string | null;
+  changeAmount: number;
+  balanceBefore?: number | null;
+  balanceAfter?: number | null;
+  remark?: string | null;
+  createTime?: string | null;
+}
+
+export interface MerchantTransactionFilters {
+  current?: number;
+  size?: number;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export type MerchantOrder = SalesOrder;
 export type MerchantOrderDetail = SalesOrderDetail;

@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.payment.constant.RefundConstants;
 import com.payment.common.BusinessException;
 import com.payment.dto.RefundQueryResultDTO;
@@ -24,6 +25,7 @@ import com.payment.mapper.RefundRecordMapper;
 import com.payment.mapper.RefundReconcileTaskMapper;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
+import com.payment.service.UserNotificationService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,7 @@ public class RefundServiceImpl implements RefundService {
     private final CompensationTaskMapper compensationTaskMapper;
     private final PaymentBillMapper paymentBillMapper;
     private final List<PaymentProvider> paymentProviders;
+    private final UserNotificationService notificationService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -99,6 +102,16 @@ public class RefundServiceImpl implements RefundService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void processLateCallbackRefundTask(CompensationTask compensationTask) {
+        // 抢占式更新：只有当前状态为 PENDING/PROCESSING 的任务才能被当前线程领取。
+        // 防止 RetryTaskScheduler 和 RefundTaskScheduler 并发处理同一任务导致重复退款。
+        boolean claimed = claimTask(compensationTask.getId());
+        if (!claimed) {
+            log.debug("补偿任务已被其他调度器领取，跳过: taskNo={}", compensationTask.getTaskNo());
+            return;
+        }
+        // 重新加载最新状态（claim 已将状态设为 PROCESSING）
+        compensationTask.setTaskStatus("PROCESSING");
+
         RefundOrder refundOrder = refundOrderMapper.selectOne(new LambdaQueryWrapper<RefundOrder>()
                 .eq(RefundOrder::getPaymentBillNo, compensationTask.getBizNo())
                 .eq(RefundOrder::getDeleted, 0));
@@ -244,6 +257,26 @@ public class RefundServiceImpl implements RefundService {
         return provider;
     }
 
+    /**
+     * 抢占式领取补偿任务。
+     * 只允许从 PENDING 状态抢占为 PROCESSING，保证两个调度器互斥。
+     * 对于卡死的 PROCESSING 状态（超时 5 分钟未完成），允许超时回收重新领取。
+     */
+    private boolean claimTask(Long taskId) {
+        LocalDateTime timeoutThreshold = LocalDateTime.now().minusMinutes(5);
+        int rows = compensationTaskMapper.update(null,
+                new LambdaUpdateWrapper<CompensationTask>()
+                        .eq(CompensationTask::getId, taskId)
+                        .and(w -> w
+                                .eq(CompensationTask::getTaskStatus, "PENDING")
+                                .or(o -> o
+                                        .eq(CompensationTask::getTaskStatus, "PROCESSING")
+                                        .lt(CompensationTask::getUpdateTime, timeoutThreshold)))
+                        .set(CompensationTask::getTaskStatus, "PROCESSING")
+                        .set(CompensationTask::getUpdateTime, LocalDateTime.now()));
+        return rows > 0;
+    }
+
     private void createLateCallbackRefundTaskIfAbsent(String paymentBillNo, String refundNo) {
         CompensationTask existing = compensationTaskMapper.selectOne(new LambdaQueryWrapper<CompensationTask>()
                 .eq(CompensationTask::getBizType, RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE)
@@ -299,6 +332,10 @@ public class RefundServiceImpl implements RefundService {
             refundRecord.setNotifyData(buildProviderPayload(RefundChannelStatusEnum.SUCCESS.name(), message));
             refundRecordMapper.updateById(refundRecord);
         }
+
+        // 通知用户：退款已到账
+        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
+                "退款已到账", "退款成功", refundOrder.getRefundAmount());
     }
 
     private void markRefundFailure(RefundOrder refundOrder, RefundRecord refundRecord, String message) {
@@ -310,6 +347,19 @@ public class RefundServiceImpl implements RefundService {
             refundRecord.setChannelStatus(RefundChannelStatusEnum.FAIL.name());
             refundRecord.setNotifyData(buildProviderPayload(RefundChannelStatusEnum.FAIL.name(), message));
             refundRecordMapper.updateById(refundRecord);
+        }
+
+        // 通知用户：退款失败
+        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
+                "退款失败: " + message, "退款失败", refundOrder.getRefundAmount());
+    }
+
+    private void sendRefundNotification(Long platformUserId, String refundNo, String content, String title, BigDecimal amount) {
+        if (platformUserId == null) return;
+        try {
+            notificationService.send(platformUserId, title, content, "REFUND");
+        } catch (Exception e) {
+            log.warn("发送退款通知失败, refundNo={}", refundNo, e);
         }
     }
 

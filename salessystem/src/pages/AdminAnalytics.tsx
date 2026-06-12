@@ -3,7 +3,6 @@ import { motion } from 'motion/react';
 import {
   Zap,
   Database,
-  ShieldAlert,
   ChevronRight,
   Brain,
   Globe,
@@ -15,89 +14,19 @@ import {
   XAxis,
   Tooltip,
   ResponsiveContainer,
-  Cell,
   LineChart as ReLineChart,
   Line,
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { adminDashboardService } from '../services/modules/adminDashboard';
-import { request } from '../services/request';
-import type { AdminDashboardOverview } from '../types/admin';
+import type { AdminDashboardOverview, AdminTrendPoint } from '../types/admin';
 
 /* ---------- Types ---------- */
 
-interface AnomalyItem {
-  name: string;
-  count: number;
-  alert?: boolean;
-}
-
-interface TrendPoint {
+interface TrendChartPoint {
   date: string;
-  current: number;
-  previous: number;
-}
-
-interface AnalysisRecord {
-  id: number;
-  tenantId?: number | null;
-  analysisType?: string | null;
-  analysisData?: string | null;
-  status?: string | null;
-  createTime?: string | null;
-}
-
-/* ---------- Helpers ---------- */
-
-function fetchAnalysisList(): Promise<AnalysisRecord[]> {
-  return request<AnalysisRecord[]>({
-    url: '/analysis/list',
-    method: 'get',
-    authRole: 'admin',
-  });
-}
-
-/** Derive per-day anomaly bar data from analysis records. */
-function deriveAnomalies(records: AnalysisRecord[]): AnomalyItem[] {
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const counts: Record<string, number> = {};
-  dayNames.forEach((d) => (counts[d] = 0));
-
-  records.forEach((r) => {
-    if (r.createTime) {
-      const dow = new Date(r.createTime).getDay();
-      counts[dayNames[dow]] = (counts[dayNames[dow]] ?? 0) + 1;
-    }
-  });
-
-  const values = Object.values(counts);
-  const max = Math.max(...values, 1);
-  const threshold = max * 0.7;
-
-  return dayNames.map((name) => ({
-    name,
-    count: counts[name] ?? 0,
-    alert: (counts[name] ?? 0) >= threshold,
-  }));
-}
-
-/** Build a trend series from overview totals.
- *  Since there is no admin-level time-series API,
- *  we derive a synthetic 7-point growth curve so the chart is not empty. */
-function deriveTrend(overview: AdminDashboardOverview): TrendPoint[] {
-  const total = overview.totalOrderAmount ?? 0;
-  const step = total / 7;
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-  });
-
-  return dates.map((date, i) => ({
-    date,
-    current: Math.round(step * (i + 1)),
-    previous: Math.round(step * (i + 1) * 0.7),
-  }));
+  orderAmount: number;
+  orderCount: number;
 }
 
 /* ---------- Sub-components ---------- */
@@ -137,12 +66,34 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+/* ---------- Formatting helpers ---------- */
+
+function formatCount(n: number | undefined | null): string {
+  if (n == null) return '--';
+  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`;
+  return n.toLocaleString('zh-CN');
+}
+
+function formatCurrency(n: number | undefined | null): string {
+  if (n == null) return '--';
+  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`;
+  return `¥${n.toLocaleString('zh-CN')}`;
+}
+
+/** 将 ISO 日期 (yyyy-MM-dd) 转为短显示 (MM/dd) */
+function toShortDate(isoDate: string): string {
+  const parts = isoDate.split('-');
+  if (parts.length === 3) {
+    return `${parts[1]}/${parts[2]}`;
+  }
+  return isoDate;
+}
+
 /* ---------- Main Component ---------- */
 
 export default function AdminAnalytics() {
   const [overview, setOverview] = useState<AdminDashboardOverview | null>(null);
-  const [anomaliesData, setAnomaliesData] = useState<AnomalyItem[]>([]);
-  const [trendData, setTrendData] = useState<TrendPoint[]>([]);
+  const [trendData, setTrendData] = useState<TrendChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -154,23 +105,38 @@ export default function AdminAnalytics() {
       setError(null);
 
       try {
-        const [overviewRes, analysisList] = await Promise.allSettled([
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - 29);
+
+        const fmt = (d: Date) =>
+          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+        const [overviewRes, trendRes] = await Promise.allSettled([
           adminDashboardService.getOverview(),
-          fetchAnalysisList(),
+          adminDashboardService.getTrend({
+            startDate: fmt(startDate),
+            endDate: fmt(endDate),
+            granularity: 'DAY',
+          }),
         ]);
 
         if (cancelled) return;
 
         if (overviewRes.status === 'fulfilled') {
           setOverview(overviewRes.value);
-          setTrendData(deriveTrend(overviewRes.value));
         }
 
-        if (analysisList.status === 'fulfilled') {
-          setAnomaliesData(deriveAnomalies(analysisList.value));
+        if (trendRes.status === 'fulfilled' && trendRes.value.points?.length > 0) {
+          setTrendData(
+            trendRes.value.points.map((p: AdminTrendPoint) => ({
+              date: toShortDate(p.date),
+              orderAmount: p.orderAmount ?? 0,
+              orderCount: p.orderCount ?? 0,
+            })),
+          );
         } else {
-          // Analysis endpoint may be restricted; fall back to empty
-          setAnomaliesData([]);
+          setTrendData([]);
         }
 
         if (overviewRes.status === 'rejected') {
@@ -194,6 +160,7 @@ export default function AdminAnalytics() {
   }, []);
 
   /* ---------- Derived display values ---------- */
+  const hasRealTrendData = trendData.some((d) => d.orderAmount > 0 || d.orderCount > 0);
   const metrics = overview
     ? [
         { label: '平台用户总数', value: formatCount(overview.totalPlatformUsers), icon: Cpu, color: 'text-primary' },
@@ -208,14 +175,12 @@ export default function AdminAnalytics() {
         { label: '已支付订单率', value: '--', icon: Brain, color: 'text-indigo-500' },
       ];
 
-  const hasAnomalyData = anomaliesData.some((d) => d.count > 0);
-
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">智能引擎与深度分析</h1>
-          <p className="text-slate-500 font-medium font-inter">基于平台实时数据的全局流量分析与异常检测系统。</p>
+          <p className="text-slate-500 font-medium font-inter">基于平台实时数据的全局流量分析与趋势监控。</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl flex items-center gap-2">
@@ -256,12 +221,14 @@ export default function AdminAnalytics() {
                 </div>
                 <div>
                   <h3 className="text-2xl font-black tracking-tight">订单金额增长趋势</h3>
-                  <p className="text-slate-400 font-medium text-sm font-inter">平台累计订单金额 7 日走势</p>
+                  <p className="text-slate-400 font-medium text-sm font-inter">
+                    近 30 日每日订单金额走势（真实数据）
+                  </p>
                 </div>
               </div>
 
               <div className="h-[320px] w-full">
-                {trendData.length > 0 ? (
+                {hasRealTrendData ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <ReLineChart data={trendData}>
                       <defs>
@@ -277,26 +244,29 @@ export default function AdminAnalytics() {
                           </feMerge>
                         </filter>
                       </defs>
+                      <XAxis
+                        dataKey="date"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fontSize: 10, fontWeight: 700, fill: '#64748b' }}
+                        interval="preserveStartEnd"
+                      />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
                         itemStyle={{ color: '#fff' }}
+                        formatter={(value: number, name: string) => [
+                          name === 'orderAmount' ? formatCurrency(value) : value,
+                          name === 'orderAmount' ? '订单金额' : '订单数',
+                        ]}
                       />
                       <Line
                         type="monotone"
-                        dataKey="current"
+                        dataKey="orderAmount"
                         stroke="#0ea5e9"
                         strokeWidth={4}
                         dot={false}
                         activeDot={{ r: 8, stroke: '#fff', strokeWidth: 4 }}
                         filter="url(#shadow)"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="previous"
-                        stroke="#1e293b"
-                        strokeWidth={2}
-                        strokeDasharray="5 5"
-                        dot={false}
                       />
                     </ReLineChart>
                   </ResponsiveContainer>
@@ -333,33 +303,40 @@ export default function AdminAnalytics() {
           >
             <div className="flex flex-col gap-3">
               <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center border border-orange-100">
-                <ShieldAlert className="w-6 h-6" />
+                <Zap className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-black text-slate-900">异常检测分析</h3>
-              <p className="text-sm text-slate-500 leading-relaxed font-inter font-medium">按星期分布的分析记录频次，高频日标记为异常。</p>
+              <h3 className="text-xl font-black text-slate-900">每日订单量</h3>
+              <p className="text-sm text-slate-500 leading-relaxed font-inter font-medium">近 30 日每日订单数分布。</p>
             </div>
 
             <div className="h-[200px] w-full">
-              {hasAnomalyData ? (
+              {hasRealTrendData ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={anomaliesData}>
-                    <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                      {anomaliesData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.alert ? '#f43f5e' : '#cbd5e1'} />
-                      ))}
-                    </Bar>
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 800, fill: '#94a3b8' }} />
+                  <BarChart data={trendData}>
+                    <Bar dataKey="orderCount" fill="#cbd5e1" radius={[8, 8, 0, 0]} />
+                    <XAxis
+                      dataKey="date"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
+                      interval="preserveStartEnd"
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold' }}
+                      itemStyle={{ color: '#fff' }}
+                      formatter={(value: number) => [value, '订单数']}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyState message="暂无分析记录" />
+                <EmptyState message="暂无订单数据" />
               )}
             </div>
 
             <div className="flex flex-col gap-4">
               <div className="p-4 bg-red-50 rounded-2xl flex items-center justify-between group cursor-pointer hover:bg-red-100 transition-colors">
                 <div className="flex items-center gap-3">
-                  <ShieldAlert className="w-5 h-5 text-red-500" />
+                  <Brain className="w-5 h-5 text-red-500" />
                   <span className="text-sm font-black text-red-700">
                     {overview?.pendingWithdrawals
                       ? `待处理提现: ${overview.pendingWithdrawals} 笔`
@@ -397,18 +374,4 @@ export default function AdminAnalytics() {
       </div>
     </div>
   );
-}
-
-/* ---------- Formatting helpers ---------- */
-
-function formatCount(n: number | undefined | null): string {
-  if (n == null) return '--';
-  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`;
-  return n.toLocaleString('zh-CN');
-}
-
-function formatCurrency(n: number | undefined | null): string {
-  if (n == null) return '--';
-  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万`;
-  return `¥${n.toLocaleString('zh-CN')}`;
 }

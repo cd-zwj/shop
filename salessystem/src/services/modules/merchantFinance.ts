@@ -5,6 +5,8 @@ import type {
   MerchantPointsRulePayload,
   MerchantRechargeRule,
   MerchantRechargeRulePayload,
+  MerchantTransaction,
+  MerchantTransactionFilters,
   MerchantWalletSummary,
   MerchantWithdrawal,
   MerchantWithdrawalApplyPayload,
@@ -80,6 +82,21 @@ export const merchantFinanceService = {
       url: `/v1/merchant/tenants/${tenantId}/withdrawals`,
       method: 'post',
       data: payload,
+      authRole: 'merchant',
+    });
+  },
+
+  listTransactions(tenantId: number, filters: MerchantTransactionFilters = {}) {
+    return request<PageResult<MerchantTransaction>>({
+      url: `/v1/merchant/tenants/${tenantId}/transactions`,
+      method: 'get',
+      params: {
+        current: filters.current ?? 1,
+        size: filters.size ?? 20,
+        type: filters.type,
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+      },
       authRole: 'merchant',
     });
   },

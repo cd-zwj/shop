@@ -3,9 +3,9 @@ import {
   AlertCircle,
   ArrowRight,
   ArrowUpRight,
-  Banknote,
   CircleDollarSign,
   Landmark,
+  List,
   ShieldCheck,
   Wallet,
 } from 'lucide-react';
@@ -15,9 +15,11 @@ import { merchantFinanceService } from '../../services/modules/merchantFinance';
 import type {
   MerchantPointsRule,
   MerchantRechargeRule,
+  MerchantTransaction,
   MerchantWalletSummary,
   MerchantWithdrawal,
 } from '../../types/merchant';
+import type { PageResult } from '../../types/api';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 
@@ -29,6 +31,22 @@ const DEFAULT_SUMMARY: MerchantWalletSummary = {
   totalWithdrawal: 0,
 };
 
+const TX_TYPE_LABEL: Record<string, string> = {
+  PAYMENT: '收款',
+  REFUND: '退款',
+  RECHARGE: '充值',
+  WITHDRAWAL: '提现',
+  POINTS: '积分',
+};
+
+const TX_TYPE_BADGE: Record<string, string> = {
+  PAYMENT: 'bg-green-100 text-green-700',
+  REFUND: 'bg-red-100 text-red-700',
+  RECHARGE: 'bg-blue-100 text-blue-700',
+  WITHDRAWAL: 'bg-orange-100 text-orange-700',
+  POINTS: 'bg-purple-100 text-purple-700',
+};
+
 export default function MerchantFinance() {
   const navigate = useNavigate();
   const { merchantSession } = useAuth();
@@ -37,6 +55,13 @@ export default function MerchantFinance() {
   const [pointsRule, setPointsRule] = useState<MerchantPointsRule | null>(null);
   const [rechargeRules, setRechargeRules] = useState<MerchantRechargeRule[]>([]);
   const [withdrawals, setWithdrawals] = useState<MerchantWithdrawal[]>([]);
+  const [transactions, setTransactions] = useState<MerchantTransaction[]>([]);
+  const [txTotal, setTxTotal] = useState(0);
+  const [txPage, setTxPage] = useState(1);
+  const [txTypeFilter, setTxTypeFilter] = useState('');
+  const [txStartDate, setTxStartDate] = useState('');
+  const [txEndDate, setTxEndDate] = useState('');
+  const [txLoading, setTxLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -81,6 +106,39 @@ export default function MerchantFinance() {
       isMounted = false;
     };
   }, [tenantId]);
+
+  /* ---------- 收支流水加载 ---------- */
+  useEffect(() => {
+    if (!tenantId) return;
+    let isMounted = true;
+    setTxLoading(true);
+
+    merchantFinanceService
+      .listTransactions(tenantId, {
+        current: txPage,
+        size: 10,
+        type: txTypeFilter || undefined,
+        startDate: txStartDate || undefined,
+        endDate: txEndDate || undefined,
+      })
+      .then((res: PageResult<MerchantTransaction>) => {
+        if (!isMounted) return;
+        setTransactions(res.records ?? []);
+        setTxTotal(res.total ?? 0);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setTransactions([]);
+        setTxTotal(0);
+      })
+      .finally(() => {
+        if (isMounted) setTxLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId, txPage, txTypeFilter, txStartDate, txEndDate]);
 
   const enabledRechargeRules = useMemo(
     () => rechargeRules.filter((rule) => Number(rule.status) === 1),
@@ -336,17 +394,141 @@ export default function MerchantFinance() {
             </div>
           </div>
 
-          <div className="rounded-[40px] border border-blue-100 bg-blue-50 p-8">
-            <div className="flex items-center gap-3 text-primary">
-              <Banknote className="h-5 w-5" />
-              <span className="text-xs font-black uppercase tracking-widest">对接说明</span>
-            </div>
-            <p className="mt-3 text-sm font-medium leading-relaxed text-blue-700">
-              当前后端没有提供独立的收支流水接口，所以财务页展示的是余额汇总、运营规则快照和最近提现记录，不再使用原来的前端 mock 流水。
-            </p>
-          </div>
         </section>
       </div>
+
+      {/* 收支流水 */}
+      <section className="flex flex-col gap-6 rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary/5 flex items-center justify-center text-primary">
+              <List className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black tracking-tight text-slate-900">收支流水</h2>
+              <p className="text-sm font-medium text-slate-500">商户钱包资金变动记录。</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {['', 'PAYMENT', 'REFUND', 'RECHARGE', 'WITHDRAWAL'].map((t) => (
+              <button
+                key={t}
+                onClick={() => {
+                  setTxTypeFilter(t);
+                  setTxPage(1);
+                }}
+                className={cn(
+                  'rounded-xl px-3 py-1.5 text-xs font-black transition-all',
+                  txTypeFilter === t
+                    ? 'bg-primary text-white'
+                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+                )}
+              >
+                {t === '' ? '全部' : TX_TYPE_LABEL[t] ?? t}
+              </button>
+            ))}
+            <input
+              type="date"
+              value={txStartDate}
+              onChange={(e) => { setTxStartDate(e.target.value); setTxPage(1); }}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white"
+              placeholder="开始日期"
+            />
+            <span className="text-xs text-slate-400">至</span>
+            <input
+              type="date"
+              value={txEndDate}
+              onChange={(e) => { setTxEndDate(e.target.value); setTxPage(1); }}
+              className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white"
+              placeholder="结束日期"
+            />
+            {(txStartDate || txEndDate) && (
+              <button
+                onClick={() => { setTxStartDate(''); setTxEndDate(''); setTxPage(1); }}
+                className="rounded-xl px-2 py-1.5 text-xs font-bold text-slate-400 hover:text-red-500 transition-colors"
+              >
+                清除
+              </button>
+            )}
+          </div>
+        </div>
+
+        {txLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-14 rounded-2xl bg-slate-50 animate-pulse" />
+            ))}
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="rounded-[28px] border border-dashed border-slate-200 px-6 py-12 text-center text-sm font-medium text-slate-400">
+            暂无收支流水记录。
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">时间</th>
+                    <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">类型</th>
+                    <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">关联单号</th>
+                    <th className="pb-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">变动金额</th>
+                    <th className="pb-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">变动后余额</th>
+                    <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3.5 text-slate-600 font-medium">
+                        {tx.createTime ? formatDateTime(tx.createTime) : '--'}
+                      </td>
+                      <td className="py-3.5">
+                        <span className={cn('rounded-xl px-2.5 py-1 text-[10px] font-black uppercase tracking-widest', TX_TYPE_BADGE[tx.bizType] ?? 'bg-slate-100 text-slate-500')}>
+                          {TX_TYPE_LABEL[tx.bizType] ?? tx.bizType}
+                        </span>
+                      </td>
+                      <td className="py-3.5 font-mono text-xs text-slate-500">{tx.bizNo ?? '--'}</td>
+                      <td className={cn('py-3.5 text-right font-black', (tx.changeAmount ?? 0) >= 0 ? 'text-green-600' : 'text-red-600')}>
+                        {(tx.changeAmount ?? 0) >= 0 ? '+' : ''}{formatCurrency(tx.changeAmount)}
+                      </td>
+                      <td className="py-3.5 text-right font-medium text-slate-600">
+                        {tx.balanceAfter != null ? formatCurrency(tx.balanceAfter) : '--'}
+                      </td>
+                      <td className="py-3.5 text-slate-500 max-w-[200px] truncate">{tx.remark ?? '--'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {txTotal > 10 && (
+              <div className="flex items-center justify-between pt-2">
+                <span className="text-xs font-medium text-slate-400">共 {txTotal} 条</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={txPage <= 1}
+                    onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+                    className="rounded-xl px-3 py-1.5 text-xs font-black bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    上一页
+                  </button>
+                  <span className="text-xs font-bold text-slate-600">
+                    {txPage} / {Math.ceil(txTotal / 10)}
+                  </span>
+                  <button
+                    disabled={txPage >= Math.ceil(txTotal / 10)}
+                    onClick={() => setTxPage((p) => p + 1)}
+                    className="rounded-xl px-3 py-1.5 text-xs font-black bg-slate-100 text-slate-500 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  >
+                    下一页
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }

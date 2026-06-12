@@ -2,6 +2,7 @@ package com.payment.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.dto.AdminDashboardOverviewVO;
+import com.payment.dto.AdminTrendVO;
 import com.payment.dto.AdminOrderListVO;
 import com.payment.dto.AdminPaymentBillVO;
 import com.payment.dto.AdminPlatformUserVO;
@@ -30,6 +31,8 @@ public interface V1AdminService {
     Map<String, Object> getAdminInfo();
 
     AdminDashboardOverviewVO getDashboardOverview();
+
+    AdminTrendVO getTrend(String startDate, String endDate, String granularity);
 
     AdminTradeOverviewVO getTradeOverview();
 

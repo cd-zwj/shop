@@ -15,11 +15,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * POS收银控制器
+ * POS 收银控制器 — 已下线，代码保留用于参考。
  * <p>
- * POS 收银功能待 V1 迁移。
+ * 当前状态（2026-06-12）：@Deprecated + @Profile({"dev","test"}) 双标记，
+ * 生产环境不会加载。前端已无任何 POS 路由/页面/菜单入口。
+ * 零外部代码引用，仅自身引用 ScanService。
  *
- * @deprecated 待 V1 迁移完成后移除
+ * @deprecated 已下线，待 V1 迁移完成后移除
  */
 @Deprecated
 @Profile({"dev", "test"})

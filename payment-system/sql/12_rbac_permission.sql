@@ -210,4 +210,11 @@ INSERT INTO sys_permission (permission_code, permission_name, module, descriptio
 ('admin:user:update', '平台用户状态维护', 'admin', '启用或禁用平台用户'),
 ('admin:trade:overview', '交易总览', 'admin', '查看平台交易聚合数据'),
 ('admin:trade:list', '交易列表', 'admin', '查看订单、支付单、充值单列表'),
-('admin:trade:detail', '交易详情', 'admin', '查看订单详情');
+('admin:trade:detail', '交易详情', 'admin', '查看订单详情'),
+('admin:compensation:list', '补偿任务查询', 'admin', '查看补偿任务和重试任务列表'),
+('admin:compensation:operate', '补偿任务操作', 'admin', '重试或取消补偿任务和重试任务');
+
+-- 授予管理员角色对新增权限的访问权（幂等，重复执行不报错）
+INSERT IGNORE INTO sys_role_permission (role_id, permission_id)
+SELECT 3, id FROM sys_permission WHERE permission_code IN
+    ('admin:compensation:list', 'admin:compensation:operate');
