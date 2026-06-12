@@ -151,7 +151,6 @@ const BottomNav = () => {
   const navItems = [
     { icon: Store, label: '首页', path: '/' },
     { icon: ShoppingCart, label: '购物车', path: '/cart', badge: true },
-    { icon: Bot, label: 'AI助手', path: '/ai' },
     { icon: Wallet, label: '钱包', path: '/wallet' },
     { icon: User, label: '我的', path: '/profile' },
   ];
@@ -327,7 +326,8 @@ function AppContent() {
             <Route path="/orders/:orderNo/refund" element={<AuthGuard><ApplyRefund /></AuthGuard>} />
             <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
             <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />
-            <Route path="/ai" element={<AuthGuard><AIAssistant /></AuthGuard>} />
+            {/* AI 助手已隐藏：后端功能未联调，待后续需要时恢复 */}
+            {/* <Route path="/ai" element={<AuthGuard><AIAssistant /></AuthGuard>} /> */}
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/success" element={<AuthGuard><Success /></AuthGuard>} />
             <Route path="/coupons" element={<AuthGuard><CouponCenter /></AuthGuard>} />
