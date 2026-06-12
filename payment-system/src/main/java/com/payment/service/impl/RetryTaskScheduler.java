@@ -3,9 +3,15 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.entity.CompensationTask;
 import com.payment.entity.RetryTask;
+import com.payment.entity.SalesOrder;
 import com.payment.mapper.CompensationTaskMapper;
 import com.payment.mapper.RetryTaskMapper;
+import com.payment.mapper.SalesOrderMapper;
+import com.payment.service.AppOrderService;
 import com.payment.service.RefundService;
+import com.payment.service.SmsCodeService;
+import com.payment.service.WalletRechargeService;
+import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -13,16 +19,20 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 重试任务调度器。
  * 轮询 retry_task 表中 PENDING 且 (nextRetryTime IS NULL OR nextRetryTime <= now) 的记录。
  *
  * 已接入的处理器：
- * - REFUND_QUERY → 委托 RefundService.processLateCallbackRefundTask
+ * - REFUND_QUERY   → RefundService（退款对账，委托 CompensationTask）
+ * - ORDER_CLOSE    → AppOrderService.cancelOrder
+ * - RECHARGE_CREDIT → WalletRechargeService.handleRechargeSuccess
+ * - SMS_RETRY      → SmsCodeService.sendLoginCode
  *
- * 未接入的 taskType（任务保持 PENDING + 退避重试，不标记 DEAD）：
- * - PAYMENT_CALLBACK, ORDER_CLOSE, RECHARGE_CREDIT, COUPON_COMPENSATE, SMS_RETRY
+ * 未接入的 taskType（退避重试，超 maxRetryCount 后 DEAD）：
+ * - PAYMENT_CALLBACK, COUPON_COMPENSATE
  */
 @Slf4j
 @Component
@@ -33,7 +43,11 @@ public class RetryTaskScheduler {
 
     private final RetryTaskMapper retryTaskMapper;
     private final CompensationTaskMapper compensationTaskMapper;
+    private final SalesOrderMapper salesOrderMapper;
     private final RefundService refundService;
+    private final AppOrderService appOrderService;
+    private final WalletRechargeService walletRechargeService;
+    private final SmsCodeService smsCodeService;
 
     @Scheduled(fixedDelayString = "${payment.retry-task.fixed-delay-ms:60000}")
     public void processRetryTasks() {
@@ -57,13 +71,17 @@ public class RetryTaskScheduler {
     private void dispatch(RetryTask task) {
         switch (task.getTaskType()) {
             case "REFUND_QUERY" -> handleRefundQuery(task);
+            case "ORDER_CLOSE" -> handleOrderClose(task);
+            case "RECHARGE_CREDIT" -> handleRechargeCredit(task);
+            case "SMS_RETRY" -> handleSmsRetry(task);
             default -> handleUnsupported(task);
         }
     }
 
+    /* ---------- 已接入的处理器 ---------- */
+
     /**
-     * REFUND_QUERY: 查找对应的 CompensationTask 委托给已有的退款对账流程。
-     * 如果 CompensationTask 已不存在或已终态，直接标记 RetryTask 完成/死亡。
+     * REFUND_QUERY: 委托给已有的退款对账流程（通过 CompensationTask）。
      */
     private void handleRefundQuery(RetryTask task) {
         CompensationTask ct = compensationTaskMapper.selectOne(
@@ -72,7 +90,6 @@ public class RetryTaskScheduler {
                         .eq(CompensationTask::getBizType, "LATE_CALLBACK_REFUND"));
 
         if (ct == null) {
-            // 对应补偿任务不存在（可能已被清理），标记死亡
             markDead(task, "关联的 CompensationTask 不存在: bizNo=" + task.getBizNo());
             return;
         }
@@ -85,23 +102,67 @@ public class RetryTaskScheduler {
             return;
         }
 
-        // 委托给已有的退款对账处理
         refundService.processLateCallbackRefundTask(ct);
 
-        // 同步结果
         if ("SUCCESS".equals(ct.getTaskStatus())) {
             onSuccess(task, ct.getRemark());
         } else if ("FAIL".equals(ct.getTaskStatus())) {
             markDead(task, "退款处理失败: " + ct.getRemark());
         } else {
-            // PROCESSING 或 PENDING：退款仍在进行中，稍后重试
             onFailure(task, "退款处理中，等待下次重试");
         }
     }
 
     /**
-     * 未接入的 taskType：不标记 DEAD，使用退避重试保留机会。
-     * 超过 maxRetryCount 后自然转为 DEAD。
+     * ORDER_CLOSE: 关闭超时未支付订单。
+     * bizNo = orderNo，通过 SalesOrder 查 platformUserId。
+     */
+    private void handleOrderClose(RetryTask task) {
+        SalesOrder order = salesOrderMapper.selectOne(
+                new LambdaQueryWrapper<SalesOrder>()
+                        .eq(SalesOrder::getOrderNo, task.getBizNo())
+                        .eq(SalesOrder::getDeleted, 0));
+        if (order == null) {
+            markDead(task, "订单不存在: " + task.getBizNo());
+            return;
+        }
+        appOrderService.cancelOrder(order.getPlatformUserId(), task.getBizNo());
+        onSuccess(task, "订单已关闭: " + task.getBizNo());
+    }
+
+    /**
+     * RECHARGE_CREDIT: 充值入账重试。
+     * bizNo = rechargeNo。
+     */
+    private void handleRechargeCredit(RetryTask task) {
+        walletRechargeService.handleRechargeSuccess(task.getBizNo());
+        onSuccess(task, "充值入账成功: " + task.getBizNo());
+    }
+
+    /**
+     * SMS_RETRY: 短信重发。
+     * 从 extensionJson 中解析手机号：{"phone": "13800138000"}
+     */
+    @SuppressWarnings("unchecked")
+    private void handleSmsRetry(RetryTask task) {
+        if (task.getExtensionJson() == null || task.getExtensionJson().isBlank()) {
+            markDead(task, "extensionJson 为空，无法解析手机号");
+            return;
+        }
+        Map<String, Object> ext = JsonUtils.fromJson(task.getExtensionJson(), Map.class);
+        String phone = ext != null ? String.valueOf(ext.get("phone")) : null;
+        if (phone == null || phone.isBlank()) {
+            markDead(task, "extensionJson 中无 phone 字段");
+            return;
+        }
+        smsCodeService.sendLoginCode(phone);
+        onSuccess(task, "短信已重发: " + phone);
+    }
+
+    /* ---------- 通用方法 ---------- */
+
+    /**
+     * 未接入的 taskType：退避重试，超 maxRetryCount 后 DEAD。
      */
     private void handleUnsupported(RetryTask task) {
         log.warn("重试任务暂无处理器，退避重试: taskNo={}, taskType={}", task.getTaskNo(), task.getTaskType());

@@ -30,6 +30,10 @@ import java.util.concurrent.TimeUnit;
  * 扫码收银服务实现
  */
 @Slf4j
+/**
+ * @deprecated POS 功能已下线，代码保留用于参考。
+ */
+@Deprecated
 @Service
 public class ScanServiceImpl implements ScanService {
 

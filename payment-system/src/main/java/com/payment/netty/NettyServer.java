@@ -34,6 +34,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Netty服务器 - 处理扫码请求
  */
+/**
+ * @deprecated POS 扫码收银已下线，Netty 服务不再需要。代码保留用于参考。
+ */
+@Deprecated
 @Slf4j
 @Component
 public class NettyServer {

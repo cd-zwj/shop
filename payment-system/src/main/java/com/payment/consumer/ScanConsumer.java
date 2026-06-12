@@ -19,6 +19,10 @@ import org.springframework.stereotype.Component;
 /**
  * RabbitMQ消费者 - 处理扫码请求
  */
+/**
+ * @deprecated POS 功能已下线，代码保留用于参考。
+ */
+@Deprecated
 @Slf4j
 @Component
 public class ScanConsumer {

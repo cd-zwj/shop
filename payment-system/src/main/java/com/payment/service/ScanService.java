@@ -11,6 +11,11 @@ import java.util.Map;
 /**
  * 扫码收银服务接口
  */
+/**
+ * 扫码服务 — 已废弃，POS 收银模块已下线。
+ * @deprecated POS 功能已下线，代码保留用于参考。关联文件：ScanServiceImpl、ScanConsumer、NettyServer、PosController。
+ */
+@Deprecated
 public interface ScanService {
     
     /**
