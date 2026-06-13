@@ -58,9 +58,9 @@ public interface V1AdminService {
 
     Page<WithdrawalVO> listWithdrawals(Integer current, Integer size, String merchantName, Integer status, String startDate, String endDate);
 
-    void approveWithdrawal(Long withdrawalId);
+    void approveWithdrawal(Long withdrawalId, Long approverId);
 
-    void rejectWithdrawal(Long withdrawalId, String reason);
+    void rejectWithdrawal(Long withdrawalId, Long approverId, String reason);
 
     Map<String, List<Permission>> listPermissions();
 

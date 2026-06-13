@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import com.payment.annotation.RateLimit;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
@@ -24,6 +25,7 @@ public class V1AppRefundController {
 
     private final RefundApplicationService refundApplicationService;
 
+    @RateLimit(prefix = "app:refund:create", key = "#tenantId", window = 300, maxRequests = 5, includeIp = true, message = "退款申请过于频繁，请稍后再试")
     @SaCheckLogin
     @PostMapping
     public Result<RefundApplicationVO> createRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,

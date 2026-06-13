@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.BusinessException;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
@@ -29,6 +30,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/file")
 @Tag(name = "文件上传", description = "文件上传相关接口，支持分片上传")
+@SaCheckLogin
 public class FileUploadController {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -93,14 +95,14 @@ public class FileUploadController {
                 String existingUrl = minioUtil.checkFileExists(fileMd5, file.getOriginalFilename());
                 if (existingUrl != null) {
                     log.info("文件秒传成功: md5={}", fileMd5);
-                    recordFileAsset(tenantId, file, existingUrl, fileMd5);
+                    recordFileAssetOrCleanup(file, tenantId, existingUrl, fileMd5);
                     return Result.success(existingUrl);
                 }
             }
 
             // 文件不存在，执行上传
             String fileUrl = minioUtil.uploadFile(file, fileMd5);
-            recordFileAsset(tenantId, file, fileUrl, fileMd5);
+            recordFileAssetOrCleanup(file, tenantId, fileUrl, fileMd5);
             return Result.success(fileUrl);
         } catch (Exception e) {
             log.error("文件上传失败", e);
@@ -150,7 +152,7 @@ public class FileUploadController {
         }
     }
 
-    @SaCheckLogin
+    @SaCheckPermission("file:list")
     @GetMapping("/list")
     @Operation(summary = "查询已上传文件列表", description = "按租户分页查询已上传的文件列表，需要登录")
     public Result<PageResult<FileAssetVO>> listFiles(
@@ -176,7 +178,7 @@ public class FileUploadController {
         }
     }
 
-    private void recordFileAsset(Long tenantId, MultipartFile file, String fileUrl, String md5) {
+    private void recordFileAssetOrCleanup(MultipartFile file, Long tenantId, String fileUrl, String md5) {
         try {
             Long userId = PlatformSessionHelper.getPlatformUserId();
             fileAssetService.recordUpload(
@@ -188,7 +190,13 @@ public class FileUploadController {
                     file.getSize(),
                     file.getContentType());
         } catch (Exception e) {
-            log.warn("记录文件资产失败（不影响上传结果）: {}", e.getMessage());
+            log.error("记录文件资产失败，清理已上传文件, fileUrl={}", fileUrl, e);
+            try {
+                minioUtil.deleteFile(minioUtil.extractObjectNameFromUrl(fileUrl));
+            } catch (Exception cleanupEx) {
+                log.warn("清理已上传文件失败, fileUrl={}", fileUrl, cleanupEx);
+            }
+            throw new BusinessException("文件资产记录失败，请稍后重试");
         }
     }
 }

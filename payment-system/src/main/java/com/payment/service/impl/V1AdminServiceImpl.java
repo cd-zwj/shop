@@ -426,14 +426,14 @@ public class V1AdminServiceImpl implements V1AdminService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void approveWithdrawal(Long withdrawalId) {
-        withdrawalService.approveWithdrawal(withdrawalId);
+    public void approveWithdrawal(Long withdrawalId, Long approverId) {
+        withdrawalService.approveWithdrawal(approverId, buildWithdrawalApproveDTO(withdrawalId, true, null));
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void rejectWithdrawal(Long withdrawalId, String reason) {
-        withdrawalService.rejectWithdrawal(withdrawalId, reason);
+    public void rejectWithdrawal(Long withdrawalId, Long approverId, String reason) {
+        withdrawalService.approveWithdrawal(approverId, buildWithdrawalApproveDTO(withdrawalId, false, reason));
     }
 
     @Override

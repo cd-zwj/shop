@@ -14,6 +14,7 @@ import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
+import com.payment.service.MessageIdempotentService;
 import com.payment.service.ProductInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
@@ -47,27 +48,73 @@ public class PaymentV1Consumer {
     private final PointsRuleMapper pointsRuleMapper;
     private final MemberService memberService;
     private final UserNotificationService notificationService;
+    private final MessageIdempotentService messageIdempotentService;
 
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
         });
         String rechargeNo = String.valueOf(payload.get("bizNo"));
-        walletRechargeService.handleRechargeSuccess(rechargeNo);
+        String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":" + rechargeNo;
+        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)) {
+            log.info("充值成功消息已处理，跳过 messageId={}", messageId);
+            return;
+        }
+
+        try {
+            walletRechargeService.handleRechargeSuccess(rechargeNo);
+            messageIdempotentService.recordSuccess(
+                    messageId,
+                    RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
+                    body,
+                    PaymentV1Consumer.class.getSimpleName());
+        } catch (Exception e) {
+            messageIdempotentService.recordFailure(
+                    messageId,
+                    RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
+                    body,
+                    PaymentV1Consumer.class.getSimpleName(),
+                    e.getMessage());
+            throw e;
+        }
     }
 
     @RabbitListener(queues = RabbitMQConfig.V1_ORDER_PAID_QUEUE)
-    @Transactional(rollbackFor = Exception.class)
     public void handleOrderPaid(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
         });
         String orderNo = String.valueOf(payload.get("bizNo"));
+        String messageId = RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":" + orderNo;
+        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_ORDER_PAID_QUEUE)) {
+            log.info("订单支付成功消息已处理，跳过 messageId={}", messageId);
+            return;
+        }
 
+        try {
+            processOrderPaid(orderNo);
+            messageIdempotentService.recordSuccess(
+                    messageId,
+                    RabbitMQConfig.V1_ORDER_PAID_QUEUE,
+                    body,
+                    PaymentV1Consumer.class.getSimpleName());
+        } catch (Exception e) {
+            messageIdempotentService.recordFailure(
+                    messageId,
+                    RabbitMQConfig.V1_ORDER_PAID_QUEUE,
+                    body,
+                    PaymentV1Consumer.class.getSimpleName(),
+                    e.getMessage());
+            throw e;
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void processOrderPaid(String orderNo) {
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
                 .eq(SalesOrder::getOrderNo, orderNo)
                 .eq(SalesOrder::getDeleted, 0));
         if (salesOrder == null) {
-            log.warn("订单支付成功消息对应订单不存在, orderNo={}", orderNo);
+            log.warn(“订单支付成功消息对应订单不存在, orderNo={}”, orderNo);
             return;
         }
         if (PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())
@@ -75,7 +122,7 @@ public class PaymentV1Consumer {
             return;
         }
 
-        // 先扣库存，再落已支付状态，避免出现“订单已支付但库存完全没动”的长期不一致。
+        // 先扣库存，再落已支付状态，避免出现”订单已支付但库存完全没动”的长期不一致。
         List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
         for (SalesOrderItem orderItem : orderItems) {
             productInventoryService.deductStock(
@@ -105,9 +152,9 @@ public class PaymentV1Consumer {
                     salesOrder.getTenantId(),
                     salesOrder.getPlatformUserId(),
                     points,
-                    "SALES_ORDER",
+                    “SALES_ORDER”,
                     orderNo,
-                    "消费赠送积分"
+                    “消费赠送积分”
             );
         }
 
@@ -115,18 +162,18 @@ public class PaymentV1Consumer {
         try {
             memberService.checkAndAutoUpgrade(salesOrder.getTenantId(), salesOrder.getPlatformUserId());
         } catch (Exception e) {
-            log.warn("会员自动升级检查失败, orderNo={}, userId={}", orderNo, salesOrder.getPlatformUserId(), e);
+            log.warn(“会员自动升级检查失败, orderNo={}, userId={}”, orderNo, salesOrder.getPlatformUserId(), e);
         }
 
         // 通知用户：订单支付成功
         try {
             notificationService.send(
                     salesOrder.getPlatformUserId(),
-                    "订单支付成功",
-                    "您的订单 " + orderNo + " 已支付成功，金额 ¥" + salesOrder.getTotalAmount(),
-                    "ORDER");
+                    “订单支付成功”,
+                    “您的订单 “ + orderNo + “ 已支付成功，金额 ¥” + salesOrder.getTotalAmount(),
+                    “ORDER”);
         } catch (Exception e) {
-            log.warn("发送订单支付成功通知失败, orderNo={}", orderNo, e);
+            log.warn(“发送订单支付成功通知失败, orderNo={}”, orderNo, e);
         }
     }
 }

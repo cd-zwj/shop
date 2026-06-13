@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
@@ -27,7 +28,7 @@ public class V1MerchantRefundController {
     private final RefundApplicationService refundApplicationService;
     private final V1MerchantSupportService v1MerchantSupportService;
 
-    @SaCheckLogin
+    @SaCheckPermission("merchant:refund:list")
     @GetMapping
     public Result<PageResult<RefundApplicationVO>> listTenantRefunds(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                       @RequestParam(required = false) String status,
@@ -40,7 +41,7 @@ public class V1MerchantRefundController {
         return Result.success(PageResult.from(page, RefundApplicationVO::from));
     }
 
-    @SaCheckLogin
+    @SaCheckPermission("merchant:refund:audit")
     @PutMapping("/{refundId}/audit")
     public Result<Void> auditRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId,

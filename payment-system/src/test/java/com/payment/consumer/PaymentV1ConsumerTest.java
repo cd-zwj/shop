@@ -1,5 +1,6 @@
 package com.payment.consumer;
 
+import com.payment.config.RabbitMQConfig;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.enums.OrderStatusEnum;
@@ -9,7 +10,9 @@ import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
+import com.payment.service.MessageIdempotentService;
 import com.payment.service.ProductInventoryService;
+import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
 import org.junit.jupiter.api.Test;
@@ -27,26 +30,60 @@ import static org.mockito.Mockito.when;
 class PaymentV1ConsumerTest {
 
     @Test
-    void handleOrderPaidShouldNotMarkOrderPaidWhenStockDeductionFails() {
-        WalletRechargeService walletRechargeService = mock(WalletRechargeService.class);
-        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
-        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
-        ProductInventoryService productInventoryService = mock(ProductInventoryService.class);
-        WithdrawalService withdrawalService = mock(WithdrawalService.class);
-        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
-        MemberService memberService = mock(MemberService.class);
-        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+    void handleRechargeSuccessShouldSkipProcessedMessage() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        String body = "{\"bizNo\":\"RC001\"}";
+        String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
+        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
+                .thenReturn(true);
 
-        PaymentV1Consumer consumer = new PaymentV1Consumer(
-                walletRechargeService,
-                salesOrderMapper,
-                salesOrderItemMapper,
-                productInventoryService,
-                withdrawalService,
-                memberPointsAccountService,
-                pointsRuleMapper,
-                memberService
-        );
+        fixture.consumer.handleRechargeSuccess(body);
+
+        verify(fixture.walletRechargeService, never()).handleRechargeSuccess(any());
+        verify(fixture.messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+    }
+
+    @Test
+    void handleRechargeSuccessShouldRecordSuccessAfterHandling() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        String body = "{\"bizNo\":\"RC001\"}";
+        String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
+        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
+                .thenReturn(false);
+
+        fixture.consumer.handleRechargeSuccess(body);
+
+        verify(fixture.walletRechargeService).handleRechargeSuccess("RC001");
+        verify(fixture.messageIdempotentService).recordSuccess(
+                messageId,
+                RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
+                body,
+                PaymentV1Consumer.class.getSimpleName());
+    }
+
+    @Test
+    void handleRechargeSuccessShouldRecordFailureAndRethrow() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        String body = "{\"bizNo\":\"RC001\"}";
+        String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
+        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
+                .thenReturn(false);
+        org.mockito.Mockito.doThrow(new RuntimeException("recharge failed"))
+                .when(fixture.walletRechargeService).handleRechargeSuccess("RC001");
+
+        assertThrows(RuntimeException.class, () -> fixture.consumer.handleRechargeSuccess(body));
+
+        verify(fixture.messageIdempotentService).recordFailure(
+                messageId,
+                RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
+                body,
+                PaymentV1Consumer.class.getSimpleName(),
+                "recharge failed");
+    }
+
+    @Test
+    void handleOrderPaidShouldNotMarkOrderPaidWhenStockDeductionFails() {
+        ConsumerFixture fixture = new ConsumerFixture();
 
         SalesOrder salesOrder = new SalesOrder();
         salesOrder.setId(1L);
@@ -63,12 +100,37 @@ class PaymentV1ConsumerTest {
         item.setProductId(1L);
         item.setQuantity(2);
 
-        when(salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
-        when(salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
         org.mockito.Mockito.doThrow(new RuntimeException("stock failed"))
-                .when(productInventoryService).deductStock(9L, 1L, 2, "SO001");
+                .when(fixture.productInventoryService).deductStock(9L, 1L, 2, "SO001");
 
-        assertThrows(RuntimeException.class, () -> consumer.handleOrderPaid("{\"bizNo\":\"SO001\"}"));
-        verify(salesOrderMapper, never()).updateById(any(SalesOrder.class));
+        assertThrows(RuntimeException.class, () -> fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO001\"}"));
+        verify(fixture.salesOrderMapper, never()).updateById(any(SalesOrder.class));
+    }
+
+    private static class ConsumerFixture {
+        private final WalletRechargeService walletRechargeService = mock(WalletRechargeService.class);
+        private final SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        private final SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        private final ProductInventoryService productInventoryService = mock(ProductInventoryService.class);
+        private final WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        private final MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        private final MemberService memberService = mock(MemberService.class);
+        private final PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        private final UserNotificationService notificationService = mock(UserNotificationService.class);
+        private final MessageIdempotentService messageIdempotentService = mock(MessageIdempotentService.class);
+        private final PaymentV1Consumer consumer = new PaymentV1Consumer(
+                walletRechargeService,
+                salesOrderMapper,
+                salesOrderItemMapper,
+                productInventoryService,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                memberService,
+                notificationService,
+                messageIdempotentService
+        );
     }
 }

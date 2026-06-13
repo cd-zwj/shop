@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import com.payment.annotation.RateLimit;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
@@ -64,6 +65,7 @@ public class V1AppWalletController {
                 .collect(Collectors.toList()));
     }
 
+    @RateLimit(prefix = "app:wallet:recharge:unified", window = 60, maxRequests = 5, includeIp = true, message = "统一钱包充值过于频繁，请稍后再试")
     @SaCheckLogin
     @PostMapping("/wallets/unified/recharges")
     public Result<RechargePaymentVO> createUnifiedRecharge(@Valid @RequestBody CreateUnifiedWalletRechargeDTO dto) {
@@ -93,6 +95,7 @@ public class V1AppWalletController {
                 .collect(Collectors.toList()));
     }
 
+    @RateLimit(prefix = "app:wallet:recharge:merchant", key = "#tenantId", window = 60, maxRequests = 5, includeIp = true, message = "商户钱包充值过于频繁，请稍后再试")
     @SaCheckLogin
     @PostMapping("/tenants/{tenantId}/wallet/recharges")
     public Result<RechargePaymentVO> createMerchantRecharge(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,

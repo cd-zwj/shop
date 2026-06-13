@@ -13,6 +13,7 @@ import com.payment.service.WithdrawalService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class V1MerchantWithdrawalController {
     private final V1MerchantSupportService v1MerchantSupportService;
     private final WithdrawalService withdrawalService;
 
+    @SaCheckPermission("merchant:withdrawal:view")
     @GetMapping("/balance")
     public Result<V1MerchantBalanceVO> getBalance(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -43,6 +45,7 @@ public class V1MerchantWithdrawalController {
         return Result.success(vo);
     }
 
+    @SaCheckPermission("merchant:withdrawal:list")
     @GetMapping
     public Result<PageResult<WithdrawalVO>> listWithdrawals(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -62,6 +65,7 @@ public class V1MerchantWithdrawalController {
         }));
     }
 
+    @SaCheckPermission("merchant:withdrawal:create")
     @PostMapping
     public Result<WithdrawalVO> createWithdrawal(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());

@@ -1,11 +1,13 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.payment.entity.MessageIdempotent;
 import com.payment.mapper.MessageIdempotentMapper;
 import com.payment.service.MessageIdempotentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,7 @@ public class MessageIdempotentServiceImpl implements MessageIdempotentService {
                         .eq(MessageIdempotent::getMessageId, messageId)
                         .eq(MessageIdempotent::getQueueName, queueName)
         );
-        return record != null;
+        return record != null && record.getStatus() != null && record.getStatus() == 1;
     }
     
     @Override
@@ -47,9 +49,15 @@ public class MessageIdempotentServiceImpl implements MessageIdempotentService {
         try {
             messageIdempotentMapper.insert(record);
             log.info("记录消息处理成功，messageId: {}, queueName: {}", messageId, queueName);
-        } catch (Exception e) {
-            // 如果插入失败（可能是重复），记录日志但不抛出异常
-            log.warn("记录消息处理成功失败（可能已存在），messageId: {}, queueName: {}", messageId, queueName);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("消息幂等记录已存在，执行更新，messageId: {}, queueName: {}", messageId, queueName);
+            messageIdempotentMapper.update(null, new LambdaUpdateWrapper<MessageIdempotent>()
+                    .eq(MessageIdempotent::getMessageId, messageId)
+                    .eq(MessageIdempotent::getQueueName, queueName)
+                    .set(MessageIdempotent::getStatus, record.getStatus())
+                    .set(MessageIdempotent::getConsumerName, consumerName)
+                    .set(MessageIdempotent::getMessageBody, messageBody)
+                    .set(MessageIdempotent::getUpdatedTime, LocalDateTime.now()));
         }
     }
     
@@ -70,8 +78,16 @@ public class MessageIdempotentServiceImpl implements MessageIdempotentService {
         try {
             messageIdempotentMapper.insert(record);
             log.error("记录消息处理失败，messageId: {}, queueName: {}, error: {}", messageId, queueName, errorMessage);
-        } catch (Exception e) {
-            log.error("记录消息处理失败失败，messageId: {}, queueName: {}", messageId, queueName, e);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("消息幂等记录已存在，执行失败状态更新，messageId: {}, queueName: {}", messageId, queueName);
+            messageIdempotentMapper.update(null, new LambdaUpdateWrapper<MessageIdempotent>()
+                    .eq(MessageIdempotent::getMessageId, messageId)
+                    .eq(MessageIdempotent::getQueueName, queueName)
+                    .set(MessageIdempotent::getStatus, record.getStatus())
+                    .set(MessageIdempotent::getErrorMessage, errorMessage)
+                    .set(MessageIdempotent::getConsumerName, consumerName)
+                    .set(MessageIdempotent::getMessageBody, messageBody)
+                    .set(MessageIdempotent::getUpdatedTime, LocalDateTime.now()));
         }
     }
 }

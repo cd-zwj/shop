@@ -19,7 +19,11 @@ class MessageIdempotentServiceImplTest {
         MessageIdempotentMapper messageIdempotentMapper = mock(MessageIdempotentMapper.class);
         MessageIdempotentServiceImpl service = new MessageIdempotentServiceImpl(messageIdempotentMapper);
 
-        when(messageIdempotentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(new MessageIdempotent());
+        MessageIdempotent record = new MessageIdempotent();
+        record.setMessageId("MSG-1");
+        record.setQueueName("payment.v1.order.paid");
+        record.setStatus(1);
+        when(messageIdempotentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(record);
 
         assertTrue(service.isProcessed("MSG-1", "payment.v1.order.paid"));
         verify(messageIdempotentMapper).selectOne(any(LambdaQueryWrapper.class));
@@ -31,6 +35,20 @@ class MessageIdempotentServiceImplTest {
         MessageIdempotentServiceImpl service = new MessageIdempotentServiceImpl(messageIdempotentMapper);
 
         when(messageIdempotentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+
+        assertFalse(service.isProcessed("MSG-1", "payment.v1.order.paid"));
+    }
+
+    @Test
+    void isProcessedShouldReturnFalseWhenRecordIsFailure() {
+        MessageIdempotentMapper messageIdempotentMapper = mock(MessageIdempotentMapper.class);
+        MessageIdempotentServiceImpl service = new MessageIdempotentServiceImpl(messageIdempotentMapper);
+
+        MessageIdempotent record = new MessageIdempotent();
+        record.setMessageId("MSG-1");
+        record.setQueueName("payment.v1.order.paid");
+        record.setStatus(2);
+        when(messageIdempotentMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(record);
 
         assertFalse(service.isProcessed("MSG-1", "payment.v1.order.paid"));
     }
