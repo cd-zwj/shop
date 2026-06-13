@@ -94,12 +94,7 @@
             <artifactId>mybatis-spring</artifactId>
             <version>3.0.4</version>
         </dependency>
-<!--        redisson-->
-        <dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson</artifactId>
-            <version>3.24.3</version> <!-- 请根据需要更新版本号 -->
-        </dependency>
+<!--        redisson 已由 redisson-spring-boot-starter:3.25.2 引入，移除重复声明 -->
 
         <!-- Druid连接池 -->
         <dependency>
