@@ -75,17 +75,15 @@ class V1AdminServiceImplTest {
 
         when(platformUserMapper.selectCount(any())).thenReturn(10L);
         when(merchantService.count(any())).thenReturn(4L, 3L);
-        when(salesOrderMapper.selectList(any())).thenReturn(List.of(
-                buildSalesOrder("PAID", "12.50"),
-                buildSalesOrder("CREATED", "7.50")
+        // Mock SQL 聚合结果（selectMaps 返回单行 Map）
+        when(salesOrderMapper.selectMaps(any())).thenReturn(List.of(
+                java.util.Map.of("totalOrders", 2L, "totalOrderAmount", new BigDecimal("20.00"), "paidOrders", 1L)
         ));
-        when(paymentBillMapper.selectList(any())).thenReturn(List.of(
-                buildPaymentBill("5.00"),
-                buildPaymentBill("10.00")
+        when(paymentBillMapper.selectMaps(any())).thenReturn(List.of(
+                java.util.Map.of("totalBills", 2L, "totalPayAmount", new BigDecimal("15.00"))
         ));
-        when(rechargeOrderV1Mapper.selectList(any())).thenReturn(List.of(
-                buildRechargeOrder("20.00"),
-                buildRechargeOrder("30.00")
+        when(rechargeOrderV1Mapper.selectMaps(any())).thenReturn(List.of(
+                java.util.Map.of("totalRecharge", 2L, "totalRechargeAmount", new BigDecimal("50.00"))
         ));
         Page<com.payment.dto.WithdrawalVO> withdrawalPage = new Page<>(1, 1, 2);
         when(withdrawalService.listWithdrawalsForAdmin(1, 1, null, 0, null, null)).thenReturn(withdrawalPage);

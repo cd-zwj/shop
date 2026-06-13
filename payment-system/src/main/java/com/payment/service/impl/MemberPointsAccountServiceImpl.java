@@ -76,8 +76,19 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         account.setPoints(after);
         account.setTotalEarned(Math.addExact(account.getTotalEarned(), points));
-        int affected = accountMapper.updateById(account);
-        if (affected == 0) {
+        boolean updated = false;
+        for (int retry = 0; retry < 3; retry++) {
+            if (accountMapper.updateById(account) > 0) {
+                updated = true;
+                break;
+            }
+            // 乐观锁冲突，重读账户并重算
+            account = accountMapper.selectById(account.getId());
+            after = Math.addExact(account.getPoints(), points);
+            account.setPoints(after);
+            account.setTotalEarned(Math.addExact(account.getTotalEarned(), points));
+        }
+        if (!updated) {
             throw new BusinessException("积分发放失败，请重试");
         }
 
@@ -114,8 +125,21 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         account.setPoints(after);
         account.setTotalUsed(Math.addExact(account.getTotalUsed(), points));
-        int affected = accountMapper.updateById(account);
-        if (affected == 0) {
+        boolean updated = false;
+        for (int retry = 0; retry < 3; retry++) {
+            if (accountMapper.updateById(account) > 0) {
+                updated = true;
+                break;
+            }
+            account = accountMapper.selectById(account.getId());
+            if (account.getPoints() < points) {
+                throw new BusinessException("会员积分不足");
+            }
+            after = Math.subtractExact(account.getPoints(), points);
+            account.setPoints(after);
+            account.setTotalUsed(Math.addExact(account.getTotalUsed(), points));
+        }
+        if (!updated) {
             throw new BusinessException("积分预占失败，请重试");
         }
 
@@ -163,8 +187,17 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         Integer holdPoints = Math.abs(log.getChangePoints());
         account.setPoints(Math.addExact(account.getPoints(), holdPoints));
         account.setTotalUsed(Math.max(0, account.getTotalUsed() - holdPoints));
-        int affected = accountMapper.updateById(account);
-        if (affected == 0) {
+        boolean updated = false;
+        for (int retry = 0; retry < 3; retry++) {
+            if (accountMapper.updateById(account) > 0) {
+                updated = true;
+                break;
+            }
+            account = accountMapper.selectById(account.getId());
+            account.setPoints(Math.addExact(account.getPoints(), holdPoints));
+            account.setTotalUsed(Math.max(0, account.getTotalUsed() - holdPoints));
+        }
+        if (!updated) {
             throw new BusinessException("积分释放失败，请重试");
         }
 

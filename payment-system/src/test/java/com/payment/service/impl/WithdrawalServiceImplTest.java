@@ -1,7 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.payment.common.BusinessException;
 import com.payment.entity.MerchantBalance;
 import com.payment.entity.Withdrawal;
@@ -36,7 +36,7 @@ class WithdrawalServiceImplTest {
 
         when(withdrawalMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(pendingWithdrawal());
         when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithFrozen("100.00"));
-        when(withdrawalMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(0);
+        when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(0);
 
         assertThrows(BusinessException.class, () -> service.approveWithdrawal(1L));
 
@@ -51,13 +51,13 @@ class WithdrawalServiceImplTest {
 
         when(withdrawalMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(pendingWithdrawal());
         when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithFrozen("100.00"));
-        when(withdrawalMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
         when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(1);
 
         service.approveWithdrawal(1L);
 
         InOrder inOrder = inOrder(withdrawalMapper, merchantBalanceMapper);
-        inOrder.verify(withdrawalMapper).update(isNull(), any(LambdaUpdateWrapper.class));
+        inOrder.verify(withdrawalMapper).update(isNull(), any(UpdateWrapper.class));
         inOrder.verify(merchantBalanceMapper).updateById(any(MerchantBalance.class));
     }
 
@@ -72,7 +72,7 @@ class WithdrawalServiceImplTest {
 
         assertThrows(BusinessException.class, () -> service.rejectWithdrawal(1L, "资料不完整"));
 
-        verify(withdrawalMapper, never()).update(isNull(), any(LambdaUpdateWrapper.class));
+        verify(withdrawalMapper, never()).update(isNull(), any(UpdateWrapper.class));
         verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
     }
 
@@ -84,13 +84,13 @@ class WithdrawalServiceImplTest {
 
         when(withdrawalMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(pendingWithdrawal());
         when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithFrozen("100.00"));
-        when(withdrawalMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
         when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(1);
 
         service.rejectWithdrawal(1L, "资料不完整");
 
         InOrder inOrder = inOrder(withdrawalMapper, merchantBalanceMapper);
-        inOrder.verify(withdrawalMapper).update(isNull(), any(LambdaUpdateWrapper.class));
+        inOrder.verify(withdrawalMapper).update(isNull(), any(UpdateWrapper.class));
         inOrder.verify(merchantBalanceMapper).updateById(any(MerchantBalance.class));
     }
 
@@ -106,7 +106,7 @@ class WithdrawalServiceImplTest {
                 .thenReturn(balanceWithFrozen("100.00"))
                 .thenReturn(balanceWithFrozen("100.00"))
                 .thenReturn(balanceWithFrozen("100.00"));
-        when(withdrawalMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+        when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
         when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(0);
 
         assertThrows(BusinessException.class, () -> service.rejectWithdrawal(1L, "资料不完整"));

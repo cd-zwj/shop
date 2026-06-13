@@ -11,6 +11,7 @@ import com.payment.mapper.ExchangeProductMapper;
 import com.payment.mapper.RefundApplicationMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.PointsService;
+import com.payment.service.UserNotificationService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -38,7 +39,7 @@ class RefundApplicationServiceImplTest {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         when(salesOrderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(paidOrder());
         when(refundMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
@@ -62,7 +63,7 @@ class RefundApplicationServiceImplTest {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         when(salesOrderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
@@ -75,7 +76,7 @@ class RefundApplicationServiceImplTest {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, salesOrderMapper, mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         SalesOrder order = paidOrder();
         order.setPlatformUserId(OTHER_USER_ID);
@@ -89,7 +90,7 @@ class RefundApplicationServiceImplTest {
     void testAuditRefund_批准退款() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
 
@@ -106,7 +107,7 @@ class RefundApplicationServiceImplTest {
     void testAuditRefund_拒绝退款需rejectReason() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
 
@@ -129,7 +130,7 @@ class RefundApplicationServiceImplTest {
     void testAuditRefund_非PENDING状态抛异常() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         RefundApplication app = pendingRefund();
         app.setRefundStatus(RefundApplicationStatus.APPROVED.name());
@@ -143,7 +144,7 @@ class RefundApplicationServiceImplTest {
     void testCancelRefund_仅PENDING可取消() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class));
+                refundMapper, mock(SalesOrderMapper.class), mock(PointsService.class), mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
 
@@ -168,8 +169,9 @@ class RefundApplicationServiceImplTest {
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         PointsService pointsService = mock(PointsService.class);
         ExchangeProductMapper exchangeProductMapper = mock(ExchangeProductMapper.class);
+        UserNotificationService notificationService = mock(UserNotificationService.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, salesOrderMapper, pointsService, exchangeProductMapper);
+                refundMapper, salesOrderMapper, pointsService, exchangeProductMapper, notificationService);
 
         RefundApplication app = pendingRefund();
         app.setRefundStatus(RefundApplicationStatus.APPROVED.name());
@@ -202,7 +204,7 @@ class RefundApplicationServiceImplTest {
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         PointsService pointsService = mock(PointsService.class);
         RefundApplicationServiceImpl service = new RefundApplicationServiceImpl(
-                refundMapper, salesOrderMapper, pointsService, mock(ExchangeProductMapper.class));
+                refundMapper, salesOrderMapper, pointsService, mock(ExchangeProductMapper.class), mock(UserNotificationService.class));
 
         RefundApplication app = pendingRefund();
         app.setRefundStatus(RefundApplicationStatus.APPROVED.name());

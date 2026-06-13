@@ -20,6 +20,7 @@ import com.payment.dto.SalesOrderDetailVO;
 import com.payment.dto.UserPermissionDTO;
 import com.payment.dto.UserPermissionVO;
 import com.payment.dto.V1AdminSessionVO;
+import com.payment.dto.WithdrawalApproveDTO;
 import com.payment.dto.WithdrawalVO;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MerchantWalletAccount;
@@ -133,12 +134,24 @@ public class V1AdminServiceImpl implements V1AdminService {
     public AdminDashboardOverviewVO getDashboardOverview() {
         AdminDashboardOverviewVO vo = new AdminDashboardOverviewVO();
 
-        List<SalesOrder> allOrders = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getDeleted, 0));
-        List<PaymentBill> paymentBills = paymentBillMapper.selectList(new LambdaQueryWrapper<PaymentBill>()
-                .orderByDesc(PaymentBill::getCreateTime));
-        List<RechargeOrderV1> rechargeOrders = rechargeOrderV1Mapper.selectList(new LambdaQueryWrapper<RechargeOrderV1>()
-                .eq(RechargeOrderV1::getDeleted, 0));
+        // SQL 端聚合，避免全表加载到内存（修复 OOM 风险）
+        Map<String, Object> orderStats = firstOrEmpty(salesOrderMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<SalesOrder>()
+                        .select("COUNT(*) AS totalOrders",
+                                "COALESCE(SUM(total_amount), 0) AS totalOrderAmount",
+                                "SUM(CASE WHEN pay_status = 'SUCCESS' THEN 1 ELSE 0 END) AS paidOrders")
+                        .eq("deleted", 0)));
+
+        Map<String, Object> billStats = firstOrEmpty(paymentBillMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PaymentBill>()
+                        .select("COUNT(*) AS totalBills",
+                                "COALESCE(SUM(pay_amount), 0) AS totalPayAmount")));
+
+        Map<String, Object> rechargeStats = firstOrEmpty(rechargeOrderV1Mapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<RechargeOrderV1>()
+                        .select("COUNT(*) AS totalRecharge",
+                                "COALESCE(SUM(recharge_amount), 0) AS totalRechargeAmount")
+                        .eq("deleted", 0)));
 
         vo.setTotalPlatformUsers(platformUserMapper.selectCount(new LambdaQueryWrapper<PlatformUser>()
                 .eq(PlatformUser::getDeleted, 0)));
@@ -147,24 +160,13 @@ public class V1AdminServiceImpl implements V1AdminService {
         vo.setActiveMerchants(merchantService.count(new LambdaQueryWrapper<Tenant>()
                 .eq(Tenant::getDeleted, 0)
                 .eq(Tenant::getStatus, 1)));
-        vo.setTotalOrders((long) allOrders.size());
-        vo.setPaidOrders(allOrders.stream()
-                .filter(order -> "SUCCESS".equals(order.getPayStatus()))
-                .count());
-        vo.setTotalOrderAmount(allOrders.stream()
-                .map(SalesOrder::getTotalAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-        vo.setTotalPaymentBills((long) paymentBills.size());
-        vo.setTotalPaymentAmount(paymentBills.stream()
-                .map(PaymentBill::getPayAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-        vo.setTotalRechargeOrders((long) rechargeOrders.size());
-        vo.setTotalRechargeAmount(rechargeOrders.stream()
-                .map(RechargeOrderV1::getRechargeAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        vo.setTotalOrders(toLong(orderStats.get("totalOrders")));
+        vo.setPaidOrders(toLong(orderStats.get("paidOrders")));
+        vo.setTotalOrderAmount(toBigDecimal(orderStats.get("totalOrderAmount")));
+        vo.setTotalPaymentBills(toLong(billStats.get("totalBills")));
+        vo.setTotalPaymentAmount(toBigDecimal(billStats.get("totalPayAmount")));
+        vo.setTotalRechargeOrders(toLong(rechargeStats.get("totalRecharge")));
+        vo.setTotalRechargeAmount(toBigDecimal(rechargeStats.get("totalRechargeAmount")));
         vo.setPendingWithdrawals(withdrawalService.listWithdrawalsForAdmin(1, 1, null, 0, null, null).getTotal());
         return vo;
     }
@@ -284,45 +286,41 @@ public class V1AdminServiceImpl implements V1AdminService {
 
     @Override
     public AdminTradeOverviewVO getTradeOverview() {
-        List<SalesOrder> allOrders = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getDeleted, 0));
-        List<PaymentBill> paymentBills = paymentBillMapper.selectList(new LambdaQueryWrapper<PaymentBill>()
-                .orderByDesc(PaymentBill::getCreateTime));
-        List<RechargeOrderV1> rechargeOrders = rechargeOrderV1Mapper.selectList(new LambdaQueryWrapper<RechargeOrderV1>()
-                .eq(RechargeOrderV1::getDeleted, 0));
+        // SQL 端聚合，避免全表加载到内存（修复 OOM 风险）
+        Map<String, Object> orderStats = firstOrEmpty(salesOrderMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<SalesOrder>()
+                        .select("COUNT(*) AS totalOrders",
+                                "COALESCE(SUM(total_amount), 0) AS totalOrderAmount",
+                                "COALESCE(SUM(external_pay_amount), 0) AS totalExternalPayAmount",
+                                "SUM(CASE WHEN pay_status = 'SUCCESS' THEN 1 ELSE 0 END) AS paidOrders",
+                                "SUM(CASE WHEN pay_status IN ('WAIT_PAY','PAYING') THEN 1 ELSE 0 END) AS pendingOrders")
+                        .eq("deleted", 0)));
+
+        Map<String, Object> billStats = firstOrEmpty(paymentBillMapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PaymentBill>()
+                        .select("COUNT(*) AS totalBills",
+                                "COALESCE(SUM(pay_amount), 0) AS totalPayAmount",
+                                "SUM(CASE WHEN pay_status = 'SUCCESS' THEN 1 ELSE 0 END) AS paidBills")));
+
+        Map<String, Object> rechargeStats = firstOrEmpty(rechargeOrderV1Mapper.selectMaps(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<RechargeOrderV1>()
+                        .select("COUNT(*) AS totalRecharge",
+                                "COALESCE(SUM(recharge_amount), 0) AS totalRechargeAmount",
+                                "SUM(CASE WHEN biz_status = 'SUCCESS' THEN 1 ELSE 0 END) AS successRecharge")
+                        .eq("deleted", 0)));
 
         AdminTradeOverviewVO vo = new AdminTradeOverviewVO();
-        vo.setTotalOrders((long) allOrders.size());
-        vo.setPaidOrders(allOrders.stream().filter(order -> "SUCCESS".equals(order.getPayStatus())).count());
-        vo.setPendingOrders(allOrders.stream()
-                .filter(order -> "WAIT_PAY".equals(order.getPayStatus()) || "PAYING".equals(order.getPayStatus()))
-                .count());
-        vo.setTotalOrderAmount(allOrders.stream()
-                .map(SalesOrder::getTotalAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-        vo.setTotalExternalPayAmount(allOrders.stream()
-                .map(SalesOrder::getExternalPayAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        vo.setTotalPaymentBills((long) paymentBills.size());
-        vo.setPaidPaymentBills(paymentBills.stream()
-                .filter(bill -> "SUCCESS".equals(bill.getPayStatus()))
-                .count());
-        vo.setTotalPaymentAmount(paymentBills.stream()
-                .map(PaymentBill::getPayAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
-
-        vo.setTotalRechargeOrders((long) rechargeOrders.size());
-        vo.setSuccessRechargeOrders(rechargeOrders.stream()
-                .filter(order -> "SUCCESS".equals(order.getBizStatus()))
-                .count());
-        vo.setTotalRechargeAmount(rechargeOrders.stream()
-                .map(RechargeOrderV1::getRechargeAmount)
-                .filter(amount -> amount != null)
-                .reduce(BigDecimal.ZERO, BigDecimal::add));
+        vo.setTotalOrders(toLong(orderStats.get("totalOrders")));
+        vo.setPaidOrders(toLong(orderStats.get("paidOrders")));
+        vo.setPendingOrders(toLong(orderStats.get("pendingOrders")));
+        vo.setTotalOrderAmount(toBigDecimal(orderStats.get("totalOrderAmount")));
+        vo.setTotalExternalPayAmount(toBigDecimal(orderStats.get("totalExternalPayAmount")));
+        vo.setTotalPaymentBills(toLong(billStats.get("totalBills")));
+        vo.setPaidPaymentBills(toLong(billStats.get("paidBills")));
+        vo.setTotalPaymentAmount(toBigDecimal(billStats.get("totalPayAmount")));
+        vo.setTotalRechargeOrders(toLong(rechargeStats.get("totalRecharge")));
+        vo.setSuccessRechargeOrders(toLong(rechargeStats.get("successRecharge")));
+        vo.setTotalRechargeAmount(toBigDecimal(rechargeStats.get("totalRechargeAmount")));
         return vo;
     }
 
@@ -591,5 +589,35 @@ public class V1AdminServiceImpl implements V1AdminService {
         memberPointsAccountMapper.selectCount(new LambdaQueryWrapper<MemberPointsAccount>()
                 .eq(MemberPointsAccount::getPlatformUserId, user.getId()));
         return vo;
+    }
+
+    /** 安全地将 SQL 聚合结果转为 Long，null 或非数字返回 0L */
+    private Long toLong(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        return 0L;
+    }
+
+    /** 安全地将 SQL 聚合结果转为 BigDecimal，null 返回 ZERO */
+    private BigDecimal toBigDecimal(Object value) {
+        if (value instanceof Number) {
+            return new BigDecimal(value.toString());
+        }
+        return BigDecimal.ZERO;
+    }
+
+    /** 安全获取 selectMaps 结果的第一行，空结果返回空 Map */
+    private Map<String, Object> firstOrEmpty(List<Map<String, Object>> list) {
+        return (list != null && !list.isEmpty()) ? list.get(0) : java.util.Collections.emptyMap();
+    }
+
+    /** 构建提现审批 DTO */
+    private WithdrawalApproveDTO buildWithdrawalApproveDTO(Long withdrawalId, boolean approved, String reason) {
+        WithdrawalApproveDTO dto = new WithdrawalApproveDTO();
+        dto.setWithdrawalId(withdrawalId);
+        dto.setApproved(approved);
+        dto.setRejectReason(reason);
+        return dto;
     }
 }

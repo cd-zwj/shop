@@ -114,7 +114,7 @@ public class PaymentV1Consumer {
                 .eq(SalesOrder::getOrderNo, orderNo)
                 .eq(SalesOrder::getDeleted, 0));
         if (salesOrder == null) {
-            log.warn(“订单支付成功消息对应订单不存在, orderNo={}”, orderNo);
+            log.warn("订单支付成功消息对应订单不存在, orderNo={}", orderNo);
             return;
         }
         if (PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())
@@ -122,7 +122,7 @@ public class PaymentV1Consumer {
             return;
         }
 
-        // 先扣库存，再落已支付状态，避免出现”订单已支付但库存完全没动”的长期不一致。
+        // 先扣库存，再落已支付状态，避免出现"订单已支付但库存完全没动"的长期不一致。
         List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
         for (SalesOrderItem orderItem : orderItems) {
             productInventoryService.deductStock(
@@ -152,9 +152,9 @@ public class PaymentV1Consumer {
                     salesOrder.getTenantId(),
                     salesOrder.getPlatformUserId(),
                     points,
-                    “SALES_ORDER”,
+                    "SALES_ORDER",
                     orderNo,
-                    “消费赠送积分”
+                    "消费赠送积分"
             );
         }
 
@@ -162,18 +162,18 @@ public class PaymentV1Consumer {
         try {
             memberService.checkAndAutoUpgrade(salesOrder.getTenantId(), salesOrder.getPlatformUserId());
         } catch (Exception e) {
-            log.warn(“会员自动升级检查失败, orderNo={}, userId={}”, orderNo, salesOrder.getPlatformUserId(), e);
+            log.warn("会员自动升级检查失败, orderNo={}, userId={}", orderNo, salesOrder.getPlatformUserId(), e);
         }
 
         // 通知用户：订单支付成功
         try {
             notificationService.send(
                     salesOrder.getPlatformUserId(),
-                    “订单支付成功”,
-                    “您的订单 “ + orderNo + “ 已支付成功，金额 ¥” + salesOrder.getTotalAmount(),
-                    “ORDER”);
+                    "订单支付成功",
+                    "您的订单 " + orderNo + " 已支付成功，金额 ¥" + salesOrder.getTotalAmount(),
+                    "ORDER");
         } catch (Exception e) {
-            log.warn(“发送订单支付成功通知失败, orderNo={}”, orderNo, e);
+            log.warn("发送订单支付成功通知失败, orderNo={}", orderNo, e);
         }
     }
 }

@@ -1,16 +1,16 @@
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Store, 
-  ShoppingCart, 
-  Bot, 
-  Wallet, 
-  User, 
-  Bell, 
-  Search, 
-  LayoutDashboard, 
-  ShieldCheck, 
+import {
+  Store,
+  ShoppingCart,
+  Bot,
+  Wallet,
+  User,
+  Bell,
+  Search,
+  LayoutDashboard,
+  ShieldCheck,
   ArrowLeft,
   ChevronRight,
   Plus,
@@ -34,64 +34,77 @@ import {
 import { cn } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
-import Home from './pages/Home';
-import Discovery from './pages/Discovery';
-import ProductDetails from './pages/ProductDetails';
-import Cart from './pages/Cart';
-import UserWallet from './pages/Wallet';
-import Recharge from './pages/Recharge';
-import ConsumptionHistory from './pages/History';
-import AIAssistant from './pages/AIAssistant';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminMerchants from './pages/AdminMerchants';
-import AdminProducts from './pages/AdminProducts';
-import AdminAnalytics from './pages/AdminAnalytics';
-import AdminUsers from './pages/AdminUsers';
-import AdminUserDetail from './pages/AdminUserDetail';
-import AdminUserPermissions from './pages/AdminUserPermissions';
-import AdminWithdrawals from './pages/AdminWithdrawals';
-import AdminTransactions from './pages/AdminTransactions';
-import AdminPayments from './pages/AdminPayments';
-import AdminRecharges from './pages/AdminRecharges';
-import AdminMerchantDetail from './pages/AdminMerchantDetail';
-import AdminMerchantEdit from './pages/AdminMerchantEdit';
-import AdminPermissions from './pages/AdminPermissions';
-import AdminOrderDetail from './pages/AdminOrderDetail';
-import MerchantDashboard from './pages/merchant/MerchantDashboard';
-import MerchantOrders from './pages/merchant/MerchantOrders';
-import MerchantOrderDetail from './pages/merchant/MerchantOrderDetail';
-import MerchantFinance from './pages/merchant/MerchantFinance';
-import MerchantProducts from './pages/merchant/MerchantProducts';
-import MerchantProductDetail from './pages/merchant/MerchantProductDetail';
-import MerchantProductEdit from './pages/merchant/MerchantProductEdit';
-import MerchantRules from './pages/merchant/MerchantRules';
-import MerchantWithdraw from './pages/merchant/MerchantWithdraw';
-import Success from './pages/Success';
-import Login from './pages/Login';
-import Register from './pages/Register';
-
-import Profile from './pages/Profile';
-import UserOrders from './pages/UserOrders';
-import UserOrderDetail from './pages/UserOrderDetail';
-import PaymentStatus from './pages/PaymentStatus';
-import PublicMerchantDetail from './pages/PublicMerchantDetail';
 import AuthGuard from './components/guards/AuthGuard';
 import RoleGuard from './components/guards/RoleGuard';
 import GuestGuard from './components/guards/GuestGuard';
-import CouponCenter from './pages/CouponCenter';
-import Points from './pages/Points';
-import GrowthCenter from './pages/GrowthCenter';
 import { ToastProvider } from './context/ToastContext';
 
-import ApplyRefund from './pages/ApplyRefund';
-import AddressList from './pages/AddressList';
-import Notifications from './pages/Notifications';
-import MerchantRefunds from './pages/merchant/MerchantRefunds';
-import MerchantCoupons from './pages/merchant/MerchantCoupons';
-import MerchantActivities from './pages/merchant/MerchantActivities';
-import MerchantMembers from './pages/merchant/MerchantMembers';
-import AdminMarketing from './pages/AdminMarketing';
-import AccountSecurity from './pages/AccountSecurity';
+// --- Lazy-loaded page chunks ---
+const Home = lazy(() => import('./pages/Home'));
+const Discovery = lazy(() => import('./pages/Discovery'));
+const ProductDetails = lazy(() => import('./pages/ProductDetails'));
+const Cart = lazy(() => import('./pages/Cart'));
+const UserWallet = lazy(() => import('./pages/Wallet'));
+const Recharge = lazy(() => import('./pages/Recharge'));
+const ConsumptionHistory = lazy(() => import('./pages/History'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const Profile = lazy(() => import('./pages/Profile'));
+const UserOrders = lazy(() => import('./pages/UserOrders'));
+const UserOrderDetail = lazy(() => import('./pages/UserOrderDetail'));
+const PaymentStatus = lazy(() => import('./pages/PaymentStatus'));
+const PublicMerchantDetail = lazy(() => import('./pages/PublicMerchantDetail'));
+const CouponCenter = lazy(() => import('./pages/CouponCenter'));
+const Points = lazy(() => import('./pages/Points'));
+const GrowthCenter = lazy(() => import('./pages/GrowthCenter'));
+const ApplyRefund = lazy(() => import('./pages/ApplyRefund'));
+const AddressList = lazy(() => import('./pages/AddressList'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
+const Success = lazy(() => import('./pages/Success'));
+
+// --- Admin chunk ---
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminMerchants = lazy(() => import('./pages/AdminMerchants'));
+const AdminProducts = lazy(() => import('./pages/AdminProducts'));
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminUserDetail = lazy(() => import('./pages/AdminUserDetail'));
+const AdminUserPermissions = lazy(() => import('./pages/AdminUserPermissions'));
+const AdminWithdrawals = lazy(() => import('./pages/AdminWithdrawals'));
+const AdminTransactions = lazy(() => import('./pages/AdminTransactions'));
+const AdminPayments = lazy(() => import('./pages/AdminPayments'));
+const AdminRecharges = lazy(() => import('./pages/AdminRecharges'));
+const AdminMerchantDetail = lazy(() => import('./pages/AdminMerchantDetail'));
+const AdminMerchantEdit = lazy(() => import('./pages/AdminMerchantEdit'));
+const AdminPermissions = lazy(() => import('./pages/AdminPermissions'));
+const AdminOrderDetail = lazy(() => import('./pages/AdminOrderDetail'));
+const AdminMarketing = lazy(() => import('./pages/AdminMarketing'));
+
+// --- Merchant chunk ---
+const MerchantDashboard = lazy(() => import('./pages/merchant/MerchantDashboard'));
+const MerchantOrders = lazy(() => import('./pages/merchant/MerchantOrders'));
+const MerchantOrderDetail = lazy(() => import('./pages/merchant/MerchantOrderDetail'));
+const MerchantFinance = lazy(() => import('./pages/merchant/MerchantFinance'));
+const MerchantProducts = lazy(() => import('./pages/merchant/MerchantProducts'));
+const MerchantProductDetail = lazy(() => import('./pages/merchant/MerchantProductDetail'));
+const MerchantProductEdit = lazy(() => import('./pages/merchant/MerchantProductEdit'));
+const MerchantRules = lazy(() => import('./pages/merchant/MerchantRules'));
+const MerchantWithdraw = lazy(() => import('./pages/merchant/MerchantWithdraw'));
+const MerchantRefunds = lazy(() => import('./pages/merchant/MerchantRefunds'));
+const MerchantCoupons = lazy(() => import('./pages/merchant/MerchantCoupons'));
+const MerchantActivities = lazy(() => import('./pages/merchant/MerchantActivities'));
+const MerchantMembers = lazy(() => import('./pages/merchant/MerchantMembers'));
+
+/** 页面级加载占位 */
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+      <span className="text-sm text-slate-400">加载中...</span>
+    </div>
+  </div>
+);
 
 // --- Components ---
 
@@ -310,7 +323,9 @@ function AppContent() {
         (isAdmin || isMerchant) ? "md:pl-64 pt-0" : isLogin ? "p-0" : "pt-16 pb-20 md:pb-0"
       )}>
         <div className="max-w-7xl mx-auto w-full h-full">
-          <Routes>
+          <ErrorBoundary>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
             <Route path="/login" element={<GuestGuard><Login /></GuestGuard>} />
             <Route path="/register" element={<GuestGuard><Register /></GuestGuard>} />
             <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
@@ -372,6 +387,8 @@ function AppContent() {
             <Route path="/merchant/rules" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRules /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantWithdraw /></RoleGuard></AuthGuard>} />
           </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </div>
       </main>
       

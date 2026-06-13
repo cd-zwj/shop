@@ -333,14 +333,15 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     }
 
     private void claimWithdrawalStatus(Withdrawal withdrawal, Integer status, Long approverId, String rejectReason) {
-        LambdaUpdateWrapper<Withdrawal> wrapper = new LambdaUpdateWrapper<Withdrawal>()
-                .eq(Withdrawal::getId, withdrawal.getId())
-                .eq(Withdrawal::getDeleted, 0)
-                .eq(Withdrawal::getStatus, 0)
-                .set(Withdrawal::getStatus, status)
-                .set(Withdrawal::getApproverId, approverId)
-                .set(Withdrawal::getApproveTime, LocalDateTime.now())
-                .set(Withdrawal::getRejectReason, rejectReason);
+        com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Withdrawal> wrapper =
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Withdrawal>()
+                        .eq("id", withdrawal.getId())
+                        .eq("deleted", 0)
+                        .eq("status", 0)
+                        .set("status", status)
+                        .set("approver_id", approverId)
+                        .set("approve_time", LocalDateTime.now())
+                        .set("reject_reason", rejectReason);
         if (withdrawalMapper.update(null, wrapper) == 0) {
             throw new BusinessException("提现申请已审核");
         }

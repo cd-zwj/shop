@@ -10,6 +10,7 @@ import com.payment.mapper.RefundOrderMapper;
 import com.payment.mapper.RefundRecordMapper;
 import com.payment.mapper.RefundReconcileTaskMapper;
 import com.payment.service.PaymentProvider;
+import com.payment.service.UserNotificationService;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -60,7 +61,8 @@ class RefundServiceImplTest {
                 refundReconcileTaskMapper,
                 compensationTaskMapper,
                 paymentBillMapper,
-                List.of(provider)
+                List.of(provider),
+                mock(UserNotificationService.class)
         );
 
         CompensationTask task = new CompensationTask();
