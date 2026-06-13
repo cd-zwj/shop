@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { adminMerchantService } from '../services/modules/adminMerchant';
@@ -23,6 +23,13 @@ export default function AdminMerchantEditPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const timerRef = useRef<number>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,11 +90,11 @@ export default function AdminMerchantEditPage() {
       if (isEdit) {
         await adminMerchantService.updateMerchant(merchantId, payload);
         setSuccess('商户资料已更新');
-        setTimeout(() => navigate(`/admin/merchant/${merchantId}`), 500);
+        timerRef.current = window.setTimeout(() => navigate(`/admin/merchant/${merchantId}`), 500);
       } else {
         const created = await adminMerchantService.createMerchant(payload);
         setSuccess('商户创建成功');
-        setTimeout(() => navigate(`/admin/merchant/${created.id}`), 500);
+        timerRef.current = window.setTimeout(() => navigate(`/admin/merchant/${created.id}`), 500);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '商户保存失败，请稍后重试');

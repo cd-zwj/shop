@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
+import { useCart } from '../context/CartContext';
+import { useToast } from '../context/ToastContext';
 import type { Product, Tenant } from '../types/catalog';
 
 type ProductWithTenant = Product & { tenantId: number };
@@ -27,6 +29,8 @@ import { formatCurrency, getImageUrl } from '../utils/display';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { addItem } = useCart();
+  const { showToast } = useToast();
   const [featuredProducts, setFeaturedProducts] = useState<ProductWithTenant[]>([]);
   const [featuredMerchants, setFeaturedMerchants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -127,7 +131,7 @@ export default function Home() {
               whileHover={{ scale: 1.02 }}
               className="relative aspect-[2.2/1] w-[88%] shrink-0 snap-center cursor-pointer overflow-hidden rounded-2xl shadow-md md:w-[400px]"
             >
-              <img src={banner.img} alt={banner.title} className="h-full w-full object-cover transition-transform duration-700" />
+              <img src={banner.img} alt={banner.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-700" />
               <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/80 via-black/20 to-transparent p-5">
                 <span className="text-xl font-bold tracking-wide text-white md:text-2xl">{banner.title}</span>
                 <span className="mt-1 text-sm text-white/90">{banner.subtitle}</span>
@@ -178,7 +182,7 @@ export default function Home() {
               >
                 <div className="relative h-40 bg-slate-100">
                   {isData ? (
-                    <img src={getImageUrl(product.imageUrl)} alt={product.name} className="h-full w-full object-cover" />
+                    <img src={getImageUrl(product.imageUrl)} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full animate-pulse bg-slate-200" />
                   )}
@@ -200,7 +204,16 @@ export default function Home() {
                     <div className="text-red-500">
                       <span className="text-sm font-black">{isData ? formatCurrency(product.price) : '...'}</span>
                     </div>
-                    <button className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-sm transition-opacity hover:opacity-90">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isData) {
+                          addItem({ ...product, tenantId: product.tenantId });
+                          showToast('已加入购物车', 'success');
+                        }
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-sm transition-opacity hover:opacity-90"
+                    >
                       <Plus className="h-4 w-4" />
                     </button>
                   </div>

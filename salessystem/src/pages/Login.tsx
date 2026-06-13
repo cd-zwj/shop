@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { appAuthService } from '../services/modules/appAuth';
 import { ApiError } from '../types/api';
@@ -25,6 +26,7 @@ const SMS_COOLDOWN_SECONDS = 60;
 export default function Login() {
   const navigate = useNavigate();
   const { loginAdmin, loginMerchant, loginUser } = useAuth();
+  const { showToast } = useToast();
   const [selectedRole, setSelectedRole] = useState<AuthRole>('user');
   const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
   const [username, setUsername] = useState('');
@@ -490,7 +492,10 @@ export default function Login() {
               )}
 
               <div className="flex items-center justify-between px-2">
-                <button className="text-xs font-black text-slate-400 transition-colors hover:text-primary">
+                <button
+                  onClick={() => showToast('密码重置功能开发中，请联系管理员', 'info')}
+                  className="text-xs font-black text-slate-400 transition-colors hover:text-primary"
+                >
                   忘记密码？
                 </button>
                 <div className="text-xs font-medium text-slate-400">

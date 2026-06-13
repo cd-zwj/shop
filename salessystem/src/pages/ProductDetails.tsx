@@ -189,6 +189,7 @@ export default function ProductDetails() {
             <img
               src={getImageUrl(product?.imageUrl)}
               alt={product?.name || 'Product'}
+              loading="lazy"
               className="h-full w-full object-cover"
             />
             <div className="absolute left-6 top-6 flex flex-col gap-2">

@@ -144,6 +144,7 @@ export default function Discovery() {
                       <img
                         src={getImageUrl(undefined, 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80')}
                         alt={store.name}
+                        loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                       />
                     ) : (

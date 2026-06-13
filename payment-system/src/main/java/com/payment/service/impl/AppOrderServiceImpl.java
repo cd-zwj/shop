@@ -494,7 +494,7 @@ public class AppOrderServiceImpl implements AppOrderService {
      * 新增订单Item。
      */
     private void insertOrderItems(SalesOrder salesOrder, List<OrderLine> orderLines) {
-        for (OrderLine orderLine : orderLines) {
+        List<SalesOrderItem> items = orderLines.stream().map(orderLine -> {
             SalesOrderItem orderItem = new SalesOrderItem();
             orderItem.setOrderId(salesOrder.getId());
             orderItem.setOrderNo(salesOrder.getOrderNo());
@@ -504,7 +504,10 @@ public class AppOrderServiceImpl implements AppOrderService {
             orderItem.setPrice(orderLine.product().getPrice());
             orderItem.setQuantity(orderLine.quantity());
             orderItem.setSubtotal(orderLine.subtotal());
-            salesOrderItemMapper.insert(orderItem);
+            return orderItem;
+        }).collect(java.util.stream.Collectors.toList());
+        if (!items.isEmpty()) {
+            salesOrderItemMapper.insertBatch(items);
         }
     }
 

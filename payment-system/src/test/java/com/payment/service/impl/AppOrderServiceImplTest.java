@@ -134,9 +134,10 @@ class AppOrderServiceImplTest {
         assertEquals(new BigDecimal("11.00"), savedOrder.getPayableAmount());
         assertEquals("可乐等2件商品", savedOrder.getSubject());
 
-        ArgumentCaptor<SalesOrderItem> itemCaptor = ArgumentCaptor.forClass(SalesOrderItem.class);
-        verify(salesOrderItemMapper, times(2)).insert(itemCaptor.capture());
-        List<SalesOrderItem> items = itemCaptor.getAllValues();
+        ArgumentCaptor<List<SalesOrderItem>> itemCaptor = ArgumentCaptor.forClass(List.class);
+        verify(salesOrderItemMapper, times(1)).insertBatch(itemCaptor.capture());
+        List<SalesOrderItem> items = itemCaptor.getValue();
+        assertEquals(2, items.size());
         assertEquals(88L, items.get(0).getOrderId());
         assertEquals(new BigDecimal("7.00"), items.get(0).getSubtotal());
         assertEquals(new BigDecimal("4.00"), items.get(1).getSubtotal());
@@ -205,7 +206,7 @@ class AppOrderServiceImplTest {
 
         verify(unifiedWalletService).debit(100L, new BigDecimal("12.00"), "SALES_ORDER", result.getOrderNo(), "订单消费扣减");
         verify(paymentBillV1Service, never()).createBill(any(), any(), any(), any(), any(), any());
-        verify(salesOrderItemMapper, times(1)).insert(any(SalesOrderItem.class));
+        verify(salesOrderItemMapper, times(1)).insertBatch(any());
         assertNull(result.getPaymentBillNo());
         assertEquals("PAID", result.getOrderStatus());
     }

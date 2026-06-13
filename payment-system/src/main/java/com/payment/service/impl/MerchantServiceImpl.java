@@ -270,77 +270,83 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
     @Override
     public java.util.Map<String, Object> getMerchantTrend() {
         log.info("获取商家注册趋势");
-        
+
         java.util.Map<String, Object> data = new java.util.HashMap<>();
-        
-        // 查询最近6个月的商家注册数据
+
+        // 单条 GROUP BY 查询替代逐月循环（修复 N 查询问题）
+        LocalDateTime endExclusive = LocalDateTime.now().plusMonths(1).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime startInclusive = endExclusive.minusMonths(6);
+
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Tenant> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Tenant>()
+                        .select("DATE_FORMAT(create_time, '%Y-%m') AS month", "COUNT(*) AS cnt")
+                        .eq("deleted", 0)
+                        .ge("create_time", startInclusive)
+                        .lt("create_time", endExclusive)
+                        .groupBy("DATE_FORMAT(create_time, '%Y-%m')")
+                        .orderByAsc("month");
+
+        java.util.List<java.util.Map<String, Object>> rows = tenantMapper.selectMaps(qw);
+        java.util.Map<String, Long> countMap = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : rows) {
+            String month = String.valueOf(row.get("month"));
+            long cnt = row.get("cnt") instanceof Number ? ((Number) row.get("cnt")).longValue() : 0L;
+            countMap.put(month, cnt);
+        }
+
         java.util.List<String> dates = new java.util.ArrayList<>();
         java.util.List<Integer> counts = new java.util.ArrayList<>();
-        
-        LocalDateTime now = LocalDateTime.now();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM");
         for (int i = 5; i >= 0; i--) {
-            LocalDateTime monthStart = now.minusMonths(i).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-            LocalDateTime monthEnd = monthStart.plusMonths(1).minusSeconds(1);
-            
-            // 格式化月份
-            String monthStr = monthStart.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+            String monthStr = LocalDateTime.now().minusMonths(i).format(fmt);
             dates.add(monthStr);
-            
-            // 查询该月注册的商家数量
-            LambdaQueryWrapper<Tenant> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(Tenant::getDeleted, 0);
-            wrapper.ge(Tenant::getCreateTime, monthStart);
-            wrapper.lt(Tenant::getCreateTime, monthEnd);
-            Long count = tenantMapper.selectCount(wrapper);
-            counts.add(count.intValue());
+            counts.add(countMap.getOrDefault(monthStr, 0L).intValue());
         }
-        
+
         data.put("dates", dates);
         data.put("counts", counts);
-        
-        log.info("商家注册趋势：dates={}, counts={}", dates, counts);
-        
         return data;
     }
-    
+
     @Override
     public java.util.Map<String, Object> getSalesTrend() {
         log.info("获取平台销售趋势");
-        
+
         java.util.Map<String, Object> data = new java.util.HashMap<>();
-        
-        // 查询最近6个月的销售数据
+
+        // 单条 GROUP BY 查询替代逐月循环（修复 N 查询 + 全表加载问题）
+        LocalDateTime endExclusive = LocalDateTime.now().plusMonths(1).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
+        LocalDateTime startInclusive = endExclusive.minusMonths(6);
+
+        com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PaymentOrder> qw =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<PaymentOrder>()
+                        .select("DATE_FORMAT(pay_time, '%Y-%m') AS month", "COALESCE(SUM(pay_amount), 0) AS total")
+                        .eq("pay_status", "SUCCESS")
+                        .eq("deleted", 0)
+                        .ge("pay_time", startInclusive)
+                        .lt("pay_time", endExclusive)
+                        .groupBy("DATE_FORMAT(pay_time, '%Y-%m')")
+                        .orderByAsc("month");
+
+        java.util.List<java.util.Map<String, Object>> rows = paymentOrderMapper.selectMaps(qw);
+        java.util.Map<String, Double> amountMap = new java.util.LinkedHashMap<>();
+        for (java.util.Map<String, Object> row : rows) {
+            String month = String.valueOf(row.get("month"));
+            double amt = row.get("total") instanceof Number ? ((Number) row.get("total")).doubleValue() : 0.0;
+            amountMap.put(month, amt);
+        }
+
         java.util.List<String> dates = new java.util.ArrayList<>();
         java.util.List<Double> amounts = new java.util.ArrayList<>();
-        
-        LocalDateTime now = LocalDateTime.now();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM");
         for (int i = 5; i >= 0; i--) {
-            LocalDateTime monthStart = now.minusMonths(i).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-            LocalDateTime monthEnd = monthStart.plusMonths(1).minusSeconds(1);
-            
-            // 格式化月份
-            String monthStr = monthStart.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+            String monthStr = LocalDateTime.now().minusMonths(i).format(fmt);
             dates.add(monthStr);
-            
-            // 查询该月的销售额
-            LambdaQueryWrapper<PaymentOrder> wrapper = new LambdaQueryWrapper<>();
-            wrapper.eq(PaymentOrder::getPayStatus, "SUCCESS"); // 已支付
-            wrapper.eq(PaymentOrder::getDeleted, 0);
-            wrapper.ge(PaymentOrder::getPayTime, monthStart);
-            wrapper.lt(PaymentOrder::getPayTime, monthEnd);
-            wrapper.select(PaymentOrder::getPayAmount);
-            
-            BigDecimal monthSales = paymentOrderMapper.selectList(wrapper).stream()
-                    .map(PaymentOrder::getPayAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            amounts.add(monthSales.doubleValue());
+            amounts.add(amountMap.getOrDefault(monthStr, 0.0));
         }
-        
+
         data.put("dates", dates);
         data.put("amounts", amounts);
-        
-        log.info("平台销售趋势：dates={}, amounts={}", dates, amounts);
-        
         return data;
     }
 }

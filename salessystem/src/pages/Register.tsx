@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
@@ -25,6 +25,13 @@ export default function Register() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const timerRef = useRef<number>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,7 +58,7 @@ export default function Register() {
       });
 
       setSuccess('注册成功，即将返回登录页');
-      setTimeout(() => {
+      timerRef.current = window.setTimeout(() => {
         navigate('/login');
       }, 900);
     } catch (err) {
