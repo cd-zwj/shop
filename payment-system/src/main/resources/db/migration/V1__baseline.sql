@@ -1,0 +1,5 @@
+-- Flyway baseline migration
+-- 此文件标记现有 schema 为已应用状态。
+-- 历史迁移脚本见 payment-system/sql/ 目录（00-30 号）。
+-- 后续新表结构变更请使用 V2__xxx.sql 命名在此目录下创建。
+-- 命名规范：V{版本号}__{描述}.sql（双下划线分隔）

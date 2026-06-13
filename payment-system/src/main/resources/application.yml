@@ -85,6 +85,13 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+# Flyway 数据库迁移
+spring.flyway:
+  enabled: ${FLYWAY_ENABLED:true}
+  baseline-on-migrate: true
+  baseline-version: 0
+  locations: classpath:db/migration
+
 # MyBatis Plus配置
 mybatis-plus:
   configuration:
