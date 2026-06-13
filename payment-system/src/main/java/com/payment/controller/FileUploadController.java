@@ -5,6 +5,7 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.BusinessException;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.common.TenantContextHolder;
 import com.payment.service.FileAssetService;
 import com.payment.util.MinioUtil;
 import com.payment.util.PlatformSessionHelper;
@@ -85,8 +86,8 @@ public class FileUploadController {
     @Operation(summary = "简单文件上传", description = "适用于小文件的直接上传，支持MD5去重")
     public Result<String> uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "fileMd5", required = false) String fileMd5,
-            @RequestParam(value = "tenantId", required = false) Long tenantId) {
+            @RequestParam(value = "fileMd5", required = false) String fileMd5) {
+        Long tenantId = TenantContextHolder.getTenantId();
         try {
             validateFileType(file);
 
@@ -156,9 +157,9 @@ public class FileUploadController {
     @GetMapping("/list")
     @Operation(summary = "查询已上传文件列表", description = "按租户分页查询已上传的文件列表，需要登录")
     public Result<PageResult<FileAssetVO>> listFiles(
-            @RequestParam Long tenantId,
             @RequestParam(defaultValue = "1") @jakarta.validation.constraints.Min(value = 1, message = "页码必须大于0") Integer current,
             @RequestParam(defaultValue = "10") @jakarta.validation.constraints.Min(value = 1, message = "每页条数必须大于0") Integer size) {
+        Long tenantId = TenantContextHolder.getTenantId();
         List<FileAssetVO> records = fileAssetService.listByTenant(tenantId, current, size);
         return Result.success(new PageResult<>(records, (long) records.size(), current, size));
     }

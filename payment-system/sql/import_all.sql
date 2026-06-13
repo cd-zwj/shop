@@ -38,6 +38,7 @@ SOURCE 26_coupon_records_and_rules.sql;
 SOURCE 27_new_modules.sql;
 SOURCE 28_permission_rate_limit_hardening.sql;
 SOURCE 29_merchant_balance_version.sql;
+SOURCE 30_critical_indexes.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

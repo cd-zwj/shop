@@ -224,8 +224,17 @@ public class CouponServiceImpl implements CouponService {
             return Collections.emptyList();
         }
 
+        // 批量预加载所有模板的 scope，避免 N+1 查询
+        Set<Long> templateIds = templates.stream()
+                .map(CouponTemplate::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<Long, List<CouponScope>> scopesMap = batchLoadScopes(templateIds);
+
         return templates.stream()
-                .filter(template -> isTemplateVisibleForTenantAndUser(template, tenantId, platformUserId))
+                .filter(template -> {
+                    List<CouponScope> scopes = scopesMap.getOrDefault(template.getId(), Collections.emptyList());
+                    return isVisibleWithScopes(template, tenantId, platformUserId, scopes);
+                })
                 .map(template -> toTemplateVO(template, platformUserId))
                 .collect(Collectors.toList());
     }
@@ -947,6 +956,21 @@ public class CouponServiceImpl implements CouponService {
                 .eq(CouponScope::getCouponTemplateId, couponTemplateId)
                 .eq(CouponScope::getDeleted, 0));
         return scopes == null ? Collections.emptyList() : scopes;
+    }
+
+    /** 批量加载多个模板的 scope，消除 N+1 查询 */
+    private Map<Long, List<CouponScope>> batchLoadScopes(Set<Long> templateIds) {
+        if (templateIds == null || templateIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<CouponScope> allScopes = couponScopeMapper.selectList(new LambdaQueryWrapper<CouponScope>()
+                .in(CouponScope::getCouponTemplateId, templateIds)
+                .eq(CouponScope::getDeleted, 0));
+        if (allScopes == null || allScopes.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return allScopes.stream()
+                .collect(Collectors.groupingBy(CouponScope::getCouponTemplateId));
     }
 
     private BigDecimal sumItems(List<OrderPricingItemDTO> items) {

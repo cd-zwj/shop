@@ -35,11 +35,7 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/v1/merchant/auth/login",
                 "/v1/open/payments/**",
                 "/api/payment/notify/**",
-                "/v3/api-docs/**",
-                "/swagger-ui/**",
-                "/swagger-ui.html",
-                "/doc.html",
-                "/webjars/**",
+                "/actuator/**",
                 "/favicon.ico"
         ));
 
@@ -48,7 +44,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
                     "/swagger-ui.html",
-                    "/doc.html"
+                    "/doc.html",
+                    "/webjars/**"
             ));
         }
 

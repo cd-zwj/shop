@@ -42,10 +42,10 @@ spring:
       timeout: 5000ms
       jedis:
         pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
+          max-active: 50
+          max-idle: 20
+          min-idle: 8
+          max-wait: 3000ms
 
   # RabbitMQ配置
   rabbitmq:
@@ -139,20 +139,20 @@ langchain4j:
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       api-key: ${AI_API_KEY:}
       model-name: text-embedding-v3
-      log-requests: true
-      log-responses: true
+      log-requests: ${AI_LOG_REQUESTS:false}
+      log-responses: ${AI_LOG_RESPONSES:false}
     streaming-chat-model:
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       api-key: ${AI_API_KEY:}
       model-name: qwen-plus
-      log-requests: true
-      log-responses: true
+      log-requests: ${AI_LOG_REQUESTS:false}
+      log-responses: ${AI_LOG_RESPONSES:false}
     chat-model:
       base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
       api-key: ${AI_API_KEY:}
       model-name: qwen-plus
-      log-requests: true
-      log-responses: true
+      log-requests: ${AI_LOG_REQUESTS:false}
+      log-responses: ${AI_LOG_RESPONSES:false}
 
 sa-token:
   token-name: Authorization
@@ -162,6 +162,19 @@ sa-token:
   is-share: ${SA_TOKEN_IS_SHARE:true}
   token-style: uuid
   is-log: true
+
+# Actuator 健康检查 + Prometheus 监控
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
 
 # JWT配置
 jwt:
