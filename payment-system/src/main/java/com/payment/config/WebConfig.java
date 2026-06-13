@@ -51,6 +51,8 @@ public class WebConfig implements WebMvcConfigurer {
                 response.setHeader("X-XSS-Protection", "1; mode=block");
                 response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
                 response.setHeader("Cache-Control", "no-store");
+                response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+                response.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'");
                 filterChain.doFilter(request, response);
             }
         };

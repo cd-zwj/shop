@@ -12,3 +12,6 @@ ALTER TABLE `payment_bill` ADD INDEX `idx_pay_status_time` (`pay_status`, `creat
 
 -- withdrawal: tenant_id + status + apply_time 复合索引（提现列表查询）
 ALTER TABLE `withdrawal` ADD INDEX `idx_tenant_status_time` (`tenant_id`, `status`, `apply_time`);
+
+-- member_points_log: 预扣查询覆盖索引
+ALTER TABLE `member_points_log` ADD INDEX `idx_user_tenant_biz` (`platform_user_id`, `tenant_id`, `biz_type`, `biz_no`, `status`);

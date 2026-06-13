@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.payment.util.JsonUtils;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
 import com.payment.dto.AnalysisRequestDTO;
@@ -142,13 +143,14 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
     }
     
     @Override
-    public List<DataAnalysisResult> getAnalysisList(String analysisType) {
+    public Page<DataAnalysisResult> getAnalysisList(String analysisType, Integer current, Integer size) {
+        Page<DataAnalysisResult> page = new Page<>(current, size);
         LambdaQueryWrapper<DataAnalysisResult> wrapper = new LambdaQueryWrapper<>();
         if (analysisType != null) {
             wrapper.eq(DataAnalysisResult::getAnalysisType, analysisType);
         }
         wrapper.orderByDesc(DataAnalysisResult::getCreateTime);
-        return list(wrapper);
+        return page(page, wrapper);
     }
 }
 

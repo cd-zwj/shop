@@ -23,8 +23,11 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -174,8 +177,14 @@ public class PromotionServiceImpl implements PromotionService {
             return Collections.emptyList();
         }
 
+        // 批量预加载所有活动的规则，消除 N+1 查询
+        Set<Long> activityIds = activities.stream()
+                .map(PromotionActivity::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+        Map<Long, List<ActivityRule>> rulesMap = batchLoadRules(activityIds);
+
         return activities.stream()
-                .map(activity -> matchActivity(activity, items))
+                .map(activity -> matchActivityWithRules(activity, rulesMap.getOrDefault(activity.getId(), Collections.emptyList()), items))
                 .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
@@ -265,7 +274,13 @@ public class PromotionServiceImpl implements PromotionService {
                 .eq(ActivityRule::getActivityId, activity.getId())
                 .eq(ActivityRule::getDeleted, 0)
                 .orderByDesc(ActivityRule::getPriority));
-        if (rules == null || rules.isEmpty()) {
+        return matchActivityWithRules(activity, rules == null ? Collections.emptyList() : rules, items);
+    }
+
+    private PromotionDiscountCandidateDTO matchActivityWithRules(PromotionActivity activity,
+                                                                  List<ActivityRule> rules,
+                                                                  List<OrderPricingItemDTO> items) {
+        if (rules.isEmpty()) {
             return null;
         }
 
@@ -274,6 +289,22 @@ public class PromotionServiceImpl implements PromotionService {
                 .filter(Objects::nonNull)
                 .max(Comparator.comparing(candidate -> resolvePriority(rules, candidate.getActivityRuleId())))
                 .orElse(null);
+    }
+
+    /** 批量加载多个活动的规则，消除 N+1 查询 */
+    private Map<Long, List<ActivityRule>> batchLoadRules(Set<Long> activityIds) {
+        if (activityIds == null || activityIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        List<ActivityRule> allRules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
+                .in(ActivityRule::getActivityId, activityIds)
+                .eq(ActivityRule::getDeleted, 0)
+                .orderByDesc(ActivityRule::getPriority));
+        if (allRules == null || allRules.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        return allRules.stream()
+                .collect(Collectors.groupingBy(ActivityRule::getActivityId));
     }
 
     private PromotionDiscountCandidateDTO toCandidate(PromotionActivity activity,

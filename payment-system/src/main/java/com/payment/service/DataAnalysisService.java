@@ -20,8 +20,8 @@ public interface DataAnalysisService extends IService<DataAnalysisResult> {
     DataAnalysisResult getAnalysisResult(Long id);
     
     /**
-     * 获取分析结果列表
+     * 获取分析结果列表（分页）
      */
-    java.util.List<DataAnalysisResult> getAnalysisList(String analysisType);
+    com.baomidou.mybatisplus.extension.plugins.pagination.Page<DataAnalysisResult> getAnalysisList(String analysisType, Integer current, Integer size);
 }
 

@@ -45,9 +45,11 @@ public class DataAnalysisController {
     
 
     @GetMapping("/list")
-    public Result<List<DataAnalysisResult>> getAnalysisList(@RequestParam(required = false) String analysisType) {
-        List<DataAnalysisResult> list = dataAnalysisService.getAnalysisList(analysisType);
-        return Result.success(list);
+    public Result<com.baomidou.mybatisplus.extension.plugins.pagination.Page<DataAnalysisResult>> getAnalysisList(
+            @RequestParam(required = false) String analysisType,
+            @RequestParam(defaultValue = "1") Integer current,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return Result.success(dataAnalysisService.getAnalysisList(analysisType, current, size));
     }
 }
 
