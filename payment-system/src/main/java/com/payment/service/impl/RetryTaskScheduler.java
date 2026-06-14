@@ -10,6 +10,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.AppOrderService;
 import com.payment.service.RefundService;
 import com.payment.service.SmsCodeService;
+import com.payment.service.CouponService;
 import com.payment.service.WalletRechargeService;
 import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +32,8 @@ import java.util.Map;
  * - RECHARGE_CREDIT → WalletRechargeService.handleRechargeSuccess
  * - SMS_RETRY      → SmsCodeService.sendLoginCode
  *
- * 未接入的 taskType（退避重试，超 maxRetryCount 后 DEAD）：
- * - PAYMENT_CALLBACK, COUPON_COMPENSATE
+ * - PAYMENT_CALLBACK  → AppOrderService.handlePaymentCallback
+ * - COUPON_COMPENSATE → CouponService.receiveCoupon
  */
 @Slf4j
 @Component
@@ -48,6 +49,7 @@ public class RetryTaskScheduler {
     private final AppOrderService appOrderService;
     private final WalletRechargeService walletRechargeService;
     private final SmsCodeService smsCodeService;
+    private final CouponService couponService;
 
     @Scheduled(fixedDelayString = "${payment.retry-task.fixed-delay-ms:60000}")
     public void processRetryTasks() {
@@ -74,6 +76,8 @@ public class RetryTaskScheduler {
             case "ORDER_CLOSE" -> handleOrderClose(task);
             case "RECHARGE_CREDIT" -> handleRechargeCredit(task);
             case "SMS_RETRY" -> handleSmsRetry(task);
+            case "PAYMENT_CALLBACK" -> handlePaymentCallback(task);
+            case "COUPON_COMPENSATE" -> handleCouponCompensate(task);
             default -> handleUnsupported(task);
         }
     }
@@ -159,6 +163,42 @@ public class RetryTaskScheduler {
         onSuccess(task, "短信已重发: " + phone);
     }
 
+
+    /**
+     * PAYMENT_CALLBACK: 支付回调重试，同步支付单状态并更新订单。
+     * bizNo = paymentBillNo。
+     */
+    private void handlePaymentCallback(RetryTask task) {
+        try {
+            appOrderService.handlePaymentCallback(task.getBizNo());
+            onSuccess(task, "支付回调处理成功: " + task.getBizNo());
+        } catch (Exception e) {
+            log.warn("支付回调处理失败，等待重试: taskNo={}, bizNo={}", task.getTaskNo(), task.getBizNo(), e);
+            onFailure(task, e.getMessage());
+        }
+    }
+
+    /**
+     * COUPON_COMPENSATE: 优惠券发放补偿重试。
+     * extensionJson 包含 couponTemplateId, tenantId, platformUserId。
+     */
+    @SuppressWarnings("unchecked")
+    private void handleCouponCompensate(RetryTask task) {
+        if (task.getExtensionJson() == null || task.getExtensionJson().isBlank()) {
+            markDead(task, "extensionJson 为空，无法解析优惠券发放参数");
+            return;
+        }
+        Map<String, Object> ext = JsonUtils.fromJson(task.getExtensionJson(), Map.class);
+        if (ext == null || !ext.containsKey("couponTemplateId") || !ext.containsKey("tenantId") || !ext.containsKey("platformUserId")) {
+            markDead(task, "extensionJson 缺少必填字段 couponTemplateId/tenantId/platformUserId");
+            return;
+        }
+        Long couponTemplateId = ((Number) ext.get("couponTemplateId")).longValue();
+        Long tenantId = ((Number) ext.get("tenantId")).longValue();
+        Long platformUserId = ((Number) ext.get("platformUserId")).longValue();
+        couponService.receiveCoupon(couponTemplateId, tenantId, platformUserId, task.getBizNo());
+        onSuccess(task, "优惠券补偿发放成功: bizNo=" + task.getBizNo());
+    }
     /* ---------- 通用方法 ---------- */
 
     /**

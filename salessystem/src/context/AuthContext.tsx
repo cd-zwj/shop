@@ -81,7 +81,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 监听 401 事件：http.ts 响应拦截器在收到 401 时分发此事件
   useEffect(() => {
-    function handleTokenClear() {
+    function handleTokenClear(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      // 如果事件指定了角色，只处理当前角色的事件
+      if (detail?.role && detail.role !== currentRole) return;
       resetLocalAuthState(setCurrentRoleState, setCurrentUser, setMerchantSessionState, setAdminSessionState);
     }
 
@@ -89,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener(AUTH_TOKEN_CLEAR_EVENT, handleTokenClear);
     };
-  }, []);
+  }, [currentRole]);
 
   useEffect(() => {
     let isMounted = true;

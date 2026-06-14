@@ -26,9 +26,16 @@ const SMS_COOLDOWN_SECONDS = 60;
 export default function Login() {
   const navigate = useNavigate();
   const { loginAdmin, loginMerchant, loginUser } = useAuth();
-  const { showToast } = useToast();
-  const [selectedRole, setSelectedRole] = useState<AuthRole>('user');
-  const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
+ const { showToast } = useToast();
+  // 从 URL 读取被 401 踢出的角色，预选对应登录标签
+  function getInitialRole(): AuthRole {
+    const params = new URLSearchParams(window.location.search);
+    const roleParam = params.get('role');
+    if (roleParam === 'merchant' || roleParam === 'admin') return roleParam;
+    return 'user';
+  }
+  const [selectedRole, setSelectedRole] = useState<AuthRole>(getInitialRole);
+ const [loginMethod, setLoginMethod] = useState<'password' | 'sms'>('password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');

@@ -1,11 +1,14 @@
 import { appOrderService } from './modules/appOrder';
-import type { OrderPayment, AppCreateOrderPayload } from '../types/order';
+import type { OrderPayment, AppCreateOrderPayload, WalletStrategy } from '../types/order';
+import type { PaymentChannelCode } from '../types/payment';
 import type { CartItem, CheckoutSource } from '../types/cart';
 
 export function buildOrderPayload(
   items: CartItem[],
   source: CheckoutSource,
-  selectedUserCouponId?: number
+  selectedUserCouponId?: number,
+  walletStrategy: WalletStrategy,
+  paymentChannelCode: PaymentChannelCode,
 ): AppCreateOrderPayload {
   if (items.length === 0) {
     throw new Error('购物车为空，无法创建订单');
@@ -28,8 +31,8 @@ export function buildOrderPayload(
       quantity: item.quantity,
       price: item.price,
     })),
-    walletStrategy: 'NO_WALLET',
-    paymentChannelCode: 'ALIPAY_PAGE',
+    walletStrategy,
+    paymentChannelCode,
     selectedUserCouponId,
   };
 }
@@ -37,9 +40,11 @@ export function buildOrderPayload(
 export function createOrderForItems(
   items: CartItem[],
   source: CheckoutSource,
-  selectedUserCouponId?: number
+  selectedUserCouponId?: number,
+  walletStrategy: WalletStrategy,
+  paymentChannelCode: PaymentChannelCode,
 ): Promise<OrderPayment> {
-  return appOrderService.createOrder(buildOrderPayload(items, source, selectedUserCouponId));
+  return appOrderService.createOrder(buildOrderPayload(items, source, selectedUserCouponId, walletStrategy, paymentChannelCode));
 }
 
 export function getOrderCheckoutPath(payment: OrderPayment) {

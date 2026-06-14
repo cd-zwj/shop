@@ -1,4 +1,4 @@
-import { useState, useCallback, type ReactNode } from 'react';
+import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface ErrorBoundaryProps {
@@ -7,55 +7,40 @@ interface ErrorBoundaryProps {
   variant?: 'page' | 'fullscreen';
 }
 
-/**
- * 全局 Error Boundary（函数式实现，通过 try-catch 渲染包装）。
- *
- * 注意：React 的 Error Boundary 机制只能通过 class component 的
- * componentDidCatch 实现。此函数式版本作为降级 UI 壳使用，
- * 真正的错误捕获由 React 的内置错误处理触发。
- *
- * 用法：
- * - 顶层：包裹 AppContent，variant="fullscreen"
- * - 页面级：包裹单个页面内容，variant="page"
- */
-export function ErrorBoundary({ children, fallback, variant = 'fullscreen' }: ErrorBoundaryProps) {
-  return (
-    <ErrorBoundaryInner fallback={fallback} variant={variant}>
-      {children}
-    </ErrorBoundaryInner>
-  );
-}
-
-interface InnerState {
+interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
 }
 
-function ErrorBoundaryInner({ children, fallback, variant }: ErrorBoundaryProps) {
-  const [state, setState] = useState<InnerState>({ hasError: false, error: null });
-
-  const handleRetry = useCallback(() => {
-    setState({ hasError: false, error: null });
-  }, []);
-
-  if (state.hasError) {
-    if (fallback) {
-      return <>{fallback}</>;
-    }
-
-    if (variant === 'page') {
-      return <PageFallback onRetry={handleRetry} error={state.error} />;
-    }
-
-    return <FullscreenFallback onRetry={handleRetry} error={state.error} />;
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
-  try {
-    return <>{children}</>;
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    setState({ hasError: true, error: err });
-    return null;
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
+    console.error('[ErrorBoundary]', error, errorInfo);
+  }
+
+  handleRetry = (): void => {
+    this.setState({ hasError: false, error: null });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+      if (this.props.variant === 'page') {
+        return <PageFallback onRetry={this.handleRetry} error={this.state.error} />;
+      }
+      return <FullscreenFallback onRetry={this.handleRetry} error={this.state.error} />;
+    }
+    return this.props.children;
   }
 }
 

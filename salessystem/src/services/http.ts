@@ -48,12 +48,15 @@ http.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response;
 
-      // 401：token 失效，清除本地认证状态并跳转登录页
-      if (status === 401) {
-        window.dispatchEvent(new CustomEvent(AUTH_TOKEN_CLEAR_EVENT));
-        window.location.href = '/login';
-        return Promise.reject(new ApiError('登录已过期，请重新登录', 401, 401, data));
-      }
+     // 401：token 失效，清除本地认证状态并跳转登录页
+     if (status === 401) {
+       const role = resolveAuthRole(error.config as InternalAxiosRequestConfig);
+       window.dispatchEvent(new CustomEvent(AUTH_TOKEN_CLEAR_EVENT, { detail: { role } }));
+        // 按角色跳转到登录页，避免商户/管理员 401 时将用户也踢到用户登录页
+        const loginPath = role ? `/login?role=${role}` : '/login';
+        window.location.href = loginPath;
+       return Promise.reject(new ApiError('登录已过期，请重新登录', 401, 401, data));
+     }
 
       const message =
         data?.message || (status === 403 ? '当前账号没有访问权限' : '请求失败，请稍后重试');

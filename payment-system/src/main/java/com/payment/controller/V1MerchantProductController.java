@@ -15,6 +15,7 @@ import com.payment.service.impl.ProductIndexMessagePublisher;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
+import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class V1MerchantProductController {
     private final V1MerchantSupportService v1MerchantSupportService;
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
+    @SaCheckPermission("merchant:product:read")
     @GetMapping
     public Result<PageResult<V1MerchantProductVO>> listProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                           @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -65,6 +67,7 @@ public class V1MerchantProductController {
         return Result.success(new PageResult<>(records, page.getTotal(), (int) page.getCurrent(), (int) page.getSize()));
     }
 
+    @SaCheckPermission("merchant:product:read")
     @GetMapping("/{productId}")
     public Result<V1MerchantProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -73,6 +76,7 @@ public class V1MerchantProductController {
         return Result.success(toProductVO(product, stock));
     }
 
+    @SaCheckPermission("merchant:product:write")
     @PostMapping
     public Result<V1MerchantProductVO> createProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                      @Valid @RequestBody V1MerchantProductUpsertDTO dto) {
@@ -109,6 +113,7 @@ public class V1MerchantProductController {
         return Result.success(toProductVO(savedProduct, productStockMapper.selectById(stock.getId())));
     }
 
+    @SaCheckPermission("merchant:product:write")
     @PutMapping("/{productId}")
     public Result<V1MerchantProductVO> updateProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
@@ -145,6 +150,7 @@ public class V1MerchantProductController {
         return Result.success(toProductVO(updatedProduct, productStockMapper.selectById(stock.getId())));
     }
 
+    @SaCheckPermission("merchant:product:write")
     @DeleteMapping("/{productId}")
     public Result<Void> deleteProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());

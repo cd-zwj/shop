@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { appCatalogService } from '../services/modules/appCatalog';
 import { createOrderForItems, getOrderCheckoutPath } from '../services/orderCheckout';
+import type { WalletStrategy } from '../types/order';
 import { ApiError } from '../types/api';
 import type { Product } from '../types/catalog';
 import type { CartItem } from '../types/cart';
@@ -38,6 +39,7 @@ export default function ProductDetails() {
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'ALIPAY_PAGE' | 'UNIFIED_WALLET'>('ALIPAY_PAGE');
 
   const queryTenantId = searchParams.get('tenantId');
   const tenantId = queryTenantId ? Number(queryTenantId) : undefined;
@@ -126,8 +128,10 @@ export default function ProductDetails() {
     setIsSubmittingOrder(true);
 
     try {
-      const payment = await createOrderForItems([toCheckoutItem(product)], 'APP_BUY_NOW');
-
+      const walletStrategy: WalletStrategy = paymentMethod === 'UNIFIED_WALLET' ? 'UNIFIED_ONLY' : 'NO_WALLET';
+      const channelCode = paymentMethod === 'UNIFIED_WALLET' ? undefined : paymentMethod;
+      const payment = await createOrderForItems(
+        [toCheckoutItem(product)], 'APP_BUY_NOW', undefined, walletStrategy, channelCode);
       if (payment.externalPayUrl) {
         const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
         if (!isOpened && payment.paymentBillNo) {
@@ -252,6 +256,33 @@ export default function ProductDetails() {
               {actionMessage}
             </div>
           )}
+          <div className="mb-10 flex flex-col gap-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">支付方式</h3>
+            <div className='flex gap-3 mb-4'>
+              <button
+                type='button'
+                onClick={() => setPaymentMethod('ALIPAY_PAGE')}
+                className={`flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all ${
+                  paymentMethod === 'ALIPAY_PAGE'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                支付宝支付
+              </button>
+              <button
+                type='button'
+                onClick={() => setPaymentMethod('UNIFIED_WALLET')}
+                className={`flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all ${
+                  paymentMethod === 'UNIFIED_WALLET'
+                    ? 'border-primary bg-primary/5 text-primary'
+                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                }`}
+              >
+                钱包余额
+              </button>
+            </div>
+          </div>
 
           <div className="mb-10 flex flex-col gap-4">
             <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">许可等级</h3>

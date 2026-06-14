@@ -200,7 +200,7 @@ export default function Recharge() {
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-slate-400">{pkg.label}</p>
                   <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-sm font-black text-slate-900">$</span>
+                    <span className="text-sm font-black text-slate-900">¥</span>
                     <span className="text-4xl font-black tracking-tight text-slate-900">{pkg.amount}</span>
                   </div>
                 </div>
@@ -243,11 +243,11 @@ export default function Recharge() {
         <div className="flex flex-col items-end gap-6 md:flex-row">
           <div className="relative w-full">
             <label className="mb-3 block px-1 text-xs font-black uppercase tracking-widest text-slate-400">
-              输入金额 ($)
+              输入金额 (¥)
             </label>
             <div className="group relative">
               <span className="absolute left-5 top-1/2 -translate-y-1/2 text-2xl font-black text-slate-300 transition-colors group-focus-within:text-primary">
-                $
+                ¥
               </span>
               <input
                 type="number"

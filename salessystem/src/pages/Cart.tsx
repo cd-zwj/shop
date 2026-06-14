@@ -53,6 +53,7 @@ export default function Cart() {
     null,
   );
   const [error, setError] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<'ALIPAY_PAGE' | 'UNIFIED_WALLET'>('ALIPAY_PAGE');
 
   // Coupon states
   const [couponsByTenant, setCouponsByTenant] = useState<Record<number, {
@@ -336,7 +337,9 @@ export default function Cart() {
         }
       }
 
-      const payment = await createOrderForItems(tenantItems, 'APP_CART', finalCouponId);
+      const walletStrategy = paymentMethod === 'UNIFIED_WALLET' ? 'UNIFIED_ONLY' : 'NO_WALLET';
+      const channelCode = paymentMethod === 'UNIFIED_WALLET' ? undefined : paymentMethod;
+      const payment = await createOrderForItems(tenantItems, 'APP_CART', finalCouponId, walletStrategy, channelCode);
       clearTenantItems(tenantId);
 
       if (payment.externalPayUrl) {
@@ -551,7 +554,32 @@ export default function Cart() {
                 </div>
 
                 <div className="flex flex-col gap-4 border-t border-slate-100 bg-slate-50/60 p-5 md:flex-row md:items-center md:justify-between">
-                  <div>
+                  <div className="flex-1">
+                    <div className="flex gap-3 mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('ALIPAY_PAGE')}
+                        className={`flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all ${
+                          paymentMethod === 'ALIPAY_PAGE'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        支付宝支付
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('UNIFIED_WALLET')}
+                        className={`flex-1 rounded-xl border-2 py-2.5 text-sm font-bold transition-all ${
+                          paymentMethod === 'UNIFIED_WALLET'
+                            ? 'border-primary bg-primary/5 text-primary'
+                            : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                        }`}
+                      >
+                        钱包余额
+                      </button>
+                    </div>
+                    <div>
                     <p className="text-xs font-black uppercase tracking-widest text-slate-400">
                       商户小计
                     </p>
@@ -569,6 +597,7 @@ export default function Cart() {
                         formatCurrency(group.subtotal)
                       )}
                     </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleCheckoutByTenant(group.tenantId)}

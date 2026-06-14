@@ -6,6 +6,7 @@ import com.payment.entity.Product;
 import com.payment.entity.Tenant;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.TenantMapper;
+import com.payment.service.ProductSearchService;
 import com.payment.service.UserBehaviorLogService;
 import com.payment.vo.ProductVO;
 import com.payment.vo.TenantVO;
@@ -28,6 +29,7 @@ public class V1AppCatalogController {
 
     private final TenantMapper tenantMapper;
     private final ProductMapper productMapper;
+    private final ProductSearchService productSearchService;
     private final UserBehaviorLogService userBehaviorLogService;
 
     @GetMapping("/tenants")
@@ -53,6 +55,13 @@ public class V1AppCatalogController {
                 .eq(Product::getStatus, 1)
                 .orderByDesc(Product::getCreateTime))
                 .stream().map(ProductVO::from).collect(Collectors.toList()));
+    }
+
+    @GetMapping("/tenants/{tenantId}/products/search")
+    public Result<List<ProductVO>> searchProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                  @RequestParam String keyword) {
+        List<Product> results = productSearchService.searchProducts(keyword, tenantId);
+        return Result.success(results.stream().map(ProductVO::from).collect(Collectors.toList()));
     }
 
     @GetMapping("/products/{productId}")

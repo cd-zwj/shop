@@ -796,4 +796,36 @@ public class AppOrderServiceImpl implements AppOrderService {
                              Integer quantity,
                              BigDecimal subtotal) {
     }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void handlePaymentCallback(String paymentBillNo) {
+        PaymentBill bill = paymentBillV1Service.syncBillStatus(paymentBillNo);
+        if (bill == null) {
+            throw new BusinessException("支付账单不存在: " + paymentBillNo);
+        }
+
+        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getOrderNo, bill.getBizNo())
+                .eq(SalesOrder::getDeleted, 0));
+        if (order == null) {
+            throw new BusinessException("订单不存在: " + bill.getBizNo());
+        }
+
+        if (PayStatusEnum.SUCCESS.name().equals(order.getPayStatus())) {
+            return;
+        }
+
+        if (PayStatusEnum.SUCCESS.name().equals(bill.getPayStatus())) {
+            order.setPayStatus(PayStatusEnum.SUCCESS.name());
+            order.setOrderStatus(OrderStatusEnum.PAID.name());
+            salesOrderMapper.updateById(order);
+            settlePaidOrder(order);
+            return;
+        }
+
+        throw new BusinessException("支付未完成，继续等待: billNo="
+                + paymentBillNo + ", billStatus=" + bill.getPayStatus());
+    }
+
 }

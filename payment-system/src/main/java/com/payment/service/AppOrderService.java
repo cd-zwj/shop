@@ -28,4 +28,10 @@ public interface AppOrderService {
     OrderPaymentVO repayOrder(Long platformUserId, String orderNo, PaymentChannelCodeEnum paymentChannelCode);
 
     void cancelOrder(Long platformUserId, String orderNo);
+    /**
+     * 处理支付回调重试：根据 PaymentBill 的状态更新关联 SalesOrder。
+     *
+     * @param paymentBillNo 支付单号
+     */
+    void handlePaymentCallback(String paymentBillNo);
 }
