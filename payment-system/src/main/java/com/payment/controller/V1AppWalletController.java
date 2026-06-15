@@ -24,6 +24,7 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -106,8 +107,11 @@ public class V1AppWalletController {
     @SaCheckLogin
     @GetMapping("/tenants/{tenantId}/points")
     public Result<PointsAccountVO> getPointsAccount(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
+        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
+        LocalDateTime now = LocalDateTime.now();
         return Result.success(PointsAccountVO.from(
-                memberPointsAccountService.getAccount(tenantId, PlatformSessionHelper.getPlatformUserId())));
+                memberPointsAccountService.getAccount(tenantId, platformUserId),
+                memberPointsAccountService.getExpiringPoints(tenantId, platformUserId, now, now.plusDays(30))));
     }
 
     @SaCheckLogin

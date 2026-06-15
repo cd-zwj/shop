@@ -24,6 +24,7 @@ public class PointsLogVO {
     private String remark;
     private String status;
     private String confirmTime;
+    private String expireTime;
     private String releaseTime;
     private String releaseReason;
     private String createTime;
@@ -42,6 +43,7 @@ public class PointsLogVO {
                 .remark(log.getRemark())
                 .status(log.getStatus())
                 .confirmTime(VoConverterUtil.formatTime(log.getConfirmTime()))
+                .expireTime(VoConverterUtil.formatTime(log.getExpireTime()))
                 .releaseTime(VoConverterUtil.formatTime(log.getReleaseTime()))
                 .releaseReason(log.getReleaseReason())
                 .createTime(VoConverterUtil.formatTime(log.getCreateTime()))

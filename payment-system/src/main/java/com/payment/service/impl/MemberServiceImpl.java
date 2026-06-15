@@ -76,6 +76,7 @@ public class MemberServiceImpl implements MemberService {
         entity.setLevelRank(level);
         entity.setLevelName(name.trim());
         entity.setUpgradeGrowth(thresholdAmount.intValue());
+        entity.setDowngradeGrowth(thresholdAmount.intValue());
         entity.setDiscountRate(discountRate);
         entity.setStatus(ENABLED);
         levelMapper.insert(entity);

@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { appAuthService } from '../services/modules/appAuth';
 import { ApiError } from '../types/api';
@@ -26,7 +25,6 @@ const SMS_COOLDOWN_SECONDS = 60;
 export default function Login() {
   const navigate = useNavigate();
   const { loginAdmin, loginMerchant, loginUser } = useAuth();
- const { showToast } = useToast();
   // 从 URL 读取被 401 踢出的角色，预选对应登录标签
   function getInitialRole(): AuthRole {
     const params = new URLSearchParams(window.location.search);
@@ -500,7 +498,7 @@ export default function Login() {
 
               <div className="flex items-center justify-between px-2">
                 <button
-                  onClick={() => showToast('密码重置功能开发中，请联系管理员', 'info')}
+                  onClick={() => navigate('/reset-password')}
                   className="text-xs font-black text-slate-400 transition-colors hover:text-primary"
                 >
                   忘记密码？

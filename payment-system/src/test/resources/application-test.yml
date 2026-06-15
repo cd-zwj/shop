@@ -4,6 +4,8 @@ spring:
     driver-class-name: org.h2.Driver
     username: sa
     password:
+  flyway:
+    enabled: false
   # 禁用外部中间件自动配置
   autoconfigure:
     exclude:

@@ -263,7 +263,8 @@ CREATE TABLE IF NOT EXISTS `member_points_log` (
   `points_before` INT NOT NULL COMMENT '变动前积分',
   `points_after` INT NOT NULL COMMENT '变动后积分',
   `remark` VARCHAR(255) DEFAULT NULL COMMENT '备注',
-  `status` VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED' COMMENT '状态：PRE_HOLD-预占，CONFIRMED-确认，RELEASED-释放',
+  `status` VARCHAR(32) NOT NULL DEFAULT 'CONFIRMED' COMMENT '状态：PRE_HOLD-预占，CONFIRMED-确认，RELEASED-释放，EXPIRED-已过期',
+  `expire_time` DATETIME DEFAULT NULL COMMENT '积分过期时间',
   `confirm_time` DATETIME DEFAULT NULL COMMENT '确认时间',
   `release_time` DATETIME DEFAULT NULL COMMENT '释放时间',
   `release_reason` VARCHAR(255) DEFAULT NULL COMMENT '释放原因',
@@ -319,3 +320,9 @@ CREATE TABLE IF NOT EXISTS `dead_letter_task` (
 -- ========================================
 ALTER TABLE `tenant_member`
   ADD COLUMN IF NOT EXISTS `member_level` INT DEFAULT 1 COMMENT '会员等级（关联 member_level.id）';
+
+-- ========================================
+-- 兼容已有数据库：给 member_points_log 补积分过期时间
+-- ========================================
+ALTER TABLE `member_points_log`
+  ADD COLUMN IF NOT EXISTS `expire_time` DATETIME DEFAULT NULL COMMENT '积分过期时间';

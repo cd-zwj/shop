@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS member_points_log (
   points_before INT DEFAULT NULL,
   points_after INT DEFAULT NULL,
   status VARCHAR(32) DEFAULT NULL,
+  expire_time TIMESTAMP DEFAULT NULL,
   remark VARCHAR(255) DEFAULT NULL,
   confirm_time TIMESTAMP DEFAULT NULL,
   release_time TIMESTAMP DEFAULT NULL,
@@ -129,26 +130,26 @@ CREATE TABLE IF NOT EXISTS product (
 
 -- 测试种子数据
 
-INSERT INTO platform_user (id, user_no, username, phone, email, password_hash, status, deleted)
-VALUES (1, 'U20240101001', 'testuser', '13800000000', 'test@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 1, 0);
+MERGE INTO platform_user (id, user_no, username, phone, email, password_hash, status, deleted)
+KEY(id) VALUES (1, 'U20240101001', 'testuser', '13800000000', 'test@example.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 1, 0);
 
-INSERT INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
-VALUES (1, 'T001', '测试商户A', '张三', '13900000000', '北京市朝阳区', 1, 0);
+MERGE INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
+KEY(id) VALUES (1, 'T001', '测试商户A', '张三', '13900000000', '北京市朝阳区', 1, 0);
 
-INSERT INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
-VALUES (2, 'T002', '测试商户B', '李四', '13900000001', '上海市浦东新区', 1, 0);
+MERGE INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
+KEY(id) VALUES (2, 'T002', '测试商户B', '李四', '13900000001', '上海市浦东新区', 1, 0);
 
-INSERT INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
-VALUES (3, 'T003', '已禁用商户', '王五', '13900000002', '深圳市南山区', 0, 0);
+MERGE INTO tenant (id, tenant_code, name, contact, phone, address, status, deleted)
+KEY(id) VALUES (3, 'T003', '已禁用商户', '王五', '13900000002', '深圳市南山区', 0, 0);
 
-INSERT INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
-VALUES (1, 1, 'P001', '经典咖啡', 28.00, '杯', '饮品', 1, 0);
+MERGE INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
+KEY(id) VALUES (1, 1, 'P001', '经典咖啡', 28.00, '杯', '饮品', 1, 0);
 
-INSERT INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
-VALUES (2, 1, 'P002', '抹茶拿铁', 32.00, '杯', '饮品', 1, 0);
+MERGE INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
+KEY(id) VALUES (2, 1, 'P002', '抹茶拿铁', 32.00, '杯', '饮品', 1, 0);
 
-INSERT INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
-VALUES (3, 2, 'P003', '手工蛋糕', 45.00, '个', '甜点', 1, 0);
+MERGE INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
+KEY(id) VALUES (3, 2, 'P003', '手工蛋糕', 45.00, '个', '甜点', 1, 0);
 
-INSERT INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
-VALUES (4, 1, 'P004', '已下架商品', 10.00, '份', '其他', 0, 0);
+MERGE INTO product (id, tenant_id, product_code, name, price, unit, category, status, deleted)
+KEY(id) VALUES (4, 1, 'P004', '已下架商品', 10.00, '份', '其他', 0, 0);

@@ -3,6 +3,7 @@ export interface PointsBalance {
   points: number;
   totalEarned: number;
   totalUsed: number;
+  expiringSoonPoints: number;
   status: number;
   createTime: string;
   updateTime: string;
@@ -16,6 +17,7 @@ export interface PointsLog {
   balance: number;
   type: 'GRANT' | 'DEDUCT';
   reason: string;
+  expireTime?: string;
   orderNo: string | null;
   createTime: string;
 }

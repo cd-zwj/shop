@@ -15,3 +15,6 @@ ALTER TABLE `withdrawal` ADD INDEX `idx_tenant_status_time` (`tenant_id`, `statu
 
 -- member_points_log: 预扣查询覆盖索引
 ALTER TABLE `member_points_log` ADD INDEX `idx_user_tenant_biz` (`platform_user_id`, `tenant_id`, `biz_type`, `biz_no`, `status`);
+
+-- member_points_log: 积分过期扫描索引
+ALTER TABLE `member_points_log` ADD INDEX `idx_points_expire_scan` (`status`, `expire_time`, `tenant_id`, `platform_user_id`);

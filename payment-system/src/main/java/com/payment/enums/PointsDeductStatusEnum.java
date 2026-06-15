@@ -6,5 +6,6 @@ package com.payment.enums;
 public enum PointsDeductStatusEnum {
     PRE_HOLD,
     CONFIRMED,
-    RELEASED
+    RELEASED,
+    EXPIRED
 }

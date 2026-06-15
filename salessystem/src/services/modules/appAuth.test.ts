@@ -102,6 +102,52 @@ describe('appAuthService', () => {
     });
   });
 
+  describe('sendPasswordResetCode', () => {
+    it('应调用 POST /v1/app/auth/password/reset/send-code 并携带 email + captcha', async () => {
+      // Arrange
+      const payload = {
+        email: 'test@example.com',
+        captchaKey: 'key',
+        captchaCode: 'code',
+      };
+      mockRequest.mockResolvedValue(undefined);
+
+      // Act
+      await appAuthService.sendPasswordResetCode(payload);
+
+      // Assert
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/auth/password/reset/send-code',
+        method: 'post',
+        data: payload,
+        authRole: false,
+      });
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('应调用 POST /v1/app/auth/password/reset/verify 并携带 emailCode + newPassword', async () => {
+      // Arrange
+      const payload = {
+        email: 'test@example.com',
+        emailCode: '123456',
+        newPassword: 'newPass123',
+      };
+      mockRequest.mockResolvedValue(undefined);
+
+      // Act
+      await appAuthService.resetPassword(payload);
+
+      // Assert
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/auth/password/reset/verify',
+        method: 'post',
+        data: payload,
+        authRole: false,
+      });
+    });
+  });
+
   describe('loginBySms', () => {
     it('应调用 POST /v1/app/auth/login/sms', async () => {
       // Arrange

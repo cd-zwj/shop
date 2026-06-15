@@ -12,6 +12,7 @@ import com.payment.dto.SmsLoginDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.service.AuthCaptchaService;
 import com.payment.service.LoginSecurityService;
+import com.payment.service.PlatformEmailAccountService;
 import com.payment.service.PlatformIdentityService;
 import com.payment.service.SmsCodeService;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,9 @@ class V1AppAuthFlowIntegrationTest {
 
     @MockBean
     private SmsCodeService smsCodeService;
+
+    @MockBean
+    private PlatformEmailAccountService platformEmailAccountService;
 
     private PlatformUser testUser;
 
@@ -311,6 +315,94 @@ class V1AppAuthFlowIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(400))
                     .andExpect(jsonPath("$.message").value("用户名不能为空"));
+        }
+    }
+
+    // ===== 密码重置接口 =====
+
+    @Nested
+    @DisplayName("密码重置接口")
+    class PasswordResetTests {
+
+        @Test
+        @DisplayName("发送密码重置邮箱验证码应校验图形验证码并调用邮箱服务")
+        void sendPasswordResetCode_成功发送() throws Exception {
+            doNothing().when(authCaptchaService).validateCaptcha("captcha-key", "ABCD");
+
+            mockMvc.perform(post("/v1/app/auth/password/reset/send-code")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "test@example.com",
+                                      "captchaKey": "captcha-key",
+                                      "captchaCode": "ABCD"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(200))
+                    .andExpect(jsonPath("$.message").value("操作成功"))
+                    .andExpect(jsonPath("$.timestamp").isNumber());
+
+            verify(authCaptchaService).validateCaptcha("captcha-key", "ABCD");
+            verify(platformEmailAccountService).sendRecoverCode("test@example.com");
+        }
+
+        @Test
+        @DisplayName("提交密码重置应调用邮箱账号服务重置密码")
+        void resetPassword_成功重置() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/password/reset/verify")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "test@example.com",
+                                      "emailCode": "123456",
+                                      "newPassword": "newPass123"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(200))
+                    .andExpect(jsonPath("$.message").value("操作成功"))
+                    .andExpect(jsonPath("$.timestamp").isNumber());
+
+            verify(platformEmailAccountService).resetPassword("test@example.com", "123456", "newPass123");
+        }
+
+        @Test
+        @DisplayName("发送密码重置验证码时邮箱格式错误应返回400")
+        void sendPasswordResetCode_邮箱格式错误_返回参数错误() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/password/reset/send-code")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "bad-email",
+                                      "captchaKey": "captcha-key",
+                                      "captchaCode": "ABCD"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(400))
+                    .andExpect(jsonPath("$.message").value("邮箱格式不正确"));
+
+            verifyNoInteractions(platformEmailAccountService);
+        }
+
+        @Test
+        @DisplayName("提交密码重置时新密码过短应返回400")
+        void resetPassword_新密码过短_返回参数错误() throws Exception {
+            mockMvc.perform(post("/v1/app/auth/password/reset/verify")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "test@example.com",
+                                      "emailCode": "123456",
+                                      "newPassword": "12345"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.code").value(400))
+                    .andExpect(jsonPath("$.message").value("密码长度需在6-64位之间"));
+
+            verifyNoInteractions(platformEmailAccountService);
         }
     }
 

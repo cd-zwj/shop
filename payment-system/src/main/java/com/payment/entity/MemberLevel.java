@@ -24,6 +24,8 @@ public class MemberLevel implements Serializable {
     private String levelName;
     private Integer levelRank;
     private Integer upgradeGrowth;
+    private Integer downgradeGrowth;
+    private Integer levelValidityDays;
     private BigDecimal discountRate;
     private String benefitJson;
     private Integer status;

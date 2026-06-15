@@ -12,13 +12,14 @@ import com.payment.mapper.MemberLevelMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.service.MemberGrowthService;
 import com.payment.vo.MemberGrowthAccountVO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 会员成长值服务实现类。
@@ -28,16 +29,14 @@ import java.util.List;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MemberGrowthServiceImpl implements MemberGrowthService {
 
-    @Autowired
-    private MemberGrowthLogMapper growthLogMapper;
+    private static final int ENABLED = 1;
 
-    @Autowired
-    private MemberLevelMapper memberLevelMapper;
-
-    @Autowired
-    private TenantMemberMapper tenantMemberMapper;
+    private final MemberGrowthLogMapper growthLogMapper;
+    private final MemberLevelMapper memberLevelMapper;
+    private final TenantMemberMapper tenantMemberMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -99,6 +98,8 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
 
         log.info("扣减成长值成功，userId={}, tenantId={}, amount={}, before={}, after={}",
                 platformUserId, tenantId, growthAmount, before, after);
+
+        checkAndAdjustLevel(platformUserId, tenantId);
     }
 
     @Override
@@ -126,7 +127,12 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
         Long currentLevelId = null;
         String currentLevelName = null;
         if (member != null && member.getMemberLevel() != null && member.getMemberLevel() > 0) {
-            MemberLevel level = memberLevelMapper.selectById(member.getMemberLevel());
+            MemberLevel level = memberLevelMapper.selectOne(
+                    new LambdaQueryWrapper<MemberLevel>()
+                            .eq(MemberLevel::getTenantId, tenantId)
+                            .eq(MemberLevel::getLevelRank, member.getMemberLevel())
+                            .eq(MemberLevel::getStatus, ENABLED)
+            );
             if (level != null) {
                 currentLevelId = level.getId();
                 currentLevelName = level.getLevelName();
@@ -138,7 +144,7 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
         List<MemberLevel> levels = memberLevelMapper.selectList(
                 new LambdaQueryWrapper<MemberLevel>()
                         .eq(MemberLevel::getTenantId, tenantId)
-                        .eq(MemberLevel::getStatus, 1)
+                        .eq(MemberLevel::getStatus, ENABLED)
                         .orderByAsc(MemberLevel::getLevelRank)
         );
         for (MemberLevel level : levels) {
@@ -170,6 +176,12 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long checkAndUpgradeLevel(Long platformUserId, Long tenantId) {
+        return checkAndAdjustLevel(platformUserId, tenantId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long checkAndAdjustLevel(Long platformUserId, Long tenantId) {
         int totalGrowth = getTotalGrowth(platformUserId, tenantId);
 
         // 查询当前会员记录
@@ -183,41 +195,82 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
             return null;
         }
 
-        int currentLevelRank = 0;
-        if (member.getMemberLevel() != null && member.getMemberLevel() > 0) {
-            MemberLevel currentLevel = memberLevelMapper.selectById(member.getMemberLevel());
-            if (currentLevel != null) {
-                currentLevelRank = currentLevel.getLevelRank();
-            }
-        }
+        int currentLevelRank = member.getMemberLevel() == null ? 0 : member.getMemberLevel();
 
         // 查询所有启用的等级，按 levelRank 升序
         List<MemberLevel> levels = memberLevelMapper.selectList(
                 new LambdaQueryWrapper<MemberLevel>()
                         .eq(MemberLevel::getTenantId, tenantId)
-                        .eq(MemberLevel::getStatus, 1)
+                        .eq(MemberLevel::getStatus, ENABLED)
                         .orderByAsc(MemberLevel::getLevelRank)
         );
 
-        // 找到满足条件的最高等级
-        MemberLevel bestLevel = null;
-        for (MemberLevel level : levels) {
-            if (level.getUpgradeGrowth() != null && totalGrowth >= level.getUpgradeGrowth()
-                    && level.getLevelRank() > currentLevelRank) {
-                bestLevel = level;
-            }
-        }
+        MemberLevel currentLevel = findLevelByRank(levels, currentLevelRank);
+        MemberLevel targetLevel = resolveTargetLevel(levels, currentLevel, member, totalGrowth);
 
-        if (bestLevel != null) {
-            member.setMemberLevel(bestLevel.getId().intValue());
+        if (targetLevel != null && !Objects.equals(targetLevel.getLevelRank(), currentLevelRank)) {
+            member.setMemberLevel(targetLevel.getLevelRank());
             member.setUpdateTime(LocalDateTime.now());
             tenantMemberMapper.updateById(member);
 
-            log.info("会员等级升级成功，userId={}, tenantId={}, newLevelId={}, newLevelName={}, totalGrowth={}",
-                    platformUserId, tenantId, bestLevel.getId(), bestLevel.getLevelName(), totalGrowth);
-            return bestLevel.getId();
+            log.info("会员等级调整成功，userId={}, tenantId={}, oldLevelRank={}, newLevelRank={}, newLevelName={}, totalGrowth={}",
+                    platformUserId, tenantId, currentLevelRank, targetLevel.getLevelRank(), targetLevel.getLevelName(), totalGrowth);
+            return targetLevel.getId();
         }
 
         return null;
+    }
+
+    private MemberLevel resolveTargetLevel(List<MemberLevel> levels,
+                                           MemberLevel currentLevel,
+                                           TenantMember member,
+                                           int totalGrowth) {
+        MemberLevel qualifiedLevel = null;
+        for (MemberLevel level : levels) {
+            if (level.getUpgradeGrowth() != null && totalGrowth >= level.getUpgradeGrowth()) {
+                qualifiedLevel = level;
+            }
+        }
+
+        if (currentLevel == null) {
+            return qualifiedLevel;
+        }
+
+        if (qualifiedLevel == null || currentLevel.getLevelRank() > qualifiedLevel.getLevelRank()) {
+            boolean withinValidity = isWithinValidity(currentLevel, member);
+            if (withinValidity && totalGrowth >= downgradeThreshold(currentLevel)) {
+                return currentLevel;
+            }
+            return qualifiedLevel;
+        }
+
+        return qualifiedLevel;
+    }
+
+    private MemberLevel findLevelByRank(List<MemberLevel> levels, int rank) {
+        for (MemberLevel level : levels) {
+            if (Objects.equals(level.getLevelRank(), rank)) {
+                return level;
+            }
+        }
+        return null;
+    }
+
+    private int downgradeThreshold(MemberLevel level) {
+        if (level.getDowngradeGrowth() != null) {
+            return level.getDowngradeGrowth();
+        }
+        return level.getUpgradeGrowth() == null ? 0 : level.getUpgradeGrowth();
+    }
+
+    private boolean isWithinValidity(MemberLevel level, TenantMember member) {
+        if (level.getLevelValidityDays() == null || level.getLevelValidityDays() <= 0) {
+            return true;
+        }
+        LocalDateTime levelStartTime = member.getUpdateTime() != null ? member.getUpdateTime() : member.getCreateTime();
+        if (levelStartTime == null) {
+            return false;
+        }
+        return levelStartTime.plusDays(level.getLevelValidityDays()).isAfter(LocalDateTime.now());
     }
 }

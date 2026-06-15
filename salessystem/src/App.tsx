@@ -49,6 +49,7 @@ const Recharge = lazy(() => import('./pages/Recharge'));
 const ConsumptionHistory = lazy(() => import('./pages/History'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Profile = lazy(() => import('./pages/Profile'));
 const UserOrders = lazy(() => import('./pages/UserOrders'));
 const UserOrderDetail = lazy(() => import('./pages/UserOrderDetail'));
@@ -114,8 +115,9 @@ const TopNav = ({ title }: { title: string }) => {
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
   const isLogin = location.pathname === '/login';
+  const isResetPassword = location.pathname === '/reset-password';
 
-  if (isLogin) return null;
+  if (isLogin || isResetPassword) return null;
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between px-4">
@@ -168,7 +170,7 @@ const BottomNav = () => {
     { icon: User, label: '我的', path: '/profile' },
   ];
 
-  if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/merchant') || location.pathname === '/login') return null;
+  if (location.pathname.startsWith('/admin') || location.pathname.startsWith('/merchant') || location.pathname === '/login' || location.pathname === '/reset-password') return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 h-20 bg-white/95 backdrop-blur-md border-t border-slate-200 md:hidden flex justify-around items-center px-2 pb-safe">
@@ -312,6 +314,7 @@ function AppContent() {
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
   const isLogin = location.pathname === '/login';
+  const isResetPassword = location.pathname === '/reset-password';
 
   return (
     <div className="min-h-screen bg-surface">
@@ -320,7 +323,7 @@ function AppContent() {
       
       <main className={cn(
         "transition-all duration-300",
-        (isAdmin || isMerchant) ? "md:pl-64 pt-0" : isLogin ? "p-0" : "pt-16 pb-20 md:pb-0"
+        (isAdmin || isMerchant) ? "md:pl-64 pt-0" : (isLogin || isResetPassword) ? "p-0" : "pt-16 pb-20 md:pb-0"
       )}>
         <div className="max-w-7xl mx-auto w-full h-full">
           <ErrorBoundary>
@@ -328,6 +331,7 @@ function AppContent() {
               <Routes>
             <Route path="/login" element={<GuestGuard><Login /></GuestGuard>} />
             <Route path="/register" element={<GuestGuard><Register /></GuestGuard>} />
+            <Route path="/reset-password" element={<GuestGuard><ResetPassword /></GuestGuard>} />
             <Route path="/" element={<AuthGuard><Home /></AuthGuard>} />
             <Route path="/discovery" element={<AuthGuard><Discovery /></AuthGuard>} />
             <Route path="/product/:id" element={<AuthGuard><ProductDetails /></AuthGuard>} />

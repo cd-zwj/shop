@@ -143,6 +143,8 @@ export default function Points() {
     return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
   };
 
+  const expiringSoonPoints = balance?.expiringSoonPoints ?? 0;
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 md:mt-8">
       {/* Header */}
@@ -180,6 +182,12 @@ export default function Points() {
               <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
               可用积分在兑换商品时可抵扣等值商品
             </p>
+            {expiringSoonPoints > 0 && (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/15 px-3 py-1 text-xs font-bold text-yellow-200">
+                <Clock className="h-3.5 w-3.5" />
+                近 30 天将过期 {expiringSoonPoints.toLocaleString()} 分
+              </p>
+            )}
           </div>
         </div>
       </section>

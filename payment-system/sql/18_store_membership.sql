@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS `member_level` (
   `level_name` VARCHAR(50) NOT NULL COMMENT '等级名称',
   `level_rank` INT NOT NULL COMMENT '等级排序值，越大等级越高',
   `upgrade_growth` INT NOT NULL DEFAULT '0' COMMENT '升级所需成长值',
+  `downgrade_growth` INT NOT NULL DEFAULT '0' COMMENT '降级阈值，成长值低于该值时降级',
+  `level_validity_days` INT DEFAULT NULL COMMENT '等级有效期天数，NULL表示长期有效',
   `discount_rate` DECIMAL(8,4) DEFAULT NULL COMMENT '等级折扣率，例如0.9500表示95折',
   `benefit_json` TEXT COMMENT '权益说明JSON',
   `status` TINYINT(1) NOT NULL DEFAULT '1' COMMENT '状态：0-停用，1-启用',
@@ -102,3 +104,8 @@ CREATE TABLE IF NOT EXISTS `member_growth_log` (
   KEY `idx_member_growth_user` (`tenant_id`, `platform_user_id`, `create_time`),
   KEY `idx_member_growth_biz` (`biz_type`, `biz_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会员成长值日志表';
+
+-- 兼容已有数据库：给 member_level 补降级与有效期字段
+ALTER TABLE `member_level`
+  ADD COLUMN IF NOT EXISTS `downgrade_growth` INT NOT NULL DEFAULT '0' COMMENT '降级阈值，成长值低于该值时降级',
+  ADD COLUMN IF NOT EXISTS `level_validity_days` INT DEFAULT NULL COMMENT '等级有效期天数，NULL表示长期有效';

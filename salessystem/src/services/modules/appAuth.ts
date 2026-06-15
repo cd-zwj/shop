@@ -1,5 +1,14 @@
 import { request } from '../request';
-import type { LoginCaptchaVO, PlatformLoginDTO, PlatformRegisterDTO, PlatformUser, SmsLoginDTO, SmsSendCodeDTO } from '../../types/auth';
+import type {
+  LoginCaptchaVO,
+  PlatformEmailSendCodeDTO,
+  PlatformLoginDTO,
+  PlatformRegisterDTO,
+  PlatformResetPasswordDTO,
+  PlatformUser,
+  SmsLoginDTO,
+  SmsSendCodeDTO,
+} from '../../types/auth';
 
 export const appAuthService = {
   getCaptcha() {
@@ -31,6 +40,24 @@ export const appAuthService = {
   sendSmsCode(payload: SmsSendCodeDTO) {
     return request<void>({
       url: '/v1/app/auth/sms/send-code',
+      method: 'post',
+      data: payload,
+      authRole: false,
+    });
+  },
+
+  sendPasswordResetCode(payload: PlatformEmailSendCodeDTO) {
+    return request<void>({
+      url: '/v1/app/auth/password/reset/send-code',
+      method: 'post',
+      data: payload,
+      authRole: false,
+    });
+  },
+
+  resetPassword(payload: PlatformResetPasswordDTO) {
+    return request<void>({
+      url: '/v1/app/auth/password/reset/verify',
       method: 'post',
       data: payload,
       authRole: false,

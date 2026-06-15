@@ -24,6 +24,18 @@ export interface SmsSendCodeDTO {
   captchaCode: string;
 }
 
+export interface PlatformEmailSendCodeDTO {
+  email: string;
+  captchaKey: string;
+  captchaCode: string;
+}
+
+export interface PlatformResetPasswordDTO {
+  email: string;
+  emailCode: string;
+  newPassword: string;
+}
+
 export interface SmsLoginDTO {
   phone: string;
   smsCode: string;

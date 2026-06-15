@@ -88,8 +88,8 @@ INSERT INTO `member_points_account` (`tenant_id`, `platform_user_id`, `points`, 
 
 -- ========== 会员等级 ==========
 
-INSERT INTO `member_level` (`tenant_id`, `level_no`, `level_rank`, `level_name`, `upgrade_growth`, `discount_rate`, `benefit_json`, `status`) VALUES
-(1, 'LV001', 1, '普通会员', 0, 1.00, NULL, 1),
-(1, 'LV002', 2, '银卡会员', 500, 0.95, '{"freeShipping": false}', 1),
-(1, 'LV003', 3, '金卡会员', 2000, 0.90, '{"freeShipping": true}', 1),
-(1, 'LV004', 4, '钻石会员', 10000, 0.85, '{"freeShipping": true, "priority": true}', 1);
+INSERT INTO `member_level` (`tenant_id`, `level_no`, `level_rank`, `level_name`, `upgrade_growth`, `downgrade_growth`, `level_validity_days`, `discount_rate`, `benefit_json`, `status`) VALUES
+(1, 'LV001', 1, '普通会员', 0, 0, NULL, 1.00, NULL, 1),
+(1, 'LV002', 2, '银卡会员', 500, 400, 365, 0.95, '{"freeShipping": false}', 1),
+(1, 'LV003', 3, '金卡会员', 2000, 1500, 365, 0.90, '{"freeShipping": true}', 1),
+(1, 'LV004', 4, '钻石会员', 10000, 8000, 365, 0.85, '{"freeShipping": true, "priority": true}', 1);

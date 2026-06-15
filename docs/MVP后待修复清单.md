@@ -40,32 +40,36 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 
 ## 🟠 优先级 P1 — 功能缺陷
 
-### 3. 密码重置功能缺失
+### 3. 密码重置功能缺失（已修复第二批）
 
 **前端**: `salessystem/src/pages/Login.tsx` 第 496 行 — "忘记密码"按钮只弹 toast `"密码重置功能开发中，请联系管理员"`
 
 **后端**: `appAuthService` 中没有忘记密码/重置密码的 API 方法
 
 **需要做的事**:
-- [ ] 后端：新增 `POST /v1/app/auth/password/reset/send-code` — 发送重置验证码（邮箱或短信）
-- [ ] 后端：新增 `POST /v1/app/auth/password/reset/verify` — 验证码校验 + 设置新密码
-- [ ] 前端：新建 `ResetPassword.tsx` 页面（输入账号 → 收验证码 → 输入新密码 → 确认）
-- [ ] 前端：Login.tsx "忘记密码"跳转到重置密码页
+- [x] 后端：新增 `POST /v1/app/auth/password/reset/send-code` — 发送重置验证码（邮箱）
+- [x] 后端：新增 `POST /v1/app/auth/password/reset/verify` — 验证码校验 + 设置新密码
+- [x] 前端：新建 `ResetPassword.tsx` 页面（输入邮箱 → 图形验证码 → 收邮箱验证码 → 输入新密码 → 确认）
+- [x] 前端：Login.tsx "忘记密码"跳转到重置密码页
 
 **注意**: 依赖短信/邮件服务可用（当前只有 MockSmsSender）
 
+**2026-06-15 修复结果**: 已复用平台邮箱账号找回能力，开放 App 端密码重置发码与重置接口，并在前端接入独立密码重置页；接口加入验证码校验、参数校验和限流，登录页不再展示占位 toast。
+
 ---
 
-### 4. 会员等级只升不降
+### 4. 会员等级只升不降（已修复第二批）
 
 **文件**: `payment-system/src/main/java/com/payment/service/impl/MemberGrowthServiceImpl.java`
 
 **问题**: `checkAndUpgradeLevel()` 只有升级逻辑，搜索不到任何 downgrade/降级相关代码。`MemberLevel` 实体没有定义降级条件或有效期。
 
 **需要做的事**:
-- [ ] `MemberLevel` 新增字段：`downgradeGrowth`（降级阈值）、`levelValidityDays`（等级有效期天数）
-- [ ] 新增定时任务 `MemberLevelScheduler`：每月/季度检查，成长值不足的自动降级
+- [x] `MemberLevel` 新增字段：`downgradeGrowth`（降级阈值）、`levelValidityDays`（等级有效期天数）
+- [x] 新增定时任务 `MemberLevelScheduler`：每月检查，成长值不足的自动降级
 - [ ] 成长值增加衰减机制：超过 N 天未消费的成长值按比例衰减（可选）
+
+**2026-06-15 修复结果**: 已在成长值服务中按 `levelRank` 重新计算目标等级，支持升级和降级；成长值扣减后会触发等级复核，定时任务每月扫描启用会员并复核等级。`downgradeGrowth` 用作降级缓冲阈值，`levelValidityDays` 到期后会重新按升级门槛计算等级。
 
 ---
 
@@ -76,9 +80,11 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 **问题**: 积分有基本增减和兑换，但没有定时任务清理过期积分，积分永不过期。
 
 **需要做的事**:
-- [ ] `MemberPointsLog` 新增字段：`expireTime`（过期时间）
-- [ ] 新增定时任务 `PointsExpireScheduler`：每日扫描过期积分，批量扣减
-- [ ] 前端积分页面展示"即将过期积分"提醒
+- [x] `MemberPointsLog` 新增字段：`expireTime`（过期时间）
+- [x] 新增定时任务 `PointsExpireScheduler`：每日扫描过期积分，批量扣减
+- [x] 前端积分页面展示"即将过期积分"提醒
+
+**2026-06-15 修复结果**: 已为积分流水新增 `expireTime`，积分发放支持可选过期时间；`PointsExpireScheduler` 默认每日 02:00 扫描到期积分，原发放流水标记为 `EXPIRED` 后再写入负向过期流水并扣减账户，保证重复扫描幂等。App 积分账户接口返回 30 天内即将过期积分，前端积分中心展示提醒。
 
 ---
 

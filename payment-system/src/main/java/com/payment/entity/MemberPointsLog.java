@@ -24,6 +24,7 @@ public class MemberPointsLog implements Serializable {
     private Integer pointsAfter;
     private String remark;
     private String status;
+    private LocalDateTime expireTime;
     private LocalDateTime confirmTime;
     private LocalDateTime releaseTime;
     private String releaseReason;

@@ -70,7 +70,16 @@ public interface MemberGrowthService {
      *
      * @param platformUserId 平台用户ID
      * @param tenantId       租户ID
-     * @return 升级后的等级ID，null 表示未升级
+     * @return 调整后的等级ID，null 表示未调整
      */
     Long checkAndUpgradeLevel(Long platformUserId, Long tenantId);
+
+    /**
+     * 按当前成长值重新计算目标等级，支持升级和降级。
+     *
+     * @param platformUserId 平台用户ID
+     * @param tenantId       租户ID
+     * @return 调整后的等级ID，null 表示未调整
+     */
+    Long checkAndAdjustLevel(Long platformUserId, Long tenantId);
 }

@@ -24,6 +24,8 @@ public class TestSaTokenConfig implements WebMvcConfigurer {
                         "/v1/app/auth/login/password",
                         "/v1/app/auth/login/sms",
                         "/v1/app/auth/login/third-party",
+                        "/v1/app/auth/password/reset/send-code",
+                        "/v1/app/auth/password/reset/verify",
                         "/v1/auth/captcha"
                 )
                 .check(r -> StpUtil.checkLogin())

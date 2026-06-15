@@ -4,13 +4,16 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.payment.annotation.RateLimit;
 import com.payment.common.Result;
 import com.payment.dto.AppUserVO;
+import com.payment.dto.PlatformEmailSendCodeDTO;
 import com.payment.dto.PlatformLoginDTO;
 import com.payment.dto.PlatformRegisterDTO;
+import com.payment.dto.PlatformResetPasswordDTO;
 import com.payment.dto.SmsLoginDTO;
 import com.payment.dto.SmsSendCodeDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.service.AuthCaptchaService;
 import com.payment.service.LoginSecurityService;
+import com.payment.service.PlatformEmailAccountService;
 import com.payment.service.PlatformIdentityService;
 import com.payment.service.SmsCodeService;
 import com.payment.service.login.PlatformLoginRequest;
@@ -31,6 +34,7 @@ public class V1AppAuthController {
     private final PlatformIdentityService platformIdentityService;
     private final LoginSecurityService loginSecurityService;
     private final SmsCodeService smsCodeService;
+    private final PlatformEmailAccountService platformEmailAccountService;
 
     @RateLimit(prefix = "auth:register", window = 3600, maxRequests = 5, includeIp = true, message = "注册过于频繁，请稍后再试")
     @PostMapping("/register")
@@ -60,6 +64,21 @@ public class V1AppAuthController {
     public Result<Void> sendSmsCode(@Valid @RequestBody SmsSendCodeDTO dto) {
         authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());
         smsCodeService.sendLoginCode(dto.getPhone());
+        return Result.success();
+    }
+
+    @RateLimit(prefix = "auth:password-reset:send", key = "#dto.email", window = 60, maxRequests = 3, includeIp = true, message = "验证码发送过于频繁，请稍后再试")
+    @PostMapping("/password/reset/send-code")
+    public Result<Void> sendPasswordResetCode(@Valid @RequestBody PlatformEmailSendCodeDTO dto) {
+        authCaptchaService.validateCaptcha(dto.getCaptchaKey(), dto.getCaptchaCode());
+        platformEmailAccountService.sendRecoverCode(dto.getEmail());
+        return Result.success();
+    }
+
+    @RateLimit(prefix = "auth:password-reset:verify", key = "#dto.email", window = 300, maxRequests = 5, includeIp = true, message = "密码重置尝试过于频繁，请稍后再试")
+    @PostMapping("/password/reset/verify")
+    public Result<Void> resetPassword(@Valid @RequestBody PlatformResetPasswordDTO dto) {
+        platformEmailAccountService.resetPassword(dto.getEmail(), dto.getEmailCode(), dto.getNewPassword());
         return Result.success();
     }
 

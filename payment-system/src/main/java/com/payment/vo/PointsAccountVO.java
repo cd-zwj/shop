@@ -19,6 +19,7 @@ public class PointsAccountVO {
     private Integer points;
     private Integer totalEarned;
     private Integer totalUsed;
+    private Integer expiringSoonPoints;
     private Integer status;
     private String createTime;
     private String updateTime;
@@ -32,9 +33,18 @@ public class PointsAccountVO {
                 .points(account.getPoints())
                 .totalEarned(account.getTotalEarned())
                 .totalUsed(account.getTotalUsed())
+                .expiringSoonPoints(0)
                 .status(account.getStatus())
                 .createTime(VoConverterUtil.formatTime(account.getCreateTime()))
                 .updateTime(VoConverterUtil.formatTime(account.getUpdateTime()))
                 .build();
+    }
+
+    public static PointsAccountVO from(MemberPointsAccount account, Integer expiringSoonPoints) {
+        PointsAccountVO vo = from(account);
+        if (vo != null) {
+            vo.setExpiringSoonPoints(expiringSoonPoints == null ? 0 : expiringSoonPoints);
+        }
+        return vo;
     }
 }

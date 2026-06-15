@@ -31,6 +31,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                 "/v1/app/auth/login/password",
                 "/v1/app/auth/login/sms",
                 "/v1/app/auth/login/third-party",
+                "/v1/app/auth/password/reset/send-code",
+                "/v1/app/auth/password/reset/verify",
                 "/v1/admin/auth/login",
                 "/v1/merchant/auth/login",
                 "/v1/open/payments/**",

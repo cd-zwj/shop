@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.entity.MemberPointsAccount;
@@ -14,6 +15,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.ToIntFunction;
 
 /**
  * 会员积分账户服务实现类，用于实现会员积分账户相关业务逻辑。
@@ -21,6 +25,8 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 public class MemberPointsAccountServiceImpl implements MemberPointsAccountService {
+
+    private static final String POINTS_EXPIRE_BIZ_TYPE = "POINTS_EXPIRE";
 
     private final MemberPointsAccountMapper accountMapper;
     private final MemberPointsLogMapper logMapper;
@@ -66,31 +72,22 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void grantPoints(Long tenantId, Long platformUserId, Integer points, String bizType, String bizNo, String remark) {
+        grantPoints(tenantId, platformUserId, points, bizType, bizNo, remark, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void grantPoints(Long tenantId, Long platformUserId, Integer points, String bizType, String bizNo, String remark,
+                            LocalDateTime expireTime) {
         if (points == null || points <= 0) {
             return;
         }
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
         Integer before = account.getPoints();
-        Integer after = Math.addExact(before, points);
-
-        account.setPoints(after);
-        account.setTotalEarned(Math.addExact(account.getTotalEarned(), points));
-        boolean updated = false;
-        for (int retry = 0; retry < 3; retry++) {
-            if (accountMapper.updateById(account) > 0) {
-                updated = true;
-                break;
-            }
-            // 乐观锁冲突，重读账户并重算
-            account = accountMapper.selectById(account.getId());
-            after = Math.addExact(account.getPoints(), points);
-            account.setPoints(after);
-            account.setTotalEarned(Math.addExact(account.getTotalEarned(), points));
-        }
-        if (!updated) {
-            throw new BusinessException("积分发放失败，请重试");
-        }
+        Integer after = updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), points),
+                current -> current.setTotalEarned(Math.addExact(current.getTotalEarned(), points)),
+                "积分发放失败，请重试");
 
         MemberPointsLog log = new MemberPointsLog();
         log.setTenantId(tenantId);
@@ -101,6 +98,7 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setPointsBefore(before);
         log.setPointsAfter(after);
         log.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
+        log.setExpireTime(expireTime);
         log.setRemark(remark);
         logMapper.insert(log);
     }
@@ -121,27 +119,14 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         }
 
         Integer before = account.getPoints();
-        Integer after = Math.subtractExact(before, points);
-
-        account.setPoints(after);
-        account.setTotalUsed(Math.addExact(account.getTotalUsed(), points));
-        boolean updated = false;
-        for (int retry = 0; retry < 3; retry++) {
-            if (accountMapper.updateById(account) > 0) {
-                updated = true;
-                break;
-            }
-            account = accountMapper.selectById(account.getId());
-            if (account.getPoints() < points) {
-                throw new BusinessException("会员积分不足");
-            }
-            after = Math.subtractExact(account.getPoints(), points);
-            account.setPoints(after);
-            account.setTotalUsed(Math.addExact(account.getTotalUsed(), points));
-        }
-        if (!updated) {
-            throw new BusinessException("积分预占失败，请重试");
-        }
+        Integer after = updateAccountWithRetry(account, current -> {
+                    if (current.getPoints() < points) {
+                        throw new BusinessException("会员积分不足");
+                    }
+                    return Math.subtractExact(current.getPoints(), points);
+                },
+                current -> current.setTotalUsed(Math.addExact(current.getTotalUsed(), points)),
+                "积分预占失败，请重试");
 
         MemberPointsLog log = new MemberPointsLog();
         log.setTenantId(tenantId);
@@ -185,26 +170,57 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
         Integer holdPoints = Math.abs(log.getChangePoints());
-        account.setPoints(Math.addExact(account.getPoints(), holdPoints));
-        account.setTotalUsed(Math.max(0, account.getTotalUsed() - holdPoints));
-        boolean updated = false;
-        for (int retry = 0; retry < 3; retry++) {
-            if (accountMapper.updateById(account) > 0) {
-                updated = true;
-                break;
-            }
-            account = accountMapper.selectById(account.getId());
-            account.setPoints(Math.addExact(account.getPoints(), holdPoints));
-            account.setTotalUsed(Math.max(0, account.getTotalUsed() - holdPoints));
-        }
-        if (!updated) {
-            throw new BusinessException("积分释放失败，请重试");
-        }
+        updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), holdPoints),
+                current -> current.setTotalUsed(Math.max(0, current.getTotalUsed() - holdPoints)),
+                "积分释放失败，请重试");
 
         log.setStatus(PointsDeductStatusEnum.RELEASED.name());
         log.setReleaseTime(LocalDateTime.now());
         log.setReleaseReason(releaseReason);
         logMapper.updateById(log);
+    }
+
+    /**
+     * 扫描并过期已到期积分，返回实际扣减积分数。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int expirePoints(LocalDateTime expireBefore, int batchSize) {
+        LocalDateTime cutoff = expireBefore == null ? LocalDateTime.now() : expireBefore;
+        int limit = batchSize <= 0 ? 100 : batchSize;
+
+        List<MemberPointsLog> expiredEarnLogs = logMapper.selectList(new LambdaQueryWrapper<MemberPointsLog>()
+                .gt(MemberPointsLog::getChangePoints, 0)
+                .eq(MemberPointsLog::getStatus, PointsDeductStatusEnum.CONFIRMED.name())
+                .isNotNull(MemberPointsLog::getExpireTime)
+                .le(MemberPointsLog::getExpireTime, cutoff)
+                .orderByAsc(MemberPointsLog::getExpireTime)
+                .last("LIMIT " + limit));
+
+        int totalExpired = 0;
+        for (MemberPointsLog sourceLog : expiredEarnLogs) {
+            totalExpired += expireOneEarnLog(sourceLog, cutoff);
+        }
+        return totalExpired;
+    }
+
+    @Override
+    public Integer getExpiringPoints(Long tenantId, Long platformUserId, LocalDateTime startTime, LocalDateTime endTime) {
+        List<MemberPointsLog> expiringLogs = logMapper.selectList(new LambdaQueryWrapper<MemberPointsLog>()
+                .eq(MemberPointsLog::getTenantId, tenantId)
+                .eq(MemberPointsLog::getPlatformUserId, platformUserId)
+                .gt(MemberPointsLog::getChangePoints, 0)
+                .eq(MemberPointsLog::getStatus, PointsDeductStatusEnum.CONFIRMED.name())
+                .isNotNull(MemberPointsLog::getExpireTime)
+                .ge(startTime != null, MemberPointsLog::getExpireTime, startTime)
+                .le(endTime != null, MemberPointsLog::getExpireTime, endTime));
+        int expiring = expiringLogs.stream()
+                .map(MemberPointsLog::getChangePoints)
+                .filter(points -> points != null && points > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+        int available = Math.max(0, getAccount(tenantId, platformUserId).getPoints());
+        return Math.min(expiring, available);
     }
 
     private MemberPointsLog getPreHoldLog(Long tenantId, Long platformUserId, String bizType, String bizNo) {
@@ -214,5 +230,88 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
                 .eq(MemberPointsLog::getBizType, bizType)
                 .eq(MemberPointsLog::getBizNo, bizNo)
                 .eq(MemberPointsLog::getStatus, PointsDeductStatusEnum.PRE_HOLD.name()));
+    }
+
+    private int expireOneEarnLog(MemberPointsLog sourceLog, LocalDateTime expireTime) {
+        MemberPointsLog update = new MemberPointsLog();
+        update.setStatus(PointsDeductStatusEnum.EXPIRED.name());
+        update.setReleaseTime(expireTime);
+        update.setReleaseReason("积分到期自动过期");
+        int marked = logMapper.update(update, new LambdaUpdateWrapper<MemberPointsLog>()
+                .eq(MemberPointsLog::getId, sourceLog.getId())
+                .eq(MemberPointsLog::getStatus, PointsDeductStatusEnum.CONFIRMED.name()));
+        if (marked <= 0) {
+            return 0;
+        }
+
+        PointsChange change = expireAccountWithRetry(
+                getAccount(sourceLog.getTenantId(), sourceLog.getPlatformUserId()),
+                sourceLog.getChangePoints());
+        if (change.deducted <= 0) {
+            return 0;
+        }
+
+        MemberPointsLog expireLog = new MemberPointsLog();
+        expireLog.setTenantId(sourceLog.getTenantId());
+        expireLog.setPlatformUserId(sourceLog.getPlatformUserId());
+        expireLog.setBizType(POINTS_EXPIRE_BIZ_TYPE);
+        expireLog.setBizNo(POINTS_EXPIRE_BIZ_TYPE + "_" + sourceLog.getId());
+        expireLog.setChangePoints(-change.deducted);
+        expireLog.setPointsBefore(change.before);
+        expireLog.setPointsAfter(change.after);
+        expireLog.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
+        expireLog.setRemark("积分到期自动过期");
+        logMapper.insert(expireLog);
+        return change.deducted;
+    }
+
+    private Integer updateAccountWithRetry(MemberPointsAccount account,
+                                           ToIntFunction<MemberPointsAccount> nextPoints,
+                                           Consumer<MemberPointsAccount> extraMutation,
+                                           String failureMessage) {
+        MemberPointsAccount current = account;
+        Integer after = null;
+        for (int retry = 0; retry < 3; retry++) {
+            after = nextPoints.applyAsInt(current);
+            extraMutation.accept(current);
+            current.setPoints(after);
+            if (accountMapper.updateById(current) > 0) {
+                return after;
+            }
+            current = accountMapper.selectById(current.getId());
+        }
+        throw new BusinessException(failureMessage);
+    }
+
+    private PointsChange expireAccountWithRetry(MemberPointsAccount account, Integer sourcePoints) {
+        MemberPointsAccount current = account;
+        for (int retry = 0; retry < 3; retry++) {
+            int before = Math.max(0, current.getPoints());
+            int deducted = Math.min(before, sourcePoints);
+            if (deducted <= 0) {
+                return new PointsChange(before, before, 0);
+            }
+
+            int after = Math.subtractExact(before, deducted);
+            current.setPoints(after);
+            current.setTotalUsed(Math.addExact(current.getTotalUsed(), deducted));
+            if (accountMapper.updateById(current) > 0) {
+                return new PointsChange(before, after, deducted);
+            }
+            current = accountMapper.selectById(current.getId());
+        }
+        throw new BusinessException("积分过期扣减失败，请重试");
+    }
+
+    private static class PointsChange {
+        private final int before;
+        private final int after;
+        private final int deducted;
+
+        private PointsChange(int before, int after, int deducted) {
+            this.before = before;
+            this.after = after;
+            this.deducted = deducted;
+        }
     }
 }
