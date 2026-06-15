@@ -1,0 +1,291 @@
+package com.payment.service.impl;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.BusinessException;
+import com.payment.dto.V1MerchantProductUpsertDTO;
+import com.payment.dto.V1MerchantProductVO;
+import com.payment.entity.Product;
+import com.payment.entity.ProductStock;
+import com.payment.mapper.ProductMapper;
+import com.payment.mapper.ProductStockMapper;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import java.math.BigDecimal;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * 商户端商品管理服务测试。
+ */
+class V1MerchantProductServiceImplTest {
+
+    private ProductMapper productMapper;
+    private ProductStockMapper productStockMapper;
+    private V1MerchantSupportService supportService;
+    private ProductIndexMessagePublisher productIndexMessagePublisher;
+    private V1MerchantProductServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        productMapper = mock(ProductMapper.class);
+        productStockMapper = mock(ProductStockMapper.class);
+        supportService = mock(V1MerchantSupportService.class);
+        productIndexMessagePublisher = mock(ProductIndexMessagePublisher.class);
+        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, supportService, productIndexMessagePublisher);
+    }
+
+    @Test
+    void listProductsShouldRequireEmployeeAndReturnPagedVOs() {
+        Product product = buildProduct(1L, 1L, "P001", "咖啡", 1);
+        Page<Product> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(product));
+        mapperPage.setTotal(1);
+        when(productMapper.selectPage(any(), any())).thenReturn(mapperPage);
+        when(productStockMapper.selectList(any())).thenReturn(List.of(buildStock(10L, 1L, 1L, 5)));
+
+        Page<V1MerchantProductVO> result = service.listProducts(1L, 100L, 1, 10, null, null, null);
+
+        verify(supportService).requireEmployee(1L, 100L);
+        assertEquals(1, result.getRecords().size());
+        assertEquals("active", result.getRecords().get(0).getStatus());
+        assertEquals(5, result.getRecords().get(0).getStock());
+    }
+
+    @Test
+    void listProductsShouldFilterOutOfStock() {
+        // out_of_stock 模式下应：1) 先用 product_stock 锁定缺货 productId 子集；2) total 仅包含缺货数；
+        // 3) 跨页时不会因内存过滤漏行。
+        Product outOfStock = buildProduct(2L, 1L, "P002", "拿铁", 1);
+        Page<Product> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(outOfStock));
+        mapperPage.setTotal(1);
+        // 第一次 selectList：找缺货 productId；第二次：loadStockMap
+        when(productStockMapper.selectList(any()))
+                .thenReturn(List.of(buildStock(11L, 1L, 2L, 0)))
+                .thenReturn(List.of(buildStock(11L, 1L, 2L, 0)));
+        when(productMapper.selectPage(any(), any())).thenReturn(mapperPage);
+
+        Page<V1MerchantProductVO> result = service.listProducts(1L, 100L, 1, 10, null, null, "out_of_stock");
+
+        assertEquals(1L, result.getTotal());
+        assertEquals(1, result.getRecords().size());
+        assertEquals(2L, result.getRecords().get(0).getId());
+        assertEquals(0, result.getRecords().get(0).getStock());
+    }
+
+    @Test
+    void listProductsShouldShortCircuitWhenNoOutOfStock() {
+        // 该租户没有缺货商品时应直接返回空页，不再触发 product 表分页查询
+        when(productStockMapper.selectList(any())).thenReturn(List.of());
+
+        Page<V1MerchantProductVO> result = service.listProducts(1L, 100L, 1, 10, null, null, "out_of_stock");
+
+        assertEquals(0L, result.getTotal());
+        assertEquals(0, result.getRecords().size());
+        verify(productMapper, never()).selectPage(any(), any());
+    }
+
+    @Test
+    void listProductsOutOfStockShouldPaginateCorrectlyAcrossPages() {
+        // 模拟租户共有 3 个商品全部缺货；第 2 页 size=2 应当返回 1 条，total=3
+        Product p3 = buildProduct(3L, 1L, "P003", "美式", 1);
+        Page<Product> mapperPage = new Page<>(2, 2);
+        mapperPage.setRecords(List.of(p3));
+        mapperPage.setTotal(3);
+        when(productStockMapper.selectList(any()))
+                .thenReturn(List.of(
+                        buildStock(10L, 1L, 1L, 0),
+                        buildStock(11L, 1L, 2L, 0),
+                        buildStock(12L, 1L, 3L, 0)))
+                .thenReturn(List.of(buildStock(12L, 1L, 3L, 0)));
+        when(productMapper.selectPage(any(), any())).thenReturn(mapperPage);
+
+        Page<V1MerchantProductVO> result = service.listProducts(1L, 100L, 2, 2, null, null, "out_of_stock");
+
+        assertEquals(3L, result.getTotal());
+        assertEquals(1, result.getRecords().size());
+        assertEquals(3L, result.getRecords().get(0).getId());
+    }
+
+    @Test
+    void getProductShouldReturnVO() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1));
+        when(productStockMapper.selectOne(any())).thenReturn(buildStock(10L, 1L, 1L, 3));
+
+        V1MerchantProductVO vo = service.getProduct(1L, 100L, 1L);
+
+        verify(supportService).requireEmployee(1L, 100L);
+        assertEquals(1L, vo.getId());
+        assertEquals(3, vo.getStock());
+        assertEquals("active", vo.getStatus());
+    }
+
+    @Test
+    void getProductShouldThrowWhenProductMissing() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+
+        assertThrows(BusinessException.class, () -> service.getProduct(1L, 100L, 999L));
+    }
+
+    @Test
+    void createProductShouldPersistAndPublishIndex() {
+        // 第一次 selectOne 查重 -> 不存在
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        // 库存初始化时 selectOne 返回 null -> 走 insert 分支
+        when(productStockMapper.selectOne(any())).thenReturn(null);
+        when(productMapper.selectById(any())).thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1));
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 8));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 8, "active");
+        V1MerchantProductVO vo = service.createProduct(1L, 100L, dto);
+
+        verify(supportService).requireEmployee(1L, 100L);
+        verify(productMapper).insert(any(Product.class));
+        verify(productStockMapper).insert(any(ProductStock.class));
+
+        ArgumentCaptor<ProductStock> stockCaptor = ArgumentCaptor.forClass(ProductStock.class);
+        verify(productStockMapper).updateById(stockCaptor.capture());
+        assertEquals(8, stockCaptor.getValue().getQuantity());
+
+        verify(productIndexMessagePublisher).publishUpsert(any(Product.class));
+        assertEquals("active", vo.getStatus());
+    }
+
+    @Test
+    void createProductShouldRejectDuplicateCode() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(buildProduct(99L, 1L, "P001", "已存在", 1));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 8, "active");
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+        assertEquals("商品编码已存在", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+        verify(productIndexMessagePublisher, never()).publishUpsert(any());
+    }
+
+    @Test
+    void createProductShouldClampNegativeStockToZero() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(productStockMapper.selectOne(any())).thenReturn(null);
+        when(productMapper.selectById(any())).thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1));
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 0));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", -5, "active");
+        service.createProduct(1L, 100L, dto);
+
+        ArgumentCaptor<ProductStock> stockCaptor = ArgumentCaptor.forClass(ProductStock.class);
+        verify(productStockMapper).updateById(stockCaptor.capture());
+        assertEquals(0, stockCaptor.getValue().getQuantity());
+    }
+
+    @Test
+    void updateProductShouldRejectDuplicateCodeOnOtherProduct() {
+        // 第一次 selectOne 是获取目标商品；第二次 selectOne 是查重
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1))
+                .thenReturn(buildProduct(2L, 1L, "P002", "占用编码的其他商品", 1));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P002", "咖啡", 5, "active");
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.updateProduct(1L, 100L, 1L, dto));
+        assertEquals("商品编码已被其他商品使用", ex.getMessage());
+        verify(productMapper, never()).updateById(any(Product.class));
+    }
+
+    @Test
+    void updateProductShouldPersistAndPublishIndex() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1))
+                .thenReturn(null);
+        when(productStockMapper.selectOne(any())).thenReturn(buildStock(10L, 1L, 1L, 0));
+        when(productMapper.selectById(any())).thenReturn(buildProduct(1L, 1L, "P001", "咖啡升级", 1));
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 12));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡升级", 12, "active");
+        V1MerchantProductVO vo = service.updateProduct(1L, 100L, 1L, dto);
+
+        verify(productMapper).updateById(any(Product.class));
+        verify(productIndexMessagePublisher).publishUpsert(any(Product.class));
+        assertEquals("active", vo.getStatus());
+    }
+
+    @Test
+    void deleteProductShouldMarkDeletedAndPublishIndex() {
+        Product existing = buildProduct(1L, 1L, "P001", "咖啡", 1);
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(existing);
+
+        service.deleteProduct(1L, 100L, 1L);
+
+        ArgumentCaptor<Product> captor = ArgumentCaptor.forClass(Product.class);
+        verify(productMapper).updateById(captor.capture());
+        assertEquals(1, captor.getValue().getDeleted());
+        assertEquals(0, captor.getValue().getStatus());
+        verify(productIndexMessagePublisher, times(1)).publishDelete(any(Product.class));
+    }
+
+    @Test
+    void writesShouldFailWhenEmployeeRejected() {
+        // requireEmployee 抛出业务异常时，写路径应短路
+        org.mockito.Mockito.doThrow(new BusinessException("当前用户无权访问该商户"))
+                .when(supportService).requireEmployee(any(), any());
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 1, "active");
+        assertThrows(BusinessException.class, () -> service.createProduct(1L, 100L, dto));
+        assertThrows(BusinessException.class, () -> service.updateProduct(1L, 100L, 1L, dto));
+        assertThrows(BusinessException.class, () -> service.deleteProduct(1L, 100L, 1L));
+
+        verify(productMapper, never()).insert(any(Product.class));
+        verify(productMapper, never()).updateById(any(Product.class));
+        verify(productIndexMessagePublisher, never()).publishUpsert(any());
+        verify(productIndexMessagePublisher, never()).publishDelete(any());
+    }
+
+    private Product buildProduct(Long id, Long tenantId, String code, String name, Integer status) {
+        Product product = new Product();
+        product.setId(id);
+        product.setTenantId(tenantId);
+        product.setProductCode(code);
+        product.setName(name);
+        product.setPrice(new BigDecimal("28.00"));
+        product.setUnit("杯");
+        product.setCategory("饮品");
+        product.setStatus(status);
+        product.setDeleted(0);
+        return product;
+    }
+
+    private ProductStock buildStock(Long id, Long tenantId, Long productId, Integer quantity) {
+        ProductStock stock = new ProductStock();
+        stock.setId(id);
+        stock.setTenantId(tenantId);
+        stock.setProductId(productId);
+        stock.setQuantity(quantity);
+        stock.setVersion(0);
+        return stock;
+    }
+
+    private V1MerchantProductUpsertDTO buildUpsertDTO(String code, String name, Integer stock, String status) {
+        V1MerchantProductUpsertDTO dto = new V1MerchantProductUpsertDTO();
+        dto.setProductCode(code);
+        dto.setName(name);
+        dto.setPrice(new BigDecimal("28.00"));
+        dto.setUnit("杯");
+        dto.setCategory("饮品");
+        dto.setStock(stock);
+        dto.setStatus(status);
+        return dto;
+    }
+}

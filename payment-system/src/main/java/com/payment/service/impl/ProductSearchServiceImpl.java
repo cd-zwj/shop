@@ -73,49 +73,55 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         if (tenantId == null) {
             tenantId = TenantContextHolder.getTenantId();
         }
-        
+
         if (tenantId == null) {
             throw new BusinessException("租户信息不存在");
         }
-        
+
+        // ES 未启用时直接走 DB，避免 ERROR 日志噪音
+        if (elasticsearchOperations == null) {
+            log.debug("Elasticsearch 未启用，使用数据库查询商品搜索，tenantId={}, keyword={}", tenantId, keyword);
+            return queryProducts(tenantId, keyword, null, true);
+        }
+
         try {
-            if (elasticsearchOperations == null) {
-                throw new IllegalStateException("Elasticsearch 未启用");
-            }
             // 构建查询条件
             Criteria criteria = new Criteria("tenantId").is(tenantId)
                     .and(new Criteria("status").is(1))
                     .and(new Criteria().or("name").contains(keyword)
                             .or("productCode").contains(keyword)
                             .or("description").contains(keyword));
-            
+
             CriteriaQuery query = new CriteriaQuery(criteria);
-            
+
             // 执行搜索
             SearchHits<ProductDocument> searchHits = elasticsearchOperations.search(query, ProductDocument.class);
-            
+
             return searchHits.getSearchHits().stream()
                     .map(SearchHit::getContent)
                     .map(this::toProduct)
                     .toList();
-            
+
         } catch (Exception e) {
             log.error("Elasticsearch搜索商品失败，使用数据库查询", e);
-            return queryProducts(tenantId, keyword, null);
+            return queryProducts(tenantId, keyword, null, true);
         }
     }
-    
+
     @Override
     public List<Product> searchByCategory(String category) {
         Long tenantId = TenantContextHolder.getTenantId();
         if (tenantId == null) {
             throw new BusinessException("租户信息不存在");
         }
-        
+
+        // ES 未启用时直接走 DB
+        if (elasticsearchOperations == null) {
+            log.debug("Elasticsearch 未启用，使用数据库查询商品分类，tenantId={}, category={}", tenantId, category);
+            return queryProducts(tenantId, null, category, false);
+        }
+
         try {
-            if (elasticsearchOperations == null) {
-                throw new IllegalStateException("Elasticsearch 未启用");
-            }
             Criteria criteria = new Criteria("tenantId").is(tenantId)
                     .and(new Criteria("category").is(category));
 
@@ -124,10 +130,10 @@ public class ProductSearchServiceImpl implements ProductSearchService {
                     .map(SearchHit::getContent)
                     .map(this::toProduct)
                     .toList();
-            
+
         } catch (Exception e) {
             log.error("Elasticsearch按分类搜索商品失败，使用数据库查询", e);
-            return queryProducts(tenantId, null, category);
+            return queryProducts(tenantId, null, category, false);
         }
     }
 
@@ -138,10 +144,20 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         return product;
     }
 
-    private List<Product> queryProducts(Long tenantId, String keyword, String category) {
+    /**
+     * 数据库降级查询。
+     *
+     * @param tenantId      租户 ID
+     * @param keyword       关键字（按 name / productCode 模糊匹配）
+     * @param category      分类（精确匹配）
+     * @param onlyActive    true 时仅返回上架商品（status=1），与 ES 全文搜索路径保持一致；
+     *                      false 时不过滤 status，与 ES 分类查询路径保持一致
+     */
+    private List<Product> queryProducts(Long tenantId, String keyword, String category, boolean onlyActive) {
         LambdaQueryWrapper<Product> wrapper = new LambdaQueryWrapper<Product>()
                 .eq(Product::getTenantId, tenantId)
                 .eq(Product::getDeleted, 0)
+                .eq(onlyActive, Product::getStatus, 1)
                 .orderByDesc(Product::getCreateTime);
 
         if (keyword != null && !keyword.isBlank()) {

@@ -138,7 +138,8 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("获取商户详情成功应返回商户对象")
         void getTenant_返回商户详情() throws Exception {
-            when(tenantMapper.selectById(1L)).thenReturn(tenantA);
+            // service 层用 selectOne + LambdaQueryWrapper 过滤 status=1 / deleted=0
+            when(tenantMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(tenantA);
 
             mockMvc.perform(get("/v1/app/tenants/1")
                             .header("Authorization", StpUtil.getTokenValue()))
@@ -155,7 +156,7 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("商户不存在时data应为null")
         void getTenant_商户不存在_返回null() throws Exception {
-            when(tenantMapper.selectById(999L)).thenReturn(null);
+            when(tenantMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
             mockMvc.perform(get("/v1/app/tenants/999")
                             .header("Authorization", StpUtil.getTokenValue()))
@@ -211,7 +212,8 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("获取商品详情成功应返回完整商品信息")
         void getProduct_返回商品详情() throws Exception {
-            when(productMapper.selectById(1L)).thenReturn(product1);
+            // service 层用 selectOne + LambdaQueryWrapper 过滤 status=1 / deleted=0
+            when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(product1);
 
             mockMvc.perform(get("/v1/app/products/1")
                             .header("Authorization", StpUtil.getTokenValue()))
@@ -229,7 +231,7 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("商品不存在时data应为null")
         void getProduct_商品不存在_返回null() throws Exception {
-            when(productMapper.selectById(999L)).thenReturn(null);
+            when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
             mockMvc.perform(get("/v1/app/products/999")
                             .header("Authorization", StpUtil.getTokenValue()))
