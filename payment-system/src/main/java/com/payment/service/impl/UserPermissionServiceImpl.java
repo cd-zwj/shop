@@ -1,6 +1,5 @@
 package com.payment.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.dto.UserPermissionVO;
@@ -9,8 +8,8 @@ import com.payment.entity.UserPermission;
 import com.payment.mapper.PermissionMapper;
 import com.payment.mapper.UserMapper;
 import com.payment.mapper.UserPermissionMapper;
+import com.payment.service.PermissionCacheInvalidationService;
 import com.payment.service.UserPermissionService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,14 +20,20 @@ import java.util.stream.Collectors;
 @Service
 public class UserPermissionServiceImpl implements UserPermissionService {
 
-    @Autowired
-    private UserPermissionMapper userPermissionMapper;
+    private final UserPermissionMapper userPermissionMapper;
+    private final PermissionMapper permissionMapper;
+    private final UserMapper userMapper;
+    private final PermissionCacheInvalidationService permissionCacheInvalidationService;
 
-    @Autowired
-    private PermissionMapper permissionMapper;
-
-    @Autowired
-    private UserMapper userMapper;
+    public UserPermissionServiceImpl(UserPermissionMapper userPermissionMapper,
+                                     PermissionMapper permissionMapper,
+                                     UserMapper userMapper,
+                                     PermissionCacheInvalidationService permissionCacheInvalidationService) {
+        this.userPermissionMapper = userPermissionMapper;
+        this.permissionMapper = permissionMapper;
+        this.userMapper = userMapper;
+        this.permissionCacheInvalidationService = permissionCacheInvalidationService;
+    }
 
     @Override
     public UserPermissionVO getUserPermissions(Long userId) {
@@ -75,14 +80,14 @@ public class UserPermissionServiceImpl implements UserPermissionService {
         up.setPermissionId(permissionId);
         userPermissionMapper.insert(up);
 
-        clearUserSession(userId);
+        permissionCacheInvalidationService.invalidateUser(userId);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void revokePermission(Long userId, Long permissionId) {
         userPermissionMapper.deleteByUserIdAndPermissionId(userId, permissionId);
-        clearUserSession(userId);
+        permissionCacheInvalidationService.invalidateUser(userId);
     }
 
     @Override
@@ -101,18 +106,6 @@ public class UserPermissionServiceImpl implements UserPermissionService {
             }
         }
 
-        clearUserSession(userId);
-    }
-
-    private void clearUserSession(Long userId) {
-        try {
-            // Get session if exists (false = don't create if not exists)
-            cn.dev33.satoken.session.SaSession session = StpUtil.getSessionByLoginId(userId, false);
-            if (session != null) {
-                session.delete("permissions");
-            }
-        } catch (Exception e) {
-            // Ignore errors during session clearing
-        }
+        permissionCacheInvalidationService.invalidateUser(userId);
     }
 }
