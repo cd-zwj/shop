@@ -25,20 +25,19 @@ SOURCE 15_coupon_marketing.sql;
 SOURCE 16_refund.sql;
 SOURCE 17_auth_security.sql;
 SOURCE 18_store_membership.sql;
--- 19/20 存在历史重复编号，按依赖顺序显式导入，避免遗漏存量迁移。
 SOURCE 19_email_auth.sql;
-SOURCE 19_message_retry.sql;
-SOURCE 20_platform_auth_provider.sql;
-SOURCE 20_payment_bill_status_remark.sql;
+SOURCE 20_message_retry.sql;
 SOURCE 21_store_rating_migration.sql;
 SOURCE 22_user_shipping_address.sql;
 SOURCE 23_user_notification.sql;
 SOURCE 24_refund_application.sql;
+SOURCE 25_payment_bill_status_remark.sql;
 SOURCE 26_coupon_records_and_rules.sql;
 SOURCE 27_new_modules.sql;
 SOURCE 28_permission_rate_limit_hardening.sql;
 SOURCE 29_merchant_balance_version.sql;
 SOURCE 30_critical_indexes.sql;
+SOURCE 31_platform_auth_provider.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

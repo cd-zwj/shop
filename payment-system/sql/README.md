@@ -23,8 +23,21 @@ sql/
 ├── 16_refund.sql              # 退款模块
 ├── 17_auth_security.sql       # 登录与安全模块
 ├── 18_store_membership.sql    # 门店与会员扩展模块
-├── 19_message_retry.sql       # 消息重试与消费日志模块
+├── 19_email_auth.sql          # 邮箱认证字段与索引
+├── 20_message_retry.sql       # 消息重试与消费日志模块
+├── 21_store_rating_migration.sql      # 门店评分迁移
+├── 22_user_shipping_address.sql       # 用户收货地址
+├── 23_user_notification.sql           # 用户通知
+├── 24_refund_application.sql          # 退款申请
+├── 25_payment_bill_status_remark.sql  # 支付单状态备注列
+├── 26_coupon_records_and_rules.sql    # 优惠券记录与规则
+├── 27_new_modules.sql                 # 新模块扩展
+├── 28_permission_rate_limit_hardening.sql  # 权限/限流加固
+├── 29_merchant_balance_version.sql    # 商户余额乐观锁列
+├── 30_critical_indexes.sql            # 关键查询索引
+├── 31_platform_auth_provider.sql      # 第三方登录方式表与索引
 ├── 99_init_data.sql           # 初始化数据
+├── 99_test_accounts.sql       # 测试账号
 ├── import_all.sql             # 完整导入脚本
 ├── payment_db.sql             # 单租户版本（旧）
 └── payment_db_multitenant.sql # 多租户版本（旧）
@@ -66,7 +79,19 @@ mysql -u root -p < 15_coupon_marketing.sql
 mysql -u root -p < 16_refund.sql
 mysql -u root -p < 17_auth_security.sql
 mysql -u root -p < 18_store_membership.sql
-mysql -u root -p < 19_message_retry.sql
+mysql -u root -p < 19_email_auth.sql
+mysql -u root -p < 20_message_retry.sql
+mysql -u root -p < 21_store_rating_migration.sql
+mysql -u root -p < 22_user_shipping_address.sql
+mysql -u root -p < 23_user_notification.sql
+mysql -u root -p < 24_refund_application.sql
+mysql -u root -p < 25_payment_bill_status_remark.sql
+mysql -u root -p < 26_coupon_records_and_rules.sql
+mysql -u root -p < 27_new_modules.sql
+mysql -u root -p < 28_permission_rate_limit_hardening.sql
+mysql -u root -p < 29_merchant_balance_version.sql
+mysql -u root -p < 30_critical_indexes.sql
+mysql -u root -p < 31_platform_auth_provider.sql
 mysql -u root -p < 99_init_data.sql
 ```
 
@@ -174,9 +199,45 @@ mysql -u root -p < payment_db_multitenant.sql
 - `member_tag_relation` - 会员标签关联表
 - `member_growth_log` - 会员成长值日志表
 
-### 19_message_retry.sql
+### 19_email_auth.sql
+- `platform_user.email_verified` 列与 `uk_email` 唯一索引
+
+### 20_message_retry.sql
 - `message_consume_log` - 消息消费日志表
 - `retry_task` - 重试任务表
+
+### 21_store_rating_migration.sql
+- 门店评分相关字段与索引
+
+### 22_user_shipping_address.sql
+- `user_shipping_address` - 用户收货地址表
+
+### 23_user_notification.sql
+- `user_notification` - 用户通知表
+
+### 24_refund_application.sql
+- `refund_application` - 退款申请表
+
+### 25_payment_bill_status_remark.sql
+- `payment_bill.status_remark` 状态备注列
+
+### 26_coupon_records_and_rules.sql
+- 优惠券核销记录与规则相关表
+
+### 27_new_modules.sql
+- 新模块扩展表（按需）
+
+### 28_permission_rate_limit_hardening.sql
+- 权限缓存与限流相关列/索引加固
+
+### 29_merchant_balance_version.sql
+- `merchant_wallet_account.version` 乐观锁列
+
+### 30_critical_indexes.sql
+- 关键业务表的查询索引补齐
+
+### 31_platform_auth_provider.sql
+- `platform_auth_provider` 表与 `platform_user_auth` 第三方登录索引
 
 ### 99_init_data.sql
 - 默认租户数据
@@ -196,7 +257,7 @@ mysql -u root -p < payment_db_multitenant.sql
 2. **字符集**：确保使用 utf8mb4 字符集
 3. **外键**：当前未使用外键约束，通过应用层保证数据一致性
 4. **备份**：导入前请备份现有数据库
-5. **模型说明**：`14_platform_wallet_v1.sql` 及后续 `15-19` 扩展表默认基于平台用户 / 双钱包 / 统一支付模型设计
+5. **模型说明**：`14_platform_wallet_v1.sql` 及后续 `15` 起的扩展表默认基于平台用户 / 双钱包 / 统一支付模型设计
 6. **渐进演进**：`18_store_membership.sql` 当前仅落地门店主数据与会员扩展，未引入新的商品分类与门店库存真相源
 
 ## 默认账号

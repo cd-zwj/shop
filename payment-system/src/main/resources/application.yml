@@ -63,7 +63,7 @@ spring:
           initial-interval: 1000
           max-attempts: 3
 
-  # Elasticsearch配置
+  # Elasticsearch 配置（默认关闭，详见 app.search.enabled；启用时通过 ES_URIS 指定地址）
   elasticsearch:
     uris: ${ES_URIS:http://localhost:9200}
     username: ${ES_USERNAME:}
@@ -196,6 +196,10 @@ file:
 app:
   swagger:
     enabled: ${APP_SWAGGER_ENABLED:false}
+  # 商品搜索能力：默认关闭，使用 MySQL 模糊查询降级；
+  # 需要 Elasticsearch 时显式设置 APP_SEARCH_ENABLED=true 并在 docker-compose 中提供 ES 服务。
+  search:
+    enabled: ${APP_SEARCH_ENABLED:false}
   auth:
     email:
       enabled: ${MAIL_ENABLED:false}

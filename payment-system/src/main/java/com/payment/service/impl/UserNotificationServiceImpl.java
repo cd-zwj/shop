@@ -93,6 +93,18 @@ public class UserNotificationServiceImpl implements UserNotificationService {
     }
 
     /**
+     * 统计未读通知数量。
+     */
+    @Override
+    public long countUnread(Long platformUserId) {
+        Long count = notificationMapper.selectCount(new LambdaQueryWrapper<UserNotification>()
+                .eq(UserNotification::getPlatformUserId, platformUserId)
+                .eq(UserNotification::getReadStatus, 0)
+                .eq(UserNotification::getDeleted, 0));
+        return count == null ? 0L : count;
+    }
+
+    /**
      * 标记已读。
      */
     @Override
@@ -113,5 +125,20 @@ public class UserNotificationServiceImpl implements UserNotificationService {
         notification.setReadTime(LocalDateTime.now());
         notificationMapper.updateById(notification);
         return notification;
+    }
+
+    /**
+     * 标记全部未读通知为已读。
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int markAllRead(Long platformUserId) {
+        UserNotification update = new UserNotification();
+        update.setReadStatus(1);
+        update.setReadTime(LocalDateTime.now());
+        return notificationMapper.update(update, new LambdaQueryWrapper<UserNotification>()
+                .eq(UserNotification::getPlatformUserId, platformUserId)
+                .eq(UserNotification::getReadStatus, 0)
+                .eq(UserNotification::getDeleted, 0));
     }
 }

@@ -46,6 +46,11 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USERNAME: ${RABBITMQ_USERNAME:-guest}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      # 商品搜索默认关闭，使用 MySQL 模糊查询。
+      # 需要启用 Elasticsearch 时：取消下方 elasticsearch service 注释、
+      # 在此设置 APP_SEARCH_ENABLED=true 并提供 ES_URIS=http://elasticsearch:9200
+      APP_SEARCH_ENABLED: ${APP_SEARCH_ENABLED:-false}
+      ES_URIS: ${ES_URIS:-http://elasticsearch:9200}
     depends_on:
       mysql:
         condition: service_healthy
@@ -53,6 +58,22 @@ services:
         condition: service_started
       rabbitmq:
         condition: service_started
+
+  # ===== 可选：Elasticsearch =====
+  # 启用步骤：
+  #   1. 取消下方 elasticsearch service 整段注释
+  #   2. backend.environment 设置 APP_SEARCH_ENABLED=true
+  #   3. backend.depends_on 增加 elasticsearch: { condition: service_started }
+  # elasticsearch:
+  #   image: elasticsearch:8.12.2
+  #   environment:
+  #     - discovery.type=single-node
+  #     - xpack.security.enabled=false
+  #     - ES_JAVA_OPTS=-Xms512m -Xmx512m
+  #   ports:
+  #     - "9200:9200"
+  #   volumes:
+  #     - es-data:/usr/share/elasticsearch/data
 
   frontend:
     build:
@@ -66,3 +87,5 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  # 启用 Elasticsearch 时同时取消注释
+  # es-data:

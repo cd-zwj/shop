@@ -83,6 +83,44 @@ class UserNotificationServiceImplTest {
         assertEquals(1, result.getReadStatus());
     }
 
+    /**
+     * 统计未读Should返回 mapper 计数，null Should兜底为0。
+     */
+    @Test
+    void countUnreadShouldReturnMapperCount() {
+        UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
+        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        when(notificationMapper.selectCount(any())).thenReturn(3L);
+
+        assertEquals(3L, service.countUnread(100L));
+    }
+
+    @Test
+    void countUnreadShouldReturnZeroWhenMapperReturnsNull() {
+        UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
+        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        when(notificationMapper.selectCount(any())).thenReturn(null);
+
+        assertEquals(0L, service.countUnread(100L));
+    }
+
+    /**
+     * 全部已读Should批量更新并写入已读时间，返回受影响条数。
+     */
+    @Test
+    void markAllReadShouldBatchUpdateUnread() {
+        UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
+        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        when(notificationMapper.update(any(), any())).thenReturn(5);
+
+        int affected = service.markAllRead(100L);
+
+        ArgumentCaptor<UserNotification> captor = ArgumentCaptor.forClass(UserNotification.class);
+        verify(notificationMapper).update(captor.capture(), any());
+        assertEquals(1, captor.getValue().getReadStatus());
+        assertEquals(5, affected);
+    }
+
     private UserNotification buildNotification(Long id, Long platformUserId, Integer readStatus) {
         UserNotification notification = new UserNotification();
         notification.setId(id);

@@ -26,7 +26,17 @@ public interface UserNotificationService {
     Page<UserNotification> list(Long platformUserId, Integer current, Integer size);
 
     /**
+     * 统计当前用户未读通知数量。
+     */
+    long countUnread(Long platformUserId);
+
+    /**
      * 标记当前用户通知为已读。
      */
     UserNotification markRead(Long platformUserId, Long notificationId);
+
+    /**
+     * 标记当前用户全部未读通知为已读，返回受影响条数。
+     */
+    int markAllRead(Long platformUserId);
 }

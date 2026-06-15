@@ -1,12 +1,10 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.entity.UserNotification;
-import com.payment.mapper.UserNotificationMapper;
 import com.payment.service.UserNotificationService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.NotificationVO;
@@ -25,7 +23,6 @@ import java.util.Map;
 public class V1AppNotificationController {
 
     private final UserNotificationService notificationService;
-    private final UserNotificationMapper notificationMapper;
 
     @SaCheckLogin
     @GetMapping
@@ -38,11 +35,7 @@ public class V1AppNotificationController {
     @SaCheckLogin
     @GetMapping("/unread-count")
     public Result<Map<String, Long>> getUnreadCount() {
-        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        Long count = notificationMapper.selectCount(new LambdaQueryWrapper<UserNotification>()
-                .eq(UserNotification::getPlatformUserId, platformUserId)
-                .eq(UserNotification::getReadStatus, 0)
-                .eq(UserNotification::getDeleted, 0));
+        long count = notificationService.countUnread(PlatformSessionHelper.getPlatformUserId());
         return Result.success(Map.of("count", count));
     }
 
@@ -56,13 +49,7 @@ public class V1AppNotificationController {
     @SaCheckLogin
     @PutMapping("/read-all")
     public Result<Void> markAllRead() {
-        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        UserNotification update = new UserNotification();
-        update.setReadStatus(1);
-        notificationMapper.update(update, new LambdaQueryWrapper<UserNotification>()
-                .eq(UserNotification::getPlatformUserId, platformUserId)
-                .eq(UserNotification::getReadStatus, 0)
-                .eq(UserNotification::getDeleted, 0));
+        notificationService.markAllRead(PlatformSessionHelper.getPlatformUserId());
         return Result.success();
     }
 }
