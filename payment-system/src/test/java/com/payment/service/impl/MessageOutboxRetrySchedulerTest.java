@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,5 +74,32 @@ class MessageOutboxRetrySchedulerTest {
         verify(messageOutboxMapper).updateById(captor.capture());
         assertEquals("DEAD", captor.getValue().getSendStatus());
         assertNull(captor.getValue().getNextRetryTime());
+    }
+
+    @Test
+    void shouldMarkFailedAndScheduleRetryWhenRepublishThrows() {
+        MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
+        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
+        MessageOutboxRetryScheduler scheduler = new MessageOutboxRetryScheduler(messageOutboxMapper, rabbitTemplate);
+
+        MessageOutbox record = new MessageOutbox();
+        record.setId(3L);
+        record.setMessageId("MSG3");
+        record.setSendStatus("PENDING");
+        record.setRetryCount(0);
+        record.setNextRetryTime(LocalDateTime.now().minusMinutes(1));
+        record.setRoutingKey("payment.product.index");
+        record.setMessageBody("{}");
+
+        when(messageOutboxMapper.selectList(any())).thenReturn(List.of(record));
+        doThrow(new RuntimeException("mq down"))
+                .when(rabbitTemplate).convertAndSend(eq("payment.product.index"), eq("{}"));
+
+        scheduler.retryPendingOutbox();
+
+        ArgumentCaptor<MessageOutbox> captor = ArgumentCaptor.forClass(MessageOutbox.class);
+        verify(messageOutboxMapper).updateById(captor.capture());
+        assertEquals("FAILED", captor.getValue().getSendStatus());
+        assertEquals(1, captor.getValue().getRetryCount());
     }
 }

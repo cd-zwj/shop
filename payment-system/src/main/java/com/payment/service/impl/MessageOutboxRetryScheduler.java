@@ -43,6 +43,7 @@ public class MessageOutboxRetryScheduler {
             try {
                 republishOutbox(record);
             } catch (Exception e) {
+                markRepublishFailure(record, e);
                 log.error("Outbox republish failed, id={}", record.getId(), e);
             }
         }

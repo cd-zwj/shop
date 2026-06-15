@@ -2,36 +2,46 @@ package com.payment.service.impl;
 
 import com.payment.config.RabbitMQConfig;
 import com.payment.dto.ProductIndexMessage;
+import com.payment.entity.MessageOutbox;
 import com.payment.entity.Product;
+import com.payment.enums.OutboxSendStatusEnum;
+import com.payment.mapper.MessageOutboxMapper;
 import com.payment.util.JsonUtils;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 class ProductIndexMessagePublisherTest {
 
     @Test
-    void publishUpsertShouldSendProductIndexMessage() {
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(rabbitTemplate);
+    void publishUpsertShouldInsertPendingOutboxRecord() {
+        MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
         Product product = buildProduct();
 
         publisher.publishUpsert(product);
 
-        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(rabbitTemplate).convertAndSend(eq(RabbitMQConfig.PRODUCT_INDEX_QUEUE), bodyCaptor.capture());
+        ArgumentCaptor<MessageOutbox> outboxCaptor = ArgumentCaptor.forClass(MessageOutbox.class);
+        verify(messageOutboxMapper).insert(outboxCaptor.capture());
 
-        ProductIndexMessage message = JsonUtils.fromJson(bodyCaptor.getValue(), ProductIndexMessage.class);
+        MessageOutbox outbox = outboxCaptor.getValue();
+        assertNotNull(outbox.getMessageId());
+        assertEquals("PRODUCT_INDEX", outbox.getBizType());
+        assertEquals(String.valueOf(product.getId()), outbox.getBizNo());
+        assertEquals("", outbox.getExchangeName());
+        assertEquals(RabbitMQConfig.PRODUCT_INDEX_QUEUE, outbox.getRoutingKey());
+        assertEquals(OutboxSendStatusEnum.PENDING.name(), outbox.getSendStatus());
+        assertEquals(0, outbox.getRetryCount());
+        assertNotNull(outbox.getNextRetryTime());
+
+        ProductIndexMessage message = JsonUtils.fromJson(outbox.getMessageBody(), ProductIndexMessage.class);
         assertEquals(ProductIndexMessage.ACTION_UPSERT, message.getAction());
         assertEquals(product.getId(), message.getId());
         assertEquals(product.getTenantId(), message.getTenantId());
@@ -39,60 +49,37 @@ class ProductIndexMessagePublisherTest {
     }
 
     @Test
-    void publishDeleteShouldSendDeleteAction() {
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(rabbitTemplate);
+    void publishDeleteShouldInsertDeleteActionOutboxRecord() {
+        MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
         Product product = buildProduct();
 
         publisher.publishDelete(product);
 
-        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(rabbitTemplate).convertAndSend(eq(RabbitMQConfig.PRODUCT_INDEX_QUEUE), bodyCaptor.capture());
+        ArgumentCaptor<MessageOutbox> outboxCaptor = ArgumentCaptor.forClass(MessageOutbox.class);
+        verify(messageOutboxMapper).insert(outboxCaptor.capture());
 
-        ProductIndexMessage message = JsonUtils.fromJson(bodyCaptor.getValue(), ProductIndexMessage.class);
+        ProductIndexMessage message = JsonUtils.fromJson(outboxCaptor.getValue().getMessageBody(), ProductIndexMessage.class);
         assertEquals(ProductIndexMessage.ACTION_DELETE, message.getAction());
         assertEquals(product.getId(), message.getId());
     }
 
     @Test
-    void publishUpsertShouldSendAfterTransactionCommit() {
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(rabbitTemplate);
+    void publishUpsertShouldInsertOutboxInsideTransaction() {
+        MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
         Product product = buildProduct();
 
         TransactionSynchronizationManager.initSynchronization();
         try {
             publisher.publishUpsert(product);
 
-            verify(rabbitTemplate, never()).convertAndSend(eq(RabbitMQConfig.PRODUCT_INDEX_QUEUE), org.mockito.ArgumentMatchers.any(String.class));
-
-            for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
-                synchronization.afterCommit();
-            }
-
-            ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-            verify(rabbitTemplate).convertAndSend(eq(RabbitMQConfig.PRODUCT_INDEX_QUEUE), bodyCaptor.capture());
-            ProductIndexMessage message = JsonUtils.fromJson(bodyCaptor.getValue(), ProductIndexMessage.class);
-            assertEquals(ProductIndexMessage.ACTION_UPSERT, message.getAction());
-            assertEquals(product.getId(), message.getId());
+            ArgumentCaptor<MessageOutbox> outboxCaptor = ArgumentCaptor.forClass(MessageOutbox.class);
+            verify(messageOutboxMapper).insert(outboxCaptor.capture());
+            assertEquals(OutboxSendStatusEnum.PENDING.name(), outboxCaptor.getValue().getSendStatus());
         } finally {
             TransactionSynchronizationManager.clearSynchronization();
         }
-    }
-
-    @Test
-    void publishUpsertShouldNotSendWhenTransactionRollsBack() {
-        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(rabbitTemplate);
-
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            publisher.publishUpsert(buildProduct());
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
-
-        verify(rabbitTemplate, never()).convertAndSend(eq(RabbitMQConfig.PRODUCT_INDEX_QUEUE), org.mockito.ArgumentMatchers.any(String.class));
     }
 
     private Product buildProduct() {
