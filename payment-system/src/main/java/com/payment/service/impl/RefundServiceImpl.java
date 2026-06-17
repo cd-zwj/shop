@@ -10,9 +10,12 @@ import com.payment.dto.RefundRequestDTO;
 import com.payment.dto.RefundSubmitResultDTO;
 import com.payment.entity.CompensationTask;
 import com.payment.entity.PaymentBill;
+import com.payment.entity.RefundApplication;
 import com.payment.entity.RefundOrder;
 import com.payment.entity.RefundRecord;
 import com.payment.entity.RefundReconcileTask;
+import com.payment.enums.PayStatusEnum;
+import com.payment.enums.RefundApplicationStatus;
 import com.payment.enums.RefundAuditStatusEnum;
 import com.payment.enums.RefundChannelStatusEnum;
 import com.payment.enums.RefundReconcileTaskStatusEnum;
@@ -20,15 +23,19 @@ import com.payment.enums.RefundStatusEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.mapper.CompensationTaskMapper;
 import com.payment.mapper.PaymentBillMapper;
+import com.payment.mapper.RefundApplicationMapper;
 import com.payment.mapper.RefundOrderMapper;
 import com.payment.mapper.RefundRecordMapper;
 import com.payment.mapper.RefundReconcileTaskMapper;
+import com.payment.service.CompensationTaskFactory;
 import com.payment.service.PaymentProvider;
+import com.payment.service.RefundApplicationService;
 import com.payment.service.RefundService;
 import com.payment.service.UserNotificationService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,8 +57,11 @@ public class RefundServiceImpl implements RefundService {
     private final RefundReconcileTaskMapper refundReconcileTaskMapper;
     private final CompensationTaskMapper compensationTaskMapper;
     private final PaymentBillMapper paymentBillMapper;
+    private final RefundApplicationMapper refundApplicationMapper;
     private final List<PaymentProvider> paymentProviders;
     private final UserNotificationService notificationService;
+    private final CompensationTaskFactory compensationTaskFactory;
+    private final ObjectProvider<RefundApplicationService> refundApplicationServiceProvider;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -101,6 +111,66 @@ public class RefundServiceImpl implements RefundService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public void prepareMerchantApprovedRefund(RefundApplication application) {
+        PaymentBill paymentBill = paymentBillMapper.selectOne(new LambdaQueryWrapper<PaymentBill>()
+                .eq(PaymentBill::getBizNo, application.getOrderNo())
+                .eq(PaymentBill::getTenantId, application.getTenantId())
+                .eq(PaymentBill::getPlatformUserId, application.getPlatformUserId())
+                .eq(PaymentBill::getPayStatus, PayStatusEnum.SUCCESS.name()));
+        if (paymentBill == null) {
+            throw new BusinessException("未找到已支付的支付单，无法发起退款");
+        }
+        if (application.getRefundAmount().compareTo(paymentBill.getPayAmount()) > 0) {
+            throw new BusinessException("退款金额不能超过支付金额");
+        }
+
+        RefundOrder refundOrder = refundOrderMapper.selectOne(new LambdaQueryWrapper<RefundOrder>()
+                .eq(RefundOrder::getRefundNo, application.getRefundNo())
+                .eq(RefundOrder::getDeleted, 0));
+        if (refundOrder == null) {
+            refundOrder = new RefundOrder();
+            refundOrder.setRefundNo(application.getRefundNo());
+            refundOrder.setBizType(RefundConstants.MERCHANT_APPROVED_REFUND_BIZ_TYPE);
+            refundOrder.setBizNo(application.getOrderNo());
+            refundOrder.setTenantId(application.getTenantId());
+            refundOrder.setPlatformUserId(application.getPlatformUserId());
+            refundOrder.setOrderNo(application.getOrderNo());
+            refundOrder.setPaymentBillNo(paymentBill.getBillNo());
+            refundOrder.setChannelCode(paymentBill.getChannelCode());
+            refundOrder.setRefundReason(application.getReason());
+            refundOrder.setApplyAmount(application.getRefundAmount());
+            refundOrder.setRefundAmount(application.getRefundAmount());
+            refundOrder.setWalletRefundAmount(BigDecimal.ZERO);
+            refundOrder.setExternalRefundAmount(application.getRefundAmount());
+            refundOrder.setRefundStatus(RefundStatusEnum.APPLIED.name());
+            refundOrder.setAuditStatus(RefundAuditStatusEnum.APPROVED.name());
+            refundOrder.setAuditBy(application.getAdminId());
+            refundOrder.setAuditTime(application.getAuditTime() == null ? LocalDateTime.now() : application.getAuditTime());
+            refundOrder.setDeleted(0);
+            refundOrderMapper.insert(refundOrder);
+        }
+
+        RefundRecord refundRecord = refundRecordMapper.selectOne(new LambdaQueryWrapper<RefundRecord>()
+                .eq(RefundRecord::getRefundNo, refundOrder.getRefundNo())
+                .eq(RefundRecord::getChannelCode, refundOrder.getChannelCode()));
+        if (refundRecord == null) {
+            refundRecord = new RefundRecord();
+            refundRecord.setRefundNo(refundOrder.getRefundNo());
+            refundRecord.setPaymentBillNo(refundOrder.getPaymentBillNo());
+            refundRecord.setChannelCode(refundOrder.getChannelCode());
+            refundRecord.setRefundAmount(refundOrder.getExternalRefundAmount());
+            refundRecord.setThirdPartyBillNo(paymentBill.getThirdPartyBillNo());
+            refundRecord.setChannelStatus(RefundChannelStatusEnum.PROCESSING.name());
+            refundRecord.setNotifyData(buildAuditPayload("MERCHANT_APPROVED", "MERCHANT_APPROVED", application.getReason()));
+            refundRecordMapper.insert(refundRecord);
+        }
+
+        createRefundTaskIfAbsent(RefundConstants.MERCHANT_APPROVED_REFUND_BIZ_TYPE,
+                application.getRefundNo(), application.getRefundNo());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void processLateCallbackRefundTask(CompensationTask compensationTask) {
         // 抢占式更新：只有当前状态为 PENDING/PROCESSING 的任务才能被当前线程领取。
         // 防止 RetryTaskScheduler 和 RefundTaskScheduler 并发处理同一任务导致重复退款。
@@ -112,9 +182,7 @@ public class RefundServiceImpl implements RefundService {
         // 重新加载最新状态（claim 已将状态设为 PROCESSING）
         compensationTask.setTaskStatus("PROCESSING");
 
-        RefundOrder refundOrder = refundOrderMapper.selectOne(new LambdaQueryWrapper<RefundOrder>()
-                .eq(RefundOrder::getPaymentBillNo, compensationTask.getBizNo())
-                .eq(RefundOrder::getDeleted, 0));
+        RefundOrder refundOrder = findRefundOrderForTask(compensationTask);
         if (refundOrder == null) {
             markCompensationTaskFailed(compensationTask, "Refund order not found");
             return;
@@ -278,21 +346,22 @@ public class RefundServiceImpl implements RefundService {
     }
 
     private void createLateCallbackRefundTaskIfAbsent(String paymentBillNo, String refundNo) {
-        CompensationTask existing = compensationTaskMapper.selectOne(new LambdaQueryWrapper<CompensationTask>()
-                .eq(CompensationTask::getBizType, RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE)
-                .eq(CompensationTask::getBizNo, paymentBillNo));
-        if (existing != null) {
-            return;
-        }
+        createRefundTaskIfAbsent(RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE, paymentBillNo, refundNo);
+    }
 
-        CompensationTask task = new CompensationTask();
-        task.setTaskNo(BizNoGenerator.generate("CT"));
-        task.setBizType(RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE);
-        task.setBizNo(paymentBillNo);
-        task.setTaskStatus("PENDING");
-        task.setRemark("Late callback refund pending, refundNo=" + refundNo);
-        task.setRetryCount(0);
-        compensationTaskMapper.insert(task);
+    private void createRefundTaskIfAbsent(String bizType, String bizNo, String refundNo) {
+        compensationTaskFactory.createIfAbsent(bizType, bizNo, "Refund pending, refundNo=" + refundNo);
+    }
+
+    private RefundOrder findRefundOrderForTask(CompensationTask task) {
+        if (RefundConstants.MERCHANT_APPROVED_REFUND_BIZ_TYPE.equals(task.getBizType())) {
+            return refundOrderMapper.selectOne(new LambdaQueryWrapper<RefundOrder>()
+                    .eq(RefundOrder::getRefundNo, task.getBizNo())
+                    .eq(RefundOrder::getDeleted, 0));
+        }
+        return refundOrderMapper.selectOne(new LambdaQueryWrapper<RefundOrder>()
+                .eq(RefundOrder::getPaymentBillNo, task.getBizNo())
+                .eq(RefundOrder::getDeleted, 0));
     }
 
     private void createRefundReconcileTaskIfAbsent(String refundNo, String channelCode) {
@@ -336,6 +405,8 @@ public class RefundServiceImpl implements RefundService {
         // 通知用户：退款已到账
         sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
                 "退款已到账", "退款成功", refundOrder.getRefundAmount());
+
+        completeRefundApplication(refundOrder.getRefundNo());
     }
 
     private void markRefundFailure(RefundOrder refundOrder, RefundRecord refundRecord, String message) {
@@ -352,6 +423,33 @@ public class RefundServiceImpl implements RefundService {
         // 通知用户：退款失败
         sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
                 "退款失败: " + message, "退款失败", refundOrder.getRefundAmount());
+
+        syncRefundApplicationStatus(refundOrder.getRefundNo(), RefundApplicationStatus.FAILED.name(), message, false);
+    }
+
+    private void syncRefundApplicationStatus(String refundNo, String status, String rejectReason, boolean completed) {
+        LambdaUpdateWrapper<RefundApplication> wrapper = new LambdaUpdateWrapper<RefundApplication>()
+                .eq(RefundApplication::getRefundNo, refundNo)
+                .set(RefundApplication::getRefundStatus, status)
+                .set(RefundApplication::getRejectReason, rejectReason);
+        if (completed) {
+            wrapper.set(RefundApplication::getCompleteTime, LocalDateTime.now());
+        }
+        refundApplicationMapper.update(null, wrapper);
+    }
+
+    private void completeRefundApplication(String refundNo) {
+        RefundApplication app = refundApplicationMapper.selectOne(new LambdaQueryWrapper<RefundApplication>()
+                .eq(RefundApplication::getRefundNo, refundNo));
+        if (app == null) {
+            return;
+        }
+        RefundApplicationService refundApplicationService = refundApplicationServiceProvider.getIfAvailable();
+        if (refundApplicationService == null) {
+            syncRefundApplicationStatus(refundNo, RefundApplicationStatus.COMPLETED.name(), null, true);
+            return;
+        }
+        refundApplicationService.completeRefund(app.getTenantId(), app.getId());
     }
 
     private void sendRefundNotification(Long platformUserId, String refundNo, String content, String title, BigDecimal amount) {

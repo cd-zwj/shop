@@ -28,6 +28,8 @@ public class V1MerchantProductUpsertDTO {
 
     private String imageUrl;
 
+    private Long storeId;
+
     @NotNull(message = "库存不能为空")
     @Min(value = 0, message = "库存不能为负数")
     private Integer stock;
@@ -36,4 +38,17 @@ public class V1MerchantProductUpsertDTO {
      * active / inactive / out_of_stock
      */
     private String status;
+
+    /**
+     * 商品类型：PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION
+     * 不传时由 Service 兜底为 PHYSICAL。
+     */
+    private String productType;
+
+    /**
+     * 交付配置(JSON 字符串)，按 productType 解读，例如：
+     * VIRTUAL = {"contentUrl":"...","accountInfo":"..."}
+     * SUBSCRIPTION = {"validityDays":30}
+     */
+    private String deliveryConfig;
 }

@@ -19,6 +19,7 @@ import com.payment.service.ProductInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.WithdrawalService;
+import com.payment.service.delivery.OrderDeliveryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
@@ -49,6 +50,7 @@ public class PaymentV1Consumer {
     private final MemberService memberService;
     private final UserNotificationService notificationService;
     private final MessageIdempotentService messageIdempotentService;
+    private final OrderDeliveryService orderDeliveryService;
 
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
@@ -175,6 +177,13 @@ public class PaymentV1Consumer {
         } catch (Exception e) {
             log.warn("发送订单支付成功通知失败, orderNo={}", orderNo, e);
         }
+
+        // 投递交付事件,由 OrderDeliveryConsumer 按 item 的 productType 分发到对应策略。
+        // 入队失败必须抛出 —— 这是支付与交付的原子性保证:
+        // 整个 processOrderPaid 处于事务中,Outbox 写失败会回滚订单状态,
+        // 由 MQ 重投 + 幂等(根据 messageId)兜底再次进入此方法。
+        // 静默 catch 会导致"订单已 PAID 但交付事件丢失",从而漏发商品。
+        orderDeliveryService.enqueueDelivery(orderNo);
     }
 }
 

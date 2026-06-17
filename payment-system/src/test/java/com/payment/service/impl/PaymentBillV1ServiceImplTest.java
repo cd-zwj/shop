@@ -52,8 +52,8 @@ class PaymentBillV1ServiceImplTest {
         PaymentBillV1ServiceImpl service = new PaymentBillV1ServiceImpl(
                 paymentBillMapper,
                 callbackRecordMapper,
-                compensationTaskMapper,
-                messageOutboxMapper,
+                new CompensationTaskFactoryImpl(compensationTaskMapper),
+                new OutboxPublisherImpl(messageOutboxMapper),
                 List.of(provider),
                 refundService
         );
@@ -99,8 +99,8 @@ class PaymentBillV1ServiceImplTest {
         PaymentBillV1ServiceImpl service = new PaymentBillV1ServiceImpl(
                 paymentBillMapper,
                 callbackRecordMapper,
-                compensationTaskMapper,
-                messageOutboxMapper,
+                new CompensationTaskFactoryImpl(compensationTaskMapper),
+                new OutboxPublisherImpl(messageOutboxMapper),
                 List.of(provider),
                 refundService
         );

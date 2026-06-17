@@ -4,15 +4,11 @@ import com.payment.config.RabbitMQConfig;
 import com.payment.dto.ProductIndexMessage;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.Product;
-import com.payment.enums.OutboxSendStatusEnum;
-import com.payment.mapper.MessageOutboxMapper;
-import com.payment.util.BizNoGenerator;
-import com.payment.util.JsonUtils;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDateTime;
 
 /**
  * 商品索引消息发布器。
@@ -24,7 +20,7 @@ public class ProductIndexMessagePublisher {
 
     private static final String BIZ_TYPE_PRODUCT_INDEX = "PRODUCT_INDEX";
 
-    private final MessageOutboxMapper messageOutboxMapper;
+    private final OutboxPublisher outboxPublisher;
 
     public void publishUpsert(Product product) {
         publish(ProductIndexMessage.upsert(product));
@@ -35,17 +31,12 @@ public class ProductIndexMessagePublisher {
     }
 
     private void publish(ProductIndexMessage message) {
-        MessageOutbox outbox = new MessageOutbox();
-        outbox.setMessageId(BizNoGenerator.generate("MSG"));
-        outbox.setBizType(BIZ_TYPE_PRODUCT_INDEX);
-        outbox.setBizNo(String.valueOf(message.getId()));
-        outbox.setExchangeName("");
-        outbox.setRoutingKey(RabbitMQConfig.PRODUCT_INDEX_QUEUE);
-        outbox.setMessageBody(JsonUtils.toJson(message));
-        outbox.setSendStatus(OutboxSendStatusEnum.PENDING.name());
-        outbox.setRetryCount(0);
-        outbox.setNextRetryTime(LocalDateTime.now());
-        messageOutboxMapper.insert(outbox);
+        MessageOutbox outbox = outboxPublisher.publish(OutboxMessageCommand.builder()
+                .bizType(BIZ_TYPE_PRODUCT_INDEX)
+                .bizNo(String.valueOf(message.getId()))
+                .routingKey(RabbitMQConfig.PRODUCT_INDEX_QUEUE)
+                .messageBody(message)
+                .build());
 
         log.info("商品索引消息已写入Outbox，action={}, tenantId={}, productId={}, outboxId={}",
                 message.getAction(), message.getTenantId(), message.getId(), outbox.getId());

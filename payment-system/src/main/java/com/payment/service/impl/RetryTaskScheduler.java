@@ -159,7 +159,7 @@ public class RetryTaskScheduler {
             markDead(task, "extensionJson 中无 phone 字段");
             return;
         }
-        smsCodeService.sendLoginCode(phone);
+        smsCodeService.retryLoginCode(phone);
         onSuccess(task, "短信已重发: " + phone);
     }
 

@@ -72,6 +72,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -89,7 +90,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
@@ -133,6 +135,7 @@ class AppOrderServiceImplTest {
         assertEquals(new BigDecimal("11.00"), savedOrder.getTotalAmount());
         assertEquals(new BigDecimal("11.00"), savedOrder.getPayableAmount());
         assertEquals("可乐等2件商品", savedOrder.getSubject());
+        assertEquals(66L, savedOrder.getStoreId());
 
         ArgumentCaptor<List<SalesOrderItem>> itemCaptor = ArgumentCaptor.forClass(List.class);
         verify(salesOrderItemMapper, times(1)).insertBatch(itemCaptor.capture());
@@ -164,6 +167,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -181,7 +185,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
@@ -209,6 +214,8 @@ class AppOrderServiceImplTest {
         verify(salesOrderItemMapper, times(1)).insertBatch(any());
         assertNull(result.getPaymentBillNo());
         assertEquals("PAID", result.getOrderStatus());
+        // 回归 H1：钱包支付分支(无外部回调)也必须入队交付事件,否则用户付钱永远收不到商品
+        verify(orderDeliveryService, times(1)).enqueueDelivery(result.getOrderNo());
     }
 
     @Test
@@ -229,6 +236,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -246,7 +254,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(1L, 10L, "别家商品", "9.90")));
@@ -279,6 +288,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -296,7 +306,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         when(tenantEmployeeMapper.selectOne(any())).thenReturn(null);
@@ -322,6 +333,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -339,7 +351,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         SalesOrder salesOrder = new SalesOrder();
@@ -402,6 +415,7 @@ class AppOrderServiceImplTest {
         PromotionService promotionService = mock(PromotionService.class);
         OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
         UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
 
         AppOrderServiceImpl service = new AppOrderServiceImpl(
                 salesOrderMapper,
@@ -419,7 +433,8 @@ class AppOrderServiceImplTest {
                 couponService,
                 promotionService,
                 orderDiscountSnapshotMapper,
-                userBehaviorLogService
+                userBehaviorLogService,
+                orderDeliveryService
         );
 
         SalesOrder salesOrder = new SalesOrder();
@@ -483,6 +498,7 @@ class AppOrderServiceImplTest {
         product.setTenantId(tenantId);
         product.setName(name);
         product.setPrice(new BigDecimal(price));
+        product.setStoreId(66L);
         product.setStatus(1);
         product.setDeleted(0);
         return product;

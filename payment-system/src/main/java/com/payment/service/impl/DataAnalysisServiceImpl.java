@@ -5,12 +5,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.dto.AnalysisRequestDTO;
 import com.payment.entity.DataAnalysisResult;
 import com.payment.entity.UserBehaviorLog;
 import com.payment.mapper.DataAnalysisResultMapper;
 import com.payment.mapper.UserBehaviorLogMapper;
 import com.payment.service.DataAnalysisService;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,7 +21,6 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -40,6 +42,9 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
     
     @Autowired
     private RestTemplate restTemplate;
+
+    @Autowired
+    private OutboxPublisher outboxPublisher;
     
     @Value("${ai.base-url}")
     private String aiBaseUrl;
@@ -57,17 +62,16 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         result.setAnalysisData(JsonUtils.toJson(request.getParams()));
         save(result);
         
-        // 异步调用AI模块
-        callAiModuleAsync(result.getId(), request);
+        publishAiAnalysisOutbox(result.getId(), request);
         
         return result;
     }
     
     /**
-     * 异步调用AI模块
+     * 执行 AI 模块调用。
      */
-    @Async
-    public void callAiModuleAsync(Long resultId, AnalysisRequestDTO request) {
+    @Override
+    public void executeAnalysis(Long resultId, AnalysisRequestDTO request) {
         try {
             // 准备分析数据
             Map<String, Object> analysisData = prepareAnalysisData(request);
@@ -105,7 +109,12 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
                 result.setUpdateTime(LocalDateTime.now());
                 updateById(result);
             }
+            throw e;
         }
+    }
+
+    public void callAiModuleAsync(Long resultId, AnalysisRequestDTO request) {
+        executeAnalysis(resultId, request);
     }
     
     /**
@@ -151,6 +160,20 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         }
         wrapper.orderByDesc(DataAnalysisResult::getCreateTime);
         return page(page, wrapper);
+    }
+
+    private void publishAiAnalysisOutbox(Long resultId, AnalysisRequestDTO request) {
+        outboxPublisher.publish(OutboxMessageCommand.builder()
+                .messagePrefix("AI")
+                .bizType("AI_ANALYSIS")
+                .bizNo(String.valueOf(resultId))
+                .routingKey(RabbitMQConfig.AI_ANALYSIS_QUEUE)
+                .messageBody(Map.of(
+                        "resultId", resultId,
+                        "analysisType", request.getAnalysisType(),
+                        "userId", request.getUserId() == null ? "" : request.getUserId(),
+                        "params", request.getParams() == null ? Map.of() : request.getParams()))
+                .build());
     }
 }
 

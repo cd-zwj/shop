@@ -38,6 +38,8 @@ SOURCE 28_permission_rate_limit_hardening.sql;
 SOURCE 29_merchant_balance_version.sql;
 SOURCE 30_critical_indexes.sql;
 SOURCE 31_platform_auth_provider.sql;
+SOURCE 32_product_delivery_framework.sql;
+SOURCE 33_card_key_pool.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

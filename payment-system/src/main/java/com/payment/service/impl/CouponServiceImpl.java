@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.dto.AppCouponReceiveVO;
 import com.payment.dto.AppCouponTemplateVO;
 import com.payment.dto.AppUserCouponVO;
@@ -34,7 +35,9 @@ import com.payment.mapper.MemberAccountTagMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.mapper.UserCouponMapper;
 import com.payment.service.CouponService;
+import com.payment.service.OutboxPublisher;
 import com.payment.service.UserBehaviorLogService;
+import com.payment.service.outbox.OutboxMessageCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -44,6 +47,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,6 +68,8 @@ public class CouponServiceImpl implements CouponService {
     private static final String TEMPLATE_STATUS_DRAFT = "DRAFT";
     private static final String TEMPLATE_STATUS_ACTIVE = "ACTIVE";
     private static final String TEMPLATE_STATUS_DISABLED = "DISABLED";
+    private static final String COUPON_EVENT_BIZ_TYPE = "COUPON_EVENT";
+    private static final String COUPON_EVENT_MESSAGE_PREFIX = "COUPON";
 
     private final CouponTemplateMapper couponTemplateMapper;
     private final CouponScopeMapper couponScopeMapper;
@@ -76,6 +82,7 @@ public class CouponServiceImpl implements CouponService {
     private final CouponWriteOffRecordMapper writeOffRecordMapper;
     private final CouponExpireRecordMapper expireRecordMapper;
     private final UserBehaviorLogService userBehaviorLogService;
+    private final OutboxPublisher outboxPublisher;
 
     @Override
     public List<CouponTemplate> listTemplates(Long tenantId, String status) {
@@ -319,6 +326,7 @@ public class CouponServiceImpl implements CouponService {
         record.setBizNo(bizNo);
         record.setReceiveTime(now);
         receiveRecordMapper.insert(record);
+        publishCouponEvent("RECEIVED", coupon, bizNo, null);
         return coupon;
     }
 
@@ -436,6 +444,7 @@ public class CouponServiceImpl implements CouponService {
         record.setLockTime(now);
         record.setLockStatus(UserCouponStatusEnum.LOCKED.name());
         lockRecordMapper.insert(record);
+        publishCouponEvent("LOCKED", coupon, bizNo, orderNo);
     }
 
     /**
@@ -473,6 +482,7 @@ public class CouponServiceImpl implements CouponService {
         record.setReleaseReason(releaseReason);
         record.setReleaseTime(now);
         releaseRecordMapper.insert(record);
+        publishCouponEvent("RELEASED", coupon, bizNo, orderNo);
     }
 
     /**
@@ -512,6 +522,7 @@ public class CouponServiceImpl implements CouponService {
         record.setDiscountAmount(discountAmount);
         record.setWriteOffTime(now);
         writeOffRecordMapper.insert(record);
+        publishCouponEvent("USED", coupon, bizNo, orderNo);
     }
 
     @Override
@@ -548,8 +559,41 @@ public class CouponServiceImpl implements CouponService {
             record.setExpireReason(expireReason);
             record.setExpireTime(now);
             expireRecordMapper.insert(record);
+            publishCouponEvent("EXPIRED", coupon, record.getBizNo(), null);
         }
         return expiredCount;
+    }
+
+    private void publishCouponEvent(String eventType, UserCoupon coupon, String bizNo, String orderNo) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("bizType", COUPON_EVENT_BIZ_TYPE);
+        body.put("eventType", eventType);
+        body.put("bizNo", resolveCouponEventBizNo(eventType, coupon, bizNo));
+        body.put("userCouponId", coupon.getId());
+        body.put("couponNo", coupon.getCouponNo());
+        body.put("couponTemplateId", coupon.getTemplateId());
+        body.put("tenantId", coupon.getTenantId());
+        body.put("platformUserId", coupon.getPlatformUserId());
+        body.put("couponStatus", coupon.getCouponStatus());
+        body.put("orderNo", orderNo);
+
+        outboxPublisher.publish(OutboxMessageCommand.builder()
+                .messagePrefix(COUPON_EVENT_MESSAGE_PREFIX)
+                .bizType(COUPON_EVENT_BIZ_TYPE)
+                .bizNo((String) body.get("bizNo"))
+                .routingKey(RabbitMQConfig.COUPON_EVENT_QUEUE)
+                .messageBody(body)
+                .build());
+    }
+
+    private String resolveCouponEventBizNo(String eventType, UserCoupon coupon, String bizNo) {
+        if (bizNo != null && !bizNo.isBlank()) {
+            return bizNo;
+        }
+        if (coupon.getCouponNo() != null && !coupon.getCouponNo().isBlank()) {
+            return coupon.getCouponNo();
+        }
+        return "COUPON_" + eventType + "_" + coupon.getId();
     }
 
     private void validateTemplateCreate(CouponTemplateCreateDTO dto) {

@@ -1,16 +1,22 @@
 package com.payment.service.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
+import com.payment.entity.CompensationTask;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
 import com.payment.enums.PointsDeductStatusEnum;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
+import com.payment.service.CompensationTaskFactory;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,7 +31,7 @@ class MemberPointsAccountServiceImplTest {
     void holdPointsShouldDeductAccountAndWritePreHoldLog() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
         when(accountMapper.updateById(any())).thenReturn(1);
@@ -42,13 +48,16 @@ class MemberPointsAccountServiceImplTest {
         assertEquals(-300, logCaptor.getValue().getChangePoints());
         assertEquals(PointsDeductStatusEnum.PRE_HOLD.name(), logCaptor.getValue().getStatus());
         assertEquals(PointsDeductStatusEnum.PRE_HOLD.name(), result.getStatus());
+
+        assertPointsEventPublished(service, "POINTS_HOLD", "ORDER_DEDUCT", "SO1001", -300,
+                PointsDeductStatusEnum.PRE_HOLD.name());
     }
 
     @Test
     void holdPointsShouldRejectInsufficientPoints() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 100, 0));
 
@@ -60,7 +69,7 @@ class MemberPointsAccountServiceImplTest {
     void confirmPointsHoldShouldMarkPreHoldAsConfirmed() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
 
@@ -69,13 +78,16 @@ class MemberPointsAccountServiceImplTest {
         ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).updateById(logCaptor.capture());
         assertEquals(PointsDeductStatusEnum.CONFIRMED.name(), logCaptor.getValue().getStatus());
+
+        assertPointsEventPublished(service, "POINTS_HOLD_CONFIRMED", "ORDER_DEDUCT", "SO1001", -300,
+                PointsDeductStatusEnum.CONFIRMED.name());
     }
 
     @Test
     void releasePointsHoldShouldRefundAccountAndMarkLogReleased() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
@@ -92,13 +104,16 @@ class MemberPointsAccountServiceImplTest {
         verify(logMapper).updateById(logCaptor.capture());
         assertEquals(PointsDeductStatusEnum.RELEASED.name(), logCaptor.getValue().getStatus());
         assertEquals("订单取消", logCaptor.getValue().getReleaseReason());
+
+        assertPointsEventPublished(service, "POINTS_HOLD_RELEASED", "ORDER_DEDUCT", "SO1001", -300,
+                PointsDeductStatusEnum.RELEASED.name());
     }
 
     @Test
     void grantPointsShouldWriteExpireTimeWhenProvided() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
         LocalDateTime expireTime = LocalDateTime.of(2026, 7, 1, 0, 0);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
@@ -109,13 +124,16 @@ class MemberPointsAccountServiceImplTest {
         ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).insert(logCaptor.capture());
         assertEquals(expireTime, logCaptor.getValue().getExpireTime());
+
+        assertPointsEventPublished(service, "POINTS_GRANTED", "ORDER_REWARD", "SO1002", 100,
+                PointsDeductStatusEnum.CONFIRMED.name());
     }
 
     @Test
     void expirePointsShouldDeductAccountMarkSourceExpiredAndWriteExpireLog() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
         LocalDateTime now = LocalDateTime.of(2026, 7, 2, 2, 0);
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
@@ -145,13 +163,16 @@ class MemberPointsAccountServiceImplTest {
         assertEquals(500, insertCaptor.getValue().getPointsBefore());
         assertEquals(200, insertCaptor.getValue().getPointsAfter());
         assertEquals(PointsDeductStatusEnum.CONFIRMED.name(), insertCaptor.getValue().getStatus());
+
+        assertPointsEventPublished(service, "POINTS_EXPIRED", "POINTS_EXPIRE", "POINTS_EXPIRE_10", -300,
+                PointsDeductStatusEnum.CONFIRMED.name());
     }
 
     @Test
     void expirePointsShouldOnlyDeductAvailableBalance() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 120, 0));
@@ -170,13 +191,16 @@ class MemberPointsAccountServiceImplTest {
         verify(logMapper).insert(insertCaptor.capture());
         assertEquals(-120, insertCaptor.getValue().getChangePoints());
         assertEquals(0, insertCaptor.getValue().getPointsAfter());
+
+        assertPointsEventPublished(service, "POINTS_EXPIRED", "POINTS_EXPIRE", "POINTS_EXPIRE_10", -120,
+                PointsDeductStatusEnum.CONFIRMED.name());
     }
 
     @Test
     void getExpiringPointsShouldCapByCurrentBalance() {
         MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
-        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(accountMapper, logMapper);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(logMapper.selectList(any())).thenReturn(List.of(
                 earnedLog(10L, 9L, 100L, 300),
@@ -192,6 +216,136 @@ class MemberPointsAccountServiceImplTest {
         );
 
         assertEquals(350, expiringPoints);
+    }
+
+    @Test
+    void grantPointsShouldCreateCompensationTaskWhenAccountUpdateRetriesExhausted() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        CompensationTaskFactory compensationTaskFactory = mock(CompensationTaskFactory.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper, compensationTaskFactory);
+
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 0));
+        when(accountMapper.updateById(any())).thenReturn(0);
+
+        assertThrows(BusinessException.class,
+                () -> service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分"));
+
+        verify(compensationTaskFactory).createIfAbsent("POINTS_GRANT", "SO1002", "积分发放失败，请重试");
+    }
+
+    @Test
+    void expirePointsShouldCreateCompensationTaskWhenAccountUpdateRetriesExhausted() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        CompensationTaskFactory compensationTaskFactory = mock(CompensationTaskFactory.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper, compensationTaskFactory);
+
+        when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
+        when(logMapper.update(any(), any())).thenReturn(1);
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
+        when(accountMapper.updateById(any())).thenReturn(0);
+
+        assertThrows(BusinessException.class,
+                () -> service.expirePoints(LocalDateTime.of(2026, 7, 2, 2, 0), 100));
+
+        verify(compensationTaskFactory).createIfAbsent("POINTS_EXPIRE", "POINTS_EXPIRE_10", "积分过期扣减失败，请重试");
+    }
+
+    @Test
+    void holdPointsShouldCreateCompensationTaskWhenAccountUpdateRetriesExhausted() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        CompensationTaskFactory compensationTaskFactory = mock(CompensationTaskFactory.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper, compensationTaskFactory);
+
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
+        when(accountMapper.updateById(any())).thenReturn(0);
+
+        assertThrows(BusinessException.class,
+                () -> service.holdPoints(9L, 100L, 100, "ORDER_DEDUCT", "SO1003", "订单积分预占"));
+
+        verify(compensationTaskFactory).createIfAbsent("POINTS_HOLD", "SO1003", "积分预占失败，请重试");
+    }
+
+    @Test
+    void releasePointsHoldShouldCreateCompensationTaskWhenAccountUpdateRetriesExhausted() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        CompensationTaskFactory compensationTaskFactory = mock(CompensationTaskFactory.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper, compensationTaskFactory);
+
+        when(logMapper.selectOne(any())).thenReturn(preHoldLog());
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 300));
+        when(accountMapper.updateById(any())).thenReturn(0);
+
+        assertThrows(BusinessException.class,
+                () -> service.releasePointsHold(9L, 100L, "ORDER_DEDUCT", "SO1001", "订单取消"));
+
+        verify(compensationTaskFactory).createIfAbsent("POINTS_RELEASE", "SO1001", "积分释放失败，请重试");
+    }
+
+    private MemberPointsAccountServiceImpl service(MemberPointsAccountMapper accountMapper,
+                                                   MemberPointsLogMapper logMapper) {
+        return service(accountMapper, logMapper, mock(CompensationTaskFactory.class));
+    }
+
+    private MemberPointsAccountServiceImpl service(MemberPointsAccountMapper accountMapper,
+                                                   MemberPointsLogMapper logMapper,
+                                                   CompensationTaskFactory compensationTaskFactory) {
+        return service(accountMapper, logMapper, compensationTaskFactory, mock(OutboxPublisher.class));
+    }
+
+    private MemberPointsAccountServiceImpl service(MemberPointsAccountMapper accountMapper,
+                                                   MemberPointsLogMapper logMapper,
+                                                   CompensationTaskFactory compensationTaskFactory,
+                                                   OutboxPublisher outboxPublisher) {
+        when(compensationTaskFactory.createIfAbsent(any(), any(), any())).thenReturn(new CompensationTask());
+        MemberPointsAccountServiceImpl service = new MemberPointsAccountServiceImpl(
+                accountMapper,
+                logMapper,
+                compensationTaskFactory,
+                outboxPublisher);
+        serviceTestOutbox(service, outboxPublisher);
+        return service;
+    }
+
+    private void assertPointsEventPublished(MemberPointsAccountServiceImpl service,
+                                            String eventType,
+                                            String bizType,
+                                            String bizNo,
+                                            Integer changePoints,
+                                            String status) {
+        OutboxPublisher outboxPublisher = serviceTestOutbox(service, null);
+        ArgumentCaptor<OutboxMessageCommand> commandCaptor = ArgumentCaptor.forClass(OutboxMessageCommand.class);
+        verify(outboxPublisher).publish(commandCaptor.capture());
+        OutboxMessageCommand command = commandCaptor.getValue();
+        assertEquals("POINTS_EVENT", command.getBizType());
+        assertEquals(bizNo, command.getBizNo());
+        assertEquals(RabbitMQConfig.POINTS_EVENT_QUEUE, command.getRoutingKey());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) command.getMessageBody();
+        assertEquals(eventType, body.get("eventType"));
+        assertEquals(bizType, body.get("bizType"));
+        assertEquals(bizNo, body.get("bizNo"));
+        assertEquals(changePoints, body.get("changePoints"));
+        assertEquals(status, body.get("status"));
+    }
+
+    private OutboxPublisher serviceTestOutbox(MemberPointsAccountServiceImpl service, OutboxPublisher outboxPublisher) {
+        if (outboxPublisher != null) {
+            TestOutboxRegistry.OUTBOX.put(service, outboxPublisher);
+        }
+        return TestOutboxRegistry.OUTBOX.get(service);
+    }
+
+    private static class TestOutboxRegistry {
+        private static final java.util.Map<MemberPointsAccountServiceImpl, OutboxPublisher> OUTBOX =
+                new java.util.IdentityHashMap<>();
     }
 
     private MemberPointsAccount account(Long tenantId, Long platformUserId, Integer points, Integer totalUsed) {

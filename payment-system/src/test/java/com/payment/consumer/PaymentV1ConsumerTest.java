@@ -120,6 +120,7 @@ class PaymentV1ConsumerTest {
         private final PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
         private final UserNotificationService notificationService = mock(UserNotificationService.class);
         private final MessageIdempotentService messageIdempotentService = mock(MessageIdempotentService.class);
+        private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
         private final PaymentV1Consumer consumer = new PaymentV1Consumer(
                 walletRechargeService,
                 salesOrderMapper,
@@ -130,7 +131,8 @@ class PaymentV1ConsumerTest {
                 pointsRuleMapper,
                 memberService,
                 notificationService,
-                messageIdempotentService
+                messageIdempotentService,
+                orderDeliveryService
         );
     }
 }

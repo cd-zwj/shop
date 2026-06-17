@@ -1,8 +1,11 @@
 package com.payment.service.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.entity.UserNotification;
 import com.payment.mapper.UserNotificationMapper;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -11,6 +14,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,6 +30,9 @@ class UserNotificationServiceImplSendTest {
 
     @Mock
     private UserNotificationMapper notificationMapper;
+
+    @Mock
+    private OutboxPublisher outboxPublisher;
 
     @InjectMocks
     private UserNotificationServiceImpl notificationService;
@@ -332,5 +340,35 @@ class UserNotificationServiceImplSendTest {
         UserNotification captured = captor.getValue();
         assertEquals(42L, captured.getPlatformUserId());
         assertEquals("SYSTEM", captured.getCategory());
+    }
+
+    @Test
+    void send_shouldPublishOutboxEventAfterNotificationCreated() {
+        // Arrange
+        when(notificationMapper.insert(any(UserNotification.class))).thenAnswer(invocation -> {
+            UserNotification notification = invocation.getArgument(0);
+            notification.setId(9001L);
+            return 1;
+        });
+
+        // Act
+        notificationService.send(42L, "通知标题", "通知内容", "SYSTEM");
+
+        // Assert
+        ArgumentCaptor<OutboxMessageCommand> captor = ArgumentCaptor.forClass(OutboxMessageCommand.class);
+        verify(outboxPublisher).publish(captor.capture());
+        OutboxMessageCommand command = captor.getValue();
+        assertEquals("NTF", command.getMessagePrefix());
+        assertEquals("USER_NOTIFICATION", command.getBizType());
+        assertEquals("USER_NOTIFICATION_9001", command.getBizNo());
+        assertEquals(RabbitMQConfig.USER_NOTIFICATION_QUEUE, command.getRoutingKey());
+
+        Map<String, Object> body = (Map<String, Object>) command.getMessageBody();
+        assertEquals("USER_NOTIFICATION", body.get("bizType"));
+        assertEquals(9001L, body.get("notificationId"));
+        assertEquals(42L, body.get("platformUserId"));
+        assertEquals("通知标题", body.get("title"));
+        assertEquals("通知内容", body.get("content"));
+        assertEquals("SYSTEM", body.get("category"));
     }
 }

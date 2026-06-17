@@ -28,7 +28,9 @@ public class RefundTaskScheduler {
     @Scheduled(fixedDelayString = "${payment.refund.compensation.fixed-delay-ms:60000}")
     public void processLateCallbackRefundTasks() {
         List<CompensationTask> tasks = compensationTaskMapper.selectList(new LambdaQueryWrapper<CompensationTask>()
-                .eq(CompensationTask::getBizType, RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE)
+                .in(CompensationTask::getBizType,
+                        RefundConstants.LATE_CALLBACK_REFUND_BIZ_TYPE,
+                        RefundConstants.MERCHANT_APPROVED_REFUND_BIZ_TYPE)
                 .in(CompensationTask::getTaskStatus, "PENDING", "PROCESSING")
                 .orderByAsc(CompensationTask::getUpdateTime)
                 .last("limit 20"));

@@ -36,6 +36,8 @@ sql/
 ├── 29_merchant_balance_version.sql    # 商户余额乐观锁列
 ├── 30_critical_indexes.sql            # 关键查询索引
 ├── 31_platform_auth_provider.sql      # 第三方登录方式表与索引
+├── 32_product_delivery_framework.sql  # 商品类型化 + 统一交付记录表
+├── 33_card_key_pool.sql       # 卡密库存池 + 上传/锁定/退款作废所需表
 ├── 99_init_data.sql           # 初始化数据
 ├── 99_test_accounts.sql       # 测试账号
 ├── import_all.sql             # 完整导入脚本

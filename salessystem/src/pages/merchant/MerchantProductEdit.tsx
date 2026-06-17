@@ -5,8 +5,10 @@ import {
   DollarSign,
   Eye,
   Info,
+  KeyRound,
   Layers,
   Package,
+  RefreshCw,
   Save,
   Upload,
 } from 'lucide-react';
@@ -14,7 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fileUploadService } from '../../services/modules/fileUpload';
 import { merchantProductService } from '../../services/modules/merchantProduct';
-import type { MerchantProductUpsertPayload } from '../../types/merchant';
+import type { MerchantCardKey, MerchantCardKeySummary, MerchantProductUpsertPayload } from '../../types/merchant';
 import { ApiError } from '../../types/api';
 
 const EMPTY_FORM: MerchantProductUpsertPayload = {
@@ -27,7 +29,17 @@ const EMPTY_FORM: MerchantProductUpsertPayload = {
   imageUrl: '',
   stock: 0,
   status: 'active',
+  productType: 'PHYSICAL',
+  deliveryConfig: '',
 };
+
+const PRODUCT_TYPE_OPTIONS: { value: NonNullable<MerchantProductUpsertPayload['productType']>; label: string; hint: string }[] = [
+  { value: 'PHYSICAL', label: '实物', hint: '支付后等待商户发货' },
+  { value: 'VIRTUAL', label: '虚拟内容', hint: '需配置 contentUrl / accountInfo' },
+  { value: 'CARD_KEY', label: '卡密 / 兑换码', hint: '保存商品后在库存池批量上传' },
+  { value: 'SERVICE', label: '服务', hint: '支付后生成核销码,商户侧确认核销' },
+  { value: 'SUBSCRIPTION', label: '订阅 / 权益', hint: '可配置 validityDays' },
+];
 
 export default function MerchantProductEdit() {
   const navigate = useNavigate();
@@ -41,6 +53,11 @@ export default function MerchantProductEdit() {
   const [isLoading, setIsLoading] = useState(Boolean(id));
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [cardKeySummary, setCardKeySummary] = useState<MerchantCardKeySummary | null>(null);
+  const [cardKeys, setCardKeys] = useState<MerchantCardKey[]>([]);
+  const [cardKeyInput, setCardKeyInput] = useState('');
+  const [isCardKeyLoading, setIsCardKeyLoading] = useState(false);
+  const [isCardKeyUploading, setIsCardKeyUploading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -53,6 +70,7 @@ export default function MerchantProductEdit() {
       try {
         const product = await merchantProductService.getProduct(tenantId, Number(id));
         if (!isMounted) return;
+        const loadedProductType = (product.productType as MerchantProductUpsertPayload['productType']) || 'PHYSICAL';
         setFormData({
           productCode: product.productCode || '',
           name: product.name || '',
@@ -66,7 +84,12 @@ export default function MerchantProductEdit() {
             product.status === 'inactive' || product.status === 'out_of_stock'
               ? product.status
               : 'active',
+          productType: loadedProductType,
+          deliveryConfig: product.deliveryConfig || '',
         });
+        if (loadedProductType === 'CARD_KEY') {
+          void loadCardKeys();
+        }
       } catch {
         if (!isMounted) return;
         setError('商品信息加载失败，请稍后重试');
@@ -83,6 +106,26 @@ export default function MerchantProductEdit() {
       isMounted = false;
     };
   }, [id, isEdit, tenantId]);
+
+  async function loadCardKeys() {
+    if (!tenantId || !id) {
+      return;
+    }
+
+    setIsCardKeyLoading(true);
+    try {
+      const [summary, page] = await Promise.all([
+        merchantProductService.getCardKeySummary(tenantId, Number(id)),
+        merchantProductService.listCardKeys(tenantId, Number(id), { current: 1, size: 10 }),
+      ]);
+      setCardKeySummary(summary);
+      setCardKeys(page.records || []);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '卡密库存加载失败，请稍后重试');
+    } finally {
+      setIsCardKeyLoading(false);
+    }
+  }
 
   function updateField<K extends keyof MerchantProductUpsertPayload>(
     key: K,
@@ -108,6 +151,42 @@ export default function MerchantProductEdit() {
       setError(err instanceof Error ? err.message : '图片上传失败，请稍后重试');
     } finally {
       setIsUploading(false);
+    }
+  }
+
+  async function handleCardKeyUpload() {
+    if (!tenantId || !id) {
+      setError('请先保存卡密商品，再上传卡密库存');
+      return;
+    }
+
+    const codes = Array.from(
+      new Set(
+        cardKeyInput
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean),
+      ),
+    );
+    if (codes.length === 0) {
+      setError('请至少输入一条卡密');
+      return;
+    }
+
+    setIsCardKeyUploading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const summary = await merchantProductService.uploadCardKeys(tenantId, Number(id), codes);
+      setCardKeySummary(summary);
+      setCardKeyInput('');
+      setSuccess(`已上传 ${codes.length} 条卡密`);
+      await loadCardKeys();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '卡密上传失败，请稍后重试');
+    } finally {
+      setIsCardKeyUploading(false);
     }
   }
 
@@ -140,6 +219,8 @@ export default function MerchantProductEdit() {
         imageUrl: formData.imageUrl?.trim() || undefined,
         stock: Number(formData.stock || 0),
         status: formData.status || 'active',
+        productType: formData.productType || 'PHYSICAL',
+        deliveryConfig: formData.deliveryConfig?.trim() || undefined,
       };
 
       const product =
@@ -267,6 +348,156 @@ export default function MerchantProductEdit() {
               </div>
             </div>
 
+            {/* 商品类型 + 交付配置：不同类型走不同 DeliveryStrategy */}
+            <div className="flex flex-col gap-3">
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                商品类型
+              </label>
+              <select
+                value={formData.productType || 'PHYSICAL'}
+                onChange={(event) => {
+                  const nextType = event.target.value as MerchantProductUpsertPayload['productType'];
+                  updateField('productType', nextType);
+                  if (nextType === 'CARD_KEY' && isEdit) {
+                    void loadCardKeys();
+                  } else {
+                    setCardKeySummary(null);
+                    setCardKeys([]);
+                  }
+                }}
+                className="w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
+              >
+                {PRODUCT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label} — {opt.hint}
+                  </option>
+                ))}
+              </select>
+              {formData.productType && formData.productType !== 'PHYSICAL' && formData.productType !== 'CARD_KEY' && (
+                <div className="flex flex-col gap-2">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    交付配置 (JSON)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.deliveryConfig || ''}
+                    onChange={(event) => updateField('deliveryConfig', event.target.value)}
+                    placeholder={
+                      formData.productType === 'VIRTUAL'
+                        ? '{"contentUrl":"https://...","accountInfo":"账号:xxx"}'
+                        : formData.productType === 'SERVICE'
+                            ? '服务类可留空,支付后系统自动生成核销码'
+                        : formData.productType === 'SUBSCRIPTION'
+                          ? '{"validityDays":30}'
+                          : '按商品类型填写交付配置'
+                    }
+                    className="no-scrollbar w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-mono text-xs leading-relaxed text-slate-700 outline-none transition-all focus:border-primary focus:bg-white"
+                  />
+                </div>
+              )}
+            </div>
+
+            {formData.productType === 'CARD_KEY' && (
+              <div className="flex flex-col gap-5 rounded-[28px] border border-slate-100 bg-slate-50 p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
+                      <KeyRound className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">卡密库存池</h3>
+                      <p className="text-xs font-bold text-slate-400">
+                        {isEdit ? '每行一条卡密，上传后进入可售库存' : '保存商品后可上传卡密'}
+                      </p>
+                    </div>
+                  </div>
+                  {isEdit && (
+                    <button
+                      type="button"
+                      onClick={() => void loadCardKeys()}
+                      disabled={isCardKeyLoading}
+                      className="flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-600 shadow-sm transition-all hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isCardKeyLoading ? 'animate-spin' : ''}`} />
+                      刷新
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {buildCardKeyStats(cardKeySummary).map((item) => (
+                    <div key={item.label} className="rounded-2xl bg-white p-4 shadow-sm">
+                      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</div>
+                      <div className="mt-2 text-2xl font-black text-slate-900">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {isEdit ? (
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,0.75fr)]">
+                    <div className="flex flex-col gap-3">
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        批量上传
+                      </label>
+                      <textarea
+                        rows={7}
+                        value={cardKeyInput}
+                        onChange={(event) => setCardKeyInput(event.target.value)}
+                        placeholder={'VIP-2026-0001\nVIP-2026-0002\nVIP-2026-0003'}
+                        className="no-scrollbar w-full rounded-[20px] border-2 border-white bg-white px-5 py-4 font-mono text-xs leading-relaxed text-slate-700 outline-none transition-all focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleCardKeyUpload()}
+                        disabled={isCardKeyUploading}
+                        className="flex items-center justify-center gap-2 rounded-[20px] bg-slate-900 px-5 py-4 text-sm font-black text-white shadow-lg transition-all hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Upload className="h-4 w-4" />
+                        {isCardKeyUploading ? '上传中...' : '上传卡密'}
+                      </button>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                      <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        最近卡密
+                      </label>
+                      <div className="overflow-hidden rounded-[20px] bg-white shadow-sm">
+                        {cardKeys.length === 0 ? (
+                          <div className="px-5 py-8 text-center text-xs font-bold text-slate-400">
+                            {isCardKeyLoading ? '加载中...' : '暂无卡密'}
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-slate-100">
+                            {cardKeys.map((cardKey) => (
+                              <div key={cardKey.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                                <div className="min-w-0">
+                                  <div className="truncate font-mono text-xs font-black text-slate-800">
+                                    {cardKey.cardCode}
+                                  </div>
+                                  <div className="mt-1 text-[10px] font-bold text-slate-400">
+                                    {formatDate(cardKey.createTime)}
+                                  </div>
+                                </div>
+                                <span
+                                  className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-black ${getCardKeyStatusClass(cardKey.status)}`}
+                                >
+                                  {getCardKeyStatusLabel(cardKey.status)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+                    当前商品还未创建，保存后即可上传卡密库存。
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
               <Field
                 label="主图 URL"
@@ -377,4 +608,41 @@ function Field({
       </div>
     </div>
   );
+}
+
+function buildCardKeyStats(summary: MerchantCardKeySummary | null) {
+  return [
+    { label: '全部', value: summary?.totalCount ?? 0 },
+    { label: '可售', value: summary?.availableCount ?? 0 },
+    { label: '已售', value: summary?.usedCount ?? 0 },
+    { label: '已退', value: summary?.returnedCount ?? 0 },
+    { label: '停用', value: summary?.disabledCount ?? 0 },
+  ];
+}
+
+function getCardKeyStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    AVAILABLE: '可售',
+    USED: '已售',
+    RETURNED: '已退',
+    DISABLED: '停用',
+  };
+  return labels[status || ''] || status || '-';
+}
+
+function getCardKeyStatusClass(status?: string | null) {
+  const classes: Record<string, string> = {
+    AVAILABLE: 'bg-emerald-50 text-emerald-600',
+    USED: 'bg-blue-50 text-blue-600',
+    RETURNED: 'bg-amber-50 text-amber-600',
+    DISABLED: 'bg-slate-100 text-slate-500',
+  };
+  return classes[status || ''] || 'bg-slate-100 text-slate-500';
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return '-';
+  }
+  return value.replace('T', ' ').slice(0, 16);
 }

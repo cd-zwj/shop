@@ -85,6 +85,7 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final PromotionService promotionService;
     private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
     private final UserBehaviorLogService userBehaviorLogService;
+    private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService;
 
     /**
      * 创建订单。
@@ -117,6 +118,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setPayableAmount(pricingResult.getPayableAmount());
         salesOrder.setSubject(resolveSubject(dto.getSubject(), orderLines));
         salesOrder.setSource(dto.getSource());
+        salesOrder.setStoreId(resolveStoreId(orderLines));
         salesOrder.setWalletStrategy(dto.getWalletStrategy().name());
         salesOrder.setExpireTime(LocalDateTime.now().plusMinutes(30));
         salesOrder.setDeleted(0);
@@ -504,6 +506,12 @@ public class AppOrderServiceImpl implements AppOrderService {
             orderItem.setPrice(orderLine.product().getPrice());
             orderItem.setQuantity(orderLine.quantity());
             orderItem.setSubtotal(orderLine.subtotal());
+            // 冗余商品类型与初始交付状态，避免后续商品改类型影响历史订单的交付路由
+            String productType = orderLine.product().getProductType();
+            orderItem.setProductType(productType == null || productType.isBlank()
+                    ? com.payment.enums.ProductTypeEnum.PHYSICAL.name()
+                    : productType);
+            orderItem.setDeliveryStatus(com.payment.enums.DeliveryStatusEnum.PENDING.name());
             return orderItem;
         }).collect(java.util.stream.Collectors.toList());
         if (!items.isEmpty()) {
@@ -544,6 +552,14 @@ public class AppOrderServiceImpl implements AppOrderService {
             return firstLine.product().getName() + " x " + firstLine.quantity();
         }
         return firstLine.product().getName() + "等" + orderLines.size() + "件商品";
+    }
+
+    private Long resolveStoreId(List<OrderLine> orderLines) {
+        return orderLines.stream()
+                .map(orderLine -> orderLine.product().getStoreId())
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -666,6 +682,10 @@ public class AppOrderServiceImpl implements AppOrderService {
                     "消费赠送积分"
             );
         }
+
+        // 钱包支付链路与外部支付回调链路都汇入此处,统一在事务内入队交付事件。
+        // 写 Outbox 与订单状态变更必须原子化:Outbox 写失败应回滚订单状态,由调用方重试。
+        orderDeliveryService.enqueueDelivery(salesOrder.getOrderNo());
     }
 
     private OrderPaymentVO buildOrderPaymentVO(SalesOrder salesOrder) {

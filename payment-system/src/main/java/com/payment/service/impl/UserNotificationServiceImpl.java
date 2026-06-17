@@ -3,15 +3,20 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.entity.UserNotification;
 import com.payment.mapper.UserNotificationMapper;
+import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
+import com.payment.service.outbox.OutboxMessageCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -22,6 +27,7 @@ import java.util.Set;
 public class UserNotificationServiceImpl implements UserNotificationService {
 
     private final UserNotificationMapper notificationMapper;
+    private final OutboxPublisher outboxPublisher;
 
     /** 允许的通知分类 */
     private static final Set<String> ALLOWED_CATEGORIES = Set.of(
@@ -64,7 +70,27 @@ public class UserNotificationServiceImpl implements UserNotificationService {
         notification.setCreateTime(now);
         notification.setUpdateTime(now);
         notificationMapper.insert(notification);
+        publishNotificationEvent(notification);
         return notification;
+    }
+
+    private void publishNotificationEvent(UserNotification notification) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("bizType", "USER_NOTIFICATION");
+        body.put("notificationId", notification.getId());
+        body.put("platformUserId", notification.getPlatformUserId());
+        body.put("title", notification.getTitle());
+        body.put("content", notification.getContent());
+        body.put("category", notification.getCategory());
+        body.put("createTime", notification.getCreateTime());
+
+        outboxPublisher.publish(OutboxMessageCommand.builder()
+                .messagePrefix("NTF")
+                .bizType("USER_NOTIFICATION")
+                .bizNo("USER_NOTIFICATION_" + notification.getId())
+                .routingKey(RabbitMQConfig.USER_NOTIFICATION_QUEUE)
+                .messageBody(body)
+                .build());
     }
 
     /**

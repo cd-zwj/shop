@@ -1,6 +1,7 @@
 package com.payment.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -39,7 +40,7 @@ public class RefundApplication implements Serializable {
     /** 退款类型：REFUND_ONLY=仅退款，RETURN_REFUND=退货退款 */
     private String refundType;
 
-    /** 退款状态：PENDING/APPROVED/REJECTED/PROCESSING/COMPLETED/CANCELLED */
+    /** 退款状态：PENDING/APPROVED/REJECTED/PROCESSING/COMPLETED/FAILED/CANCELLED */
     private String refundStatus;
 
     /** 退款金额 */
@@ -66,4 +67,20 @@ public class RefundApplication implements Serializable {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    /** 当前退款目标的交付状态快照，仅用于接口展示。 */
+    @TableField(exist = false)
+    private String deliveryStatus;
+
+    /** 当前订单剩余可退金额，仅用于接口展示。 */
+    @TableField(exist = false)
+    private BigDecimal refundableAmount;
+
+    /** 是否建议商家同意后快速进入渠道退款。 */
+    @TableField(exist = false)
+    private Boolean quickRefundSuggested;
+
+    /** 商家审核提示文案。 */
+    @TableField(exist = false)
+    private String refundSuggestion;
 }

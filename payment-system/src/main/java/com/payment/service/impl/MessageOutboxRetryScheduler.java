@@ -58,7 +58,11 @@ public class MessageOutboxRetryScheduler {
             return;
         }
 
-        rabbitTemplate.convertAndSend(record.getRoutingKey(), record.getMessageBody());
+        if (record.getExchangeName() == null || record.getExchangeName().isBlank()) {
+            rabbitTemplate.convertAndSend(record.getRoutingKey(), record.getMessageBody());
+        } else {
+            rabbitTemplate.convertAndSend(record.getExchangeName(), record.getRoutingKey(), record.getMessageBody());
+        }
         MessageOutbox successCopy = record.withSendSuccess();
         messageOutboxMapper.updateById(successCopy);
         log.info("Outbox republished, id={}, bizType={}, bizNo={}", record.getId(), record.getBizType(), record.getBizNo());

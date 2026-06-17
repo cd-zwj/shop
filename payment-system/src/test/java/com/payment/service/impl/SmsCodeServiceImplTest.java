@@ -1,29 +1,36 @@
 package com.payment.service.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.config.SmsAuthProperties;
+import com.payment.mapper.RetryTaskMapper;
+import com.payment.service.OutboxPublisher;
 import com.payment.service.SmsCodeService;
+import com.payment.service.outbox.OutboxMessageCommand;
 import com.payment.service.sms.SmsSender;
 import com.payment.util.RedisUtils;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,18 +48,33 @@ class SmsCodeServiceImplTest {
      * 判断是否需要SendLoginCodeWhenSmsEnabled。
      */
     @Test
-    @DisplayName("短信开启时应发送验证码并调用 SmsSender.send")
-    void shouldSendLoginCodeWhenSmsEnabled() {
+    @DisplayName("短信开启时应生成验证码并写入短信发送 Outbox")
+    void shouldPublishSmsOutboxWhenSmsEnabled() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.exists(anyString())).thenReturn(false);
         when(redisUtils.incrementAndGet(anyString(), anyLong(), any())).thenReturn(1L);
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         assertDoesNotThrow(() -> service.sendLoginCode("13800000000"));
         verify(redisUtils, times(2)).set(anyString(), anyString(), any(Duration.class));
-        verify(smsSender).send(eq("13800000000"), anyString());
+        verify(smsSender, never()).send(anyString(), anyString());
+        verifyNoInteractions(retryTaskMapper);
+
+        ArgumentCaptor<OutboxMessageCommand> commandCaptor = ArgumentCaptor.forClass(OutboxMessageCommand.class);
+        verify(outboxPublisher).publish(commandCaptor.capture());
+        OutboxMessageCommand command = commandCaptor.getValue();
+        assertEquals("SMS_SEND", command.getBizType());
+        assertEquals(RabbitMQConfig.SMS_SEND_QUEUE, command.getRoutingKey());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) command.getMessageBody();
+        assertEquals("LOGIN_CODE", body.get("scene"));
+        assertEquals("13800000000", body.get("phone"));
+        assertTrue(body.get("code").toString().matches("\\d{6}"));
+        assertEquals("SMS_LOGIN_13800000000_" + body.get("code"), command.getBizNo());
     }
 
     /**
@@ -62,14 +84,17 @@ class SmsCodeServiceImplTest {
     @DisplayName("短信未开启时应拒绝发送")
     void shouldRejectSendWhenSmsDisabled() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = new SmsAuthProperties();
         properties.setEnabled(false);
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.sendLoginCode("13800000000"));
 
         assertEquals("短信能力未开启，请联系管理员配置", exception.getMessage());
         verify(smsSender, never()).send(anyString(), anyString());
+        verifyNoInteractions(outboxPublisher);
     }
 
     /**
@@ -79,10 +104,12 @@ class SmsCodeServiceImplTest {
     @DisplayName("验证码正确时应验证并消费")
     void shouldValidateAndConsumeLoginCode() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.get("auth:sms:code:login:13800000000")).thenReturn("654321");
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         assertDoesNotThrow(() -> service.validateLoginCode("13800000000", "654321", true));
         verify(redisUtils).delete("auth:sms:code:login:13800000000");
@@ -95,10 +122,12 @@ class SmsCodeServiceImplTest {
     @DisplayName("验证码错误时应拒绝并报错")
     void shouldRejectWrongLoginCode() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.get("auth:sms:code:login:13800000000")).thenReturn("654321");
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -110,32 +139,61 @@ class SmsCodeServiceImplTest {
     }
 
     @Test
-    @DisplayName("SmsSender 抛异常时应包装为 BusinessException")
-    void shouldWrapSenderExceptionAsBusinessException() {
+    @DisplayName("Outbox 写入失败时不应同步调用短信供应商")
+    void shouldNotCallSenderWhenOutboxPublishFails() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.exists(anyString())).thenReturn(false);
         when(redisUtils.incrementAndGet(anyString(), anyLong(), any())).thenReturn(1L);
-        doThrow(new RuntimeException("供应商异常")).when(smsSender).send(anyString(), anyString());
+        when(outboxPublisher.publish(any())).thenThrow(new BusinessException("Outbox routingKey cannot be blank"));
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> service.sendLoginCode("13800000000")
         );
 
-        assertEquals("短信发送失败，请稍后重试", exception.getMessage());
+        assertEquals("Outbox routingKey cannot be blank", exception.getMessage());
+        verify(smsSender, never()).send(anyString(), anyString());
+        verifyNoInteractions(retryTaskMapper);
+    }
+
+    @Test
+    @DisplayName("重试发码应使用已有验证码写入短信发送 Outbox")
+    void shouldRetryLoginCodePublishOutboxWithoutCreatingNewSmsCode() {
+        RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
+        SmsAuthProperties properties = buildEnabledProperties();
+        when(redisUtils.get("auth:sms:code:login:13800000000")).thenReturn("654321");
+
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
+
+        assertDoesNotThrow(() -> service.retryLoginCode("13800000000"));
+        verify(smsSender, never()).send(anyString(), anyString());
+        ArgumentCaptor<OutboxMessageCommand> commandCaptor = ArgumentCaptor.forClass(OutboxMessageCommand.class);
+        verify(outboxPublisher).publish(commandCaptor.capture());
+        assertEquals("SMS_SEND", commandCaptor.getValue().getBizType());
+        assertEquals("SMS_LOGIN_13800000000_654321", commandCaptor.getValue().getBizNo());
+        verify(redisUtils, never()).exists(anyString());
+        verify(redisUtils, never()).incrementAndGet(anyString(), anyLong(), any());
+        verify(redisUtils, never()).set(anyString(), anyString(), any(Duration.class));
+        verifyNoInteractions(retryTaskMapper);
     }
 
     @Test
     @DisplayName("验证码过期时应报错")
     void shouldRejectWhenCodeExpired() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.get("auth:sms:code:login:13800000000")).thenReturn(null);
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -149,10 +207,12 @@ class SmsCodeServiceImplTest {
     @DisplayName("coolDown 期间应拒绝发送")
     void shouldRejectSendDuringCooldown() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.exists(anyString())).thenReturn(true);
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -161,17 +221,20 @@ class SmsCodeServiceImplTest {
 
         assertEquals("验证码发送过于频繁，请稍后再试", exception.getMessage());
         verify(smsSender, never()).send(anyString(), anyString());
+        verifyNoInteractions(outboxPublisher);
     }
 
     @Test
     @DisplayName("每日发送次数超限时应拒绝发送")
     void shouldRejectWhenDailyLimitExceeded() {
         RedisUtils redisUtils = mock(RedisUtils.class);
+        RetryTaskMapper retryTaskMapper = mock(RetryTaskMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         SmsAuthProperties properties = buildEnabledProperties();
         when(redisUtils.exists(anyString())).thenReturn(false);
         when(redisUtils.incrementAndGet(anyString(), anyLong(), any())).thenReturn(21L);
 
-        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, smsSender);
+        SmsCodeService service = new SmsCodeServiceImpl(redisUtils, properties, outboxPublisher);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -180,6 +243,7 @@ class SmsCodeServiceImplTest {
 
         assertEquals("今日验证码发送次数已达上限，请明天再试", exception.getMessage());
         verify(smsSender, never()).send(anyString(), anyString());
+        verifyNoInteractions(outboxPublisher);
     }
 
     /**

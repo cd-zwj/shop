@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.entity.UserNotification;
 import com.payment.mapper.UserNotificationMapper;
+import com.payment.service.OutboxPublisher;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -26,7 +27,7 @@ class UserNotificationServiceImplTest {
     @Test
     void listShouldReturnCurrentUserNotifications() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         Page<UserNotification> page = new Page<>(1, 20);
         page.setRecords(java.util.List.of(buildNotification(1L, 100L, 0)));
         page.setTotal(1);
@@ -45,7 +46,7 @@ class UserNotificationServiceImplTest {
     @Test
     void markReadShouldRequireOwnership() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.selectById(1L)).thenReturn(buildNotification(1L, 200L, 0));
 
         assertThrows(BusinessException.class, () -> service.markRead(100L, 1L));
@@ -57,7 +58,7 @@ class UserNotificationServiceImplTest {
     @Test
     void markReadShouldPersistReadStatus() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.selectById(1L)).thenReturn(buildNotification(1L, 100L, 0));
 
         UserNotification result = service.markRead(100L, 1L);
@@ -74,7 +75,7 @@ class UserNotificationServiceImplTest {
     @Test
     void markReadShouldSkipPersistWhenAlreadyRead() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.selectById(1L)).thenReturn(buildNotification(1L, 100L, 1));
 
         UserNotification result = service.markRead(100L, 1L);
@@ -89,7 +90,7 @@ class UserNotificationServiceImplTest {
     @Test
     void countUnreadShouldReturnMapperCount() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.selectCount(any())).thenReturn(3L);
 
         assertEquals(3L, service.countUnread(100L));
@@ -98,7 +99,7 @@ class UserNotificationServiceImplTest {
     @Test
     void countUnreadShouldReturnZeroWhenMapperReturnsNull() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.selectCount(any())).thenReturn(null);
 
         assertEquals(0L, service.countUnread(100L));
@@ -110,7 +111,7 @@ class UserNotificationServiceImplTest {
     @Test
     void markAllReadShouldBatchUpdateUnread() {
         UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
-        UserNotificationServiceImpl service = new UserNotificationServiceImpl(notificationMapper);
+        UserNotificationServiceImpl service = service(notificationMapper);
         when(notificationMapper.update(any(), any())).thenReturn(5);
 
         int affected = service.markAllRead(100L);
@@ -131,5 +132,9 @@ class UserNotificationServiceImplTest {
         notification.setReadStatus(readStatus);
         notification.setDeleted(0);
         return notification;
+    }
+
+    private UserNotificationServiceImpl service(UserNotificationMapper notificationMapper) {
+        return new UserNotificationServiceImpl(notificationMapper, mock(OutboxPublisher.class));
     }
 }

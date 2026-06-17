@@ -1,0 +1,334 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, Clock, Copy, ExternalLink, Package, Truck, XCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useToast } from '../context/ToastContext';
+import { appPurchasesService, type DeliveryStatus, type ProductType, type PurchaseRecord } from '../services/modules/appPurchases';
+import { EmptyState } from '../components/ui/EmptyState';
+import { cn } from '../lib/utils';
+
+/* ------------------------------------------------------------------ */
+/*  Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+const TABS: { key: 'ALL' | DeliveryStatus; label: string }[] = [
+  { key: 'ALL', label: '全部' },
+  { key: 'PENDING', label: '待交付' },
+  { key: 'DELIVERED', label: '已交付' },
+  { key: 'CONFIRMED', label: '已确认' },
+];
+
+const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
+  PHYSICAL: '实物',
+  VIRTUAL: '虚拟内容',
+  CARD_KEY: '兑换码',
+  SERVICE: '服务',
+  SUBSCRIPTION: '订阅',
+};
+
+const STATUS_STYLE: Record<DeliveryStatus, { label: string; cls: string }> = {
+  PENDING: { label: '待交付', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  DELIVERING: { label: '交付中', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+  DELIVERED: { label: '已交付', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  CONFIRMED: { label: '已确认', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  FAILED: { label: '交付失败', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
+  REVOKED: { label: '已撤销', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+};
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+function parsePayload(payload?: string | null): Record<string, unknown> | null {
+  if (!payload) return null;
+  try {
+    const v = JSON.parse(payload);
+    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatTime(t?: string | null): string {
+  if (!t) return '';
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return t;
+  return d.toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
+}
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
+
+export default function MyPurchases() {
+  const navigate = useNavigate();
+  const { showToast } = useToast();
+  const [tab, setTab] = useState<'ALL' | DeliveryStatus>('ALL');
+  const [items, setItems] = useState<PurchaseRecord[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await appPurchasesService.list(tab === 'ALL' ? undefined : tab, 1, 50);
+      setItems(res.records || []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '加载失败';
+      showToast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [tab, showToast]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleConfirm(id: number) {
+    try {
+      await appPurchasesService.confirm(id);
+      showToast('已确认', 'success');
+      void load();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '操作失败';
+      showToast(msg, 'error');
+    }
+  }
+
+  async function handleCopy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('已复制到剪贴板', 'success');
+    } catch {
+      showToast('复制失败', 'error');
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4 pb-20">
+      {/* Header */}
+      <section className="flex items-center gap-3 bg-white px-4 py-4 shadow-sm">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-50 text-slate-600 hover:bg-slate-100"
+          aria-label="返回"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <h1 className="text-lg font-black tracking-tight text-slate-900">我的已购</h1>
+      </section>
+
+      {/* Tabs */}
+      <section className="px-4">
+        <div className="flex gap-2 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                'flex-shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition-all',
+                tab === t.key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* List */}
+      <section className="flex flex-col gap-3 px-4">
+        {loading && items.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-400">加载中...</div>
+        ) : items.length === 0 ? (
+          <EmptyState
+            icon={<Package className="h-6 w-6" />}
+            title="还没有已购商品"
+            subtitle="支付完成后,商品交付信息会在这里展示"
+          />
+        ) : (
+          items.map((item) => (
+            <PurchaseCard
+              key={item.id}
+              record={item}
+              onConfirm={() => handleConfirm(item.id)}
+              onCopy={handleCopy}
+            />
+          ))
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Card                                                               */
+/* ------------------------------------------------------------------ */
+
+interface CardProps {
+  record: PurchaseRecord;
+  onConfirm: () => void;
+  onCopy: (text: string) => void;
+}
+
+function PurchaseCard({ record, onConfirm, onCopy }: CardProps) {
+  const payload = useMemo(() => parsePayload(record.payload), [record.payload]);
+  const statusStyle = STATUS_STYLE[record.status] ?? STATUS_STYLE.PENDING;
+  const productLabel = PRODUCT_TYPE_LABEL[record.productType] ?? record.productType;
+
+  return (
+    <article className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
+          <span>订单 {record.orderNo}</span>
+        </div>
+        <span className={cn('rounded-full border px-2.5 py-0.5 text-[11px] font-black', statusStyle.cls)}>
+          {statusStyle.label}
+        </span>
+      </header>
+
+      <div className="mt-3 flex items-center gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 text-slate-400">
+          <IconForType type={record.productType} />
+        </div>
+        <div className="flex flex-1 flex-col">
+          <span className="text-sm font-black text-slate-900">{productLabel}</span>
+          <span className="text-xs text-slate-400">下单时间 {formatTime(record.createTime)}</span>
+        </div>
+      </div>
+
+      {/* Payload 渲染：按类型展示对应字段 */}
+      <DeliveryDetail record={record} payload={payload} onCopy={onCopy} />
+
+      {/* 操作区 */}
+      {record.status === 'DELIVERED' && (
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={onConfirm}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            确认收货
+          </button>
+        </div>
+      )}
+
+      {record.status === 'FAILED' && record.failReason && (
+        <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
+          失败原因: {record.failReason}
+        </p>
+      )}
+    </article>
+  );
+}
+
+function IconForType({ type }: { type: ProductType }) {
+  switch (type) {
+    case 'PHYSICAL':
+      return <Truck className="h-5 w-5" />;
+    case 'VIRTUAL':
+      return <ExternalLink className="h-5 w-5" />;
+    case 'CARD_KEY':
+      return <Copy className="h-5 w-5" />;
+    case 'SERVICE':
+      return <CheckCircle2 className="h-5 w-5" />;
+    case 'SUBSCRIPTION':
+      return <Clock className="h-5 w-5" />;
+    default:
+      return <Package className="h-5 w-5" />;
+  }
+}
+
+interface DetailProps {
+  record: PurchaseRecord;
+  payload: Record<string, unknown> | null;
+  onCopy: (text: string) => void;
+}
+
+function DeliveryDetail({ record, payload, onCopy }: DetailProps) {
+  if (record.status === 'PENDING' || record.status === 'DELIVERING') {
+    return (
+      <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+        {record.productType === 'PHYSICAL' ? '等待商户发货...' : '正在准备交付内容...'}
+      </p>
+    );
+  }
+  if (record.status === 'REVOKED') {
+    return (
+      <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-500">该交付已撤销(退款)</p>
+    );
+  }
+  if (!payload) {
+    return null;
+  }
+
+  if (record.productType === 'VIRTUAL') {
+    const url = payload.contentUrl as string | undefined;
+    const account = payload.accountInfo as string | undefined;
+    return (
+      <div className="mt-3 flex flex-col gap-2 rounded-xl bg-emerald-50 px-3 py-2.5">
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-xs font-black text-emerald-700 hover:underline"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            查看内容
+          </a>
+        )}
+        {account && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-emerald-700">账号: {account}</span>
+            <button onClick={() => onCopy(account)} className="text-emerald-600 hover:text-emerald-800">
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+  if (record.productType === 'CARD_KEY') {
+    const code = (payload.code as string) || '';
+    return (
+      <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-slate-900 px-3 py-2.5">
+        <span className="font-mono text-sm font-black text-white">{code}</span>
+        {code && (
+          <button onClick={() => onCopy(code)} className="text-slate-300 hover:text-white">
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (record.productType === 'SERVICE') {
+    const code = (payload.verifyCode as string) || '';
+    return (
+      <div className="mt-3 rounded-xl bg-sky-50 px-3 py-2.5">
+        <p className="text-xs font-medium text-sky-700">到店出示核销码</p>
+        <p className="mt-1 font-mono text-lg font-black tracking-widest text-sky-900">{code}</p>
+      </div>
+    );
+  }
+  if (record.productType === 'SUBSCRIPTION') {
+    const days = payload.validityDays as number | undefined;
+    return (
+      <div className="mt-3 rounded-xl bg-violet-50 px-3 py-2.5 text-xs font-medium text-violet-700">
+        权益已激活{days ? `,有效期 ${days} 天` : ''}
+        {record.expireTime ? `,到期 ${formatTime(record.expireTime)}` : ''}
+      </div>
+    );
+  }
+  if (record.productType === 'PHYSICAL') {
+    const sn = payload.shippingNo as string | undefined;
+    const company = payload.logisticsCompany as string | undefined;
+    if (!sn) return null;
+    return (
+      <div className="mt-3 rounded-xl bg-slate-50 px-3 py-2.5 text-xs">
+        <p className="font-bold text-slate-700">物流单号: {sn}</p>
+        {company && <p className="mt-0.5 text-slate-500">承运商: {company}</p>}
+      </div>
+    );
+  }
+  return null;
+}

@@ -1,5 +1,12 @@
 import type { SalesOrder, SalesOrderDetail } from './order';
 
+export type ProductType =
+  | 'PHYSICAL'
+  | 'VIRTUAL'
+  | 'CARD_KEY'
+  | 'SERVICE'
+  | 'SUBSCRIPTION';
+
 export interface MerchantProduct {
   id: number;
   tenantId: number;
@@ -12,6 +19,9 @@ export interface MerchantProduct {
   imageUrl?: string | null;
   stock: number;
   status: 'active' | 'inactive' | 'out_of_stock' | string;
+  productType?: ProductType | null;
+  /** JSON 字符串,按 productType 解读 */
+  deliveryConfig?: string | null;
   createTime?: string | null;
   updateTime?: string | null;
 }
@@ -26,6 +36,9 @@ export interface MerchantProductUpsertPayload {
   imageUrl?: string;
   stock: number;
   status?: 'active' | 'inactive' | 'out_of_stock';
+  productType?: ProductType;
+  /** JSON 字符串,提交时按需序列化 */
+  deliveryConfig?: string;
 }
 
 export interface MerchantProductFilters {
@@ -34,6 +47,32 @@ export interface MerchantProductFilters {
   search?: string;
   category?: string;
   status?: string;
+}
+
+export type MerchantCardKeyStatus = 'AVAILABLE' | 'USED' | 'RETURNED' | 'DISABLED';
+
+export interface MerchantCardKey {
+  id: number;
+  tenantId: number;
+  productId: number;
+  cardCode: string;
+  status: MerchantCardKeyStatus | string;
+  orderNo?: string | null;
+  orderItemId?: number | null;
+  usedTime?: string | null;
+  returnedTime?: string | null;
+  returnReason?: string | null;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface MerchantCardKeySummary {
+  productId: number;
+  availableCount: number;
+  usedCount: number;
+  returnedCount: number;
+  disabledCount: number;
+  totalCount: number;
 }
 
 export interface MerchantOrderFilters {

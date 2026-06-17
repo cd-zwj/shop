@@ -53,6 +53,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Profile = lazy(() => import('./pages/Profile'));
 const UserOrders = lazy(() => import('./pages/UserOrders'));
 const UserOrderDetail = lazy(() => import('./pages/UserOrderDetail'));
+const MyPurchases = lazy(() => import('./pages/MyPurchases'));
 const PaymentStatus = lazy(() => import('./pages/PaymentStatus'));
 const PublicMerchantDetail = lazy(() => import('./pages/PublicMerchantDetail'));
 const CouponCenter = lazy(() => import('./pages/CouponCenter'));
@@ -342,6 +343,7 @@ function AppContent() {
             <Route path="/history" element={<AuthGuard><ConsumptionHistory /></AuthGuard>} />
             <Route path="/orders" element={<AuthGuard><UserOrders /></AuthGuard>} />
             <Route path="/order/:id" element={<AuthGuard><UserOrderDetail /></AuthGuard>} />
+            <Route path="/my-purchases" element={<AuthGuard><MyPurchases /></AuthGuard>} />
             <Route path="/orders/:orderNo/refund" element={<AuthGuard><ApplyRefund /></AuthGuard>} />
             <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
             <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />

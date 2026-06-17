@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.dto.AppCouponTemplateVO;
 import com.payment.dto.AppUserCouponVO;
 import com.payment.dto.CouponScopeCreateDTO;
@@ -29,12 +30,15 @@ import com.payment.mapper.CouponWriteOffRecordMapper;
 import com.payment.mapper.MemberAccountTagMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.mapper.UserCouponMapper;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -196,12 +200,19 @@ class CouponServiceImplTest {
         CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
         CouponReceiveRecordMapper receiveRecordMapper = mock(CouponReceiveRecordMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         CouponServiceImpl service = service(templateMapper, userCouponMapper, receiveRecordMapper,
-                mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
+                mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class),
+                outboxPublisher);
 
         when(templateMapper.selectById(201L)).thenReturn(activeTemplate());
         when(userCouponMapper.claimCouponSlot(anyLong(), anyLong())).thenReturn(1);
         when(userCouponMapper.selectCount(any())).thenReturn(0L);
+        when(userCouponMapper.insert(any())).thenAnswer(invocation -> {
+            UserCoupon coupon = invocation.getArgument(0);
+            coupon.setId(501L);
+            return 1;
+        });
 
         UserCoupon result = service.receiveCoupon(201L, 9L, 100L, "SO_REWARD_1");
 
@@ -219,6 +230,7 @@ class CouponServiceImplTest {
         assertEquals(201L, recordCaptor.getValue().getCouponTemplateId());
         assertEquals("SO_REWARD_1", recordCaptor.getValue().getBizNo());
         assertEquals(UserCouponStatusEnum.RECEIVED.name(), result.getCouponStatus());
+        assertCouponEvent(outboxPublisher, "RECEIVED", "SO_REWARD_1", UserCouponStatusEnum.RECEIVED.name(), null);
     }
 
     @Test
@@ -254,8 +266,9 @@ class CouponServiceImplTest {
     void lockCouponShouldMoveReceivedCouponToLockedAndWriteRecord() {
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
         CouponLockRecordMapper lockRecordMapper = mock(CouponLockRecordMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         CouponServiceImpl service = service(userCouponMapper, lockRecordMapper,
-                mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
+                mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class), outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(receivedCoupon());
         when(userCouponMapper.updateById(any())).thenReturn(1);
@@ -273,6 +286,7 @@ class CouponServiceImplTest {
         assertEquals(501L, recordCaptor.getValue().getUserCouponId());
         assertEquals("SO1001", recordCaptor.getValue().getBizNo());
         assertEquals(UserCouponStatusEnum.LOCKED.name(), recordCaptor.getValue().getLockStatus());
+        assertCouponEvent(outboxPublisher, "LOCKED", "SO1001", UserCouponStatusEnum.LOCKED.name(), "SO1001");
     }
 
     @Test
@@ -293,8 +307,9 @@ class CouponServiceImplTest {
     void releaseCouponShouldRestoreReceivedStatusAndWriteReleaseRecord() {
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
         CouponReleaseRecordMapper releaseRecordMapper = mock(CouponReleaseRecordMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         CouponServiceImpl service = service(userCouponMapper, mock(CouponLockRecordMapper.class),
-                releaseRecordMapper, mock(CouponWriteOffRecordMapper.class));
+                releaseRecordMapper, mock(CouponWriteOffRecordMapper.class), outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(lockedCoupon());
         when(userCouponMapper.updateById(any())).thenReturn(1);
@@ -309,14 +324,16 @@ class CouponServiceImplTest {
         verify(releaseRecordMapper).insert(recordCaptor.capture());
         assertEquals("订单取消", recordCaptor.getValue().getReleaseReason());
         assertEquals("SO1001", recordCaptor.getValue().getBizNo());
+        assertCouponEvent(outboxPublisher, "RELEASED", "SO1001", UserCouponStatusEnum.RECEIVED.name(), "SO1001");
     }
 
     @Test
     void writeOffCouponShouldMoveLockedCouponToUsedAndWriteRecord() {
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
         CouponWriteOffRecordMapper writeOffRecordMapper = mock(CouponWriteOffRecordMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         CouponServiceImpl service = service(userCouponMapper, mock(CouponLockRecordMapper.class),
-                mock(CouponReleaseRecordMapper.class), writeOffRecordMapper);
+                mock(CouponReleaseRecordMapper.class), writeOffRecordMapper, outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(lockedCoupon());
         when(userCouponMapper.updateById(any())).thenReturn(1);
@@ -332,6 +349,7 @@ class CouponServiceImplTest {
         verify(writeOffRecordMapper).insert(recordCaptor.capture());
         assertEquals(new BigDecimal("8.00"), recordCaptor.getValue().getDiscountAmount());
         assertEquals(201L, recordCaptor.getValue().getCouponTemplateId());
+        assertCouponEvent(outboxPublisher, "USED", "SO1001", UserCouponStatusEnum.USED.name(), "SO1001");
     }
 
     @Test
@@ -441,10 +459,11 @@ class CouponServiceImplTest {
     void expireCouponsShouldMoveExpiredReceivedCouponsAndWriteRecords() {
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
         CouponExpireRecordMapper expireRecordMapper = mock(CouponExpireRecordMapper.class);
+        OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         CouponServiceImpl service = service(mock(CouponTemplateMapper.class), mock(CouponScopeMapper.class), userCouponMapper,
                 mock(TenantMemberMapper.class), mock(MemberAccountTagMapper.class), mock(CouponReceiveRecordMapper.class),
                 mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class),
-                expireRecordMapper);
+                expireRecordMapper, outboxPublisher);
         UserCoupon coupon = receivedCoupon();
         coupon.setExpireTime(LocalDateTime.now().minusMinutes(10));
         when(userCouponMapper.selectList(any())).thenReturn(List.of(coupon));
@@ -463,14 +482,24 @@ class CouponServiceImplTest {
         assertEquals(201L, recordCaptor.getValue().getCouponTemplateId());
         assertEquals("COUPON_EXPIRE_SCAN", recordCaptor.getValue().getBizNo());
         assertEquals("到期扫描", recordCaptor.getValue().getExpireReason());
+        assertCouponEvent(outboxPublisher, "EXPIRED", "COUPON_EXPIRE_SCAN", UserCouponStatusEnum.EXPIRED.name(), null);
     }
 
     private CouponServiceImpl service(UserCouponMapper userCouponMapper,
                                       CouponLockRecordMapper lockRecordMapper,
                                       CouponReleaseRecordMapper releaseRecordMapper,
                                       CouponWriteOffRecordMapper writeOffRecordMapper) {
+        return service(userCouponMapper, lockRecordMapper, releaseRecordMapper, writeOffRecordMapper,
+                mock(OutboxPublisher.class));
+    }
+
+    private CouponServiceImpl service(UserCouponMapper userCouponMapper,
+                                      CouponLockRecordMapper lockRecordMapper,
+                                      CouponReleaseRecordMapper releaseRecordMapper,
+                                      CouponWriteOffRecordMapper writeOffRecordMapper,
+                                      OutboxPublisher outboxPublisher) {
         return service(mock(CouponTemplateMapper.class), userCouponMapper, mock(CouponReceiveRecordMapper.class),
-                lockRecordMapper, releaseRecordMapper, writeOffRecordMapper);
+                lockRecordMapper, releaseRecordMapper, writeOffRecordMapper, outboxPublisher);
     }
 
     private CouponServiceImpl service(CouponTemplateMapper templateMapper,
@@ -479,8 +508,19 @@ class CouponServiceImplTest {
                                       CouponLockRecordMapper lockRecordMapper,
                                       CouponReleaseRecordMapper releaseRecordMapper,
                                       CouponWriteOffRecordMapper writeOffRecordMapper) {
+        return service(templateMapper, userCouponMapper, receiveRecordMapper, lockRecordMapper, releaseRecordMapper,
+                writeOffRecordMapper, mock(OutboxPublisher.class));
+    }
+
+    private CouponServiceImpl service(CouponTemplateMapper templateMapper,
+                                      UserCouponMapper userCouponMapper,
+                                      CouponReceiveRecordMapper receiveRecordMapper,
+                                      CouponLockRecordMapper lockRecordMapper,
+                                      CouponReleaseRecordMapper releaseRecordMapper,
+                                      CouponWriteOffRecordMapper writeOffRecordMapper,
+                                      OutboxPublisher outboxPublisher) {
         return service(templateMapper, mock(CouponScopeMapper.class), userCouponMapper, receiveRecordMapper,
-                lockRecordMapper, releaseRecordMapper, writeOffRecordMapper);
+                lockRecordMapper, releaseRecordMapper, writeOffRecordMapper, outboxPublisher);
     }
 
     private CouponServiceImpl service(CouponTemplateMapper templateMapper,
@@ -490,9 +530,21 @@ class CouponServiceImplTest {
                                       CouponLockRecordMapper lockRecordMapper,
                                       CouponReleaseRecordMapper releaseRecordMapper,
                                       CouponWriteOffRecordMapper writeOffRecordMapper) {
+        return service(templateMapper, scopeMapper, userCouponMapper, receiveRecordMapper, lockRecordMapper,
+                releaseRecordMapper, writeOffRecordMapper, mock(OutboxPublisher.class));
+    }
+
+    private CouponServiceImpl service(CouponTemplateMapper templateMapper,
+                                      CouponScopeMapper scopeMapper,
+                                      UserCouponMapper userCouponMapper,
+                                      CouponReceiveRecordMapper receiveRecordMapper,
+                                      CouponLockRecordMapper lockRecordMapper,
+                                      CouponReleaseRecordMapper releaseRecordMapper,
+                                      CouponWriteOffRecordMapper writeOffRecordMapper,
+                                      OutboxPublisher outboxPublisher) {
         return service(templateMapper, scopeMapper, userCouponMapper, mock(TenantMemberMapper.class),
                 mock(MemberAccountTagMapper.class), receiveRecordMapper, lockRecordMapper, releaseRecordMapper,
-                writeOffRecordMapper);
+                writeOffRecordMapper, outboxPublisher);
     }
 
     private CouponServiceImpl service(CouponTemplateMapper templateMapper,
@@ -504,6 +556,21 @@ class CouponServiceImplTest {
                                       CouponLockRecordMapper lockRecordMapper,
                                       CouponReleaseRecordMapper releaseRecordMapper,
                                       CouponWriteOffRecordMapper writeOffRecordMapper) {
+        return service(templateMapper, scopeMapper, userCouponMapper, tenantMemberMapper, memberAccountTagMapper,
+                receiveRecordMapper, lockRecordMapper, releaseRecordMapper, writeOffRecordMapper,
+                mock(OutboxPublisher.class));
+    }
+
+    private CouponServiceImpl service(CouponTemplateMapper templateMapper,
+                                      CouponScopeMapper scopeMapper,
+                                      UserCouponMapper userCouponMapper,
+                                      TenantMemberMapper tenantMemberMapper,
+                                      MemberAccountTagMapper memberAccountTagMapper,
+                                      CouponReceiveRecordMapper receiveRecordMapper,
+                                      CouponLockRecordMapper lockRecordMapper,
+                                      CouponReleaseRecordMapper releaseRecordMapper,
+                                      CouponWriteOffRecordMapper writeOffRecordMapper,
+                                      OutboxPublisher outboxPublisher) {
         return new CouponServiceImpl(
                 templateMapper,
                 scopeMapper,
@@ -515,8 +582,32 @@ class CouponServiceImplTest {
                 releaseRecordMapper,
                 writeOffRecordMapper,
                 mock(CouponExpireRecordMapper.class),
-                mock(com.payment.service.UserBehaviorLogService.class)
+                mock(com.payment.service.UserBehaviorLogService.class),
+                outboxPublisher
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertCouponEvent(OutboxPublisher outboxPublisher,
+                                   String eventType,
+                                   String bizNo,
+                                   String couponStatus,
+                                   String orderNo) {
+        ArgumentCaptor<OutboxMessageCommand> captor = ArgumentCaptor.forClass(OutboxMessageCommand.class);
+        verify(outboxPublisher).publish(captor.capture());
+        OutboxMessageCommand command = captor.getValue();
+        assertEquals("COUPON_EVENT", command.getBizType());
+        assertEquals(bizNo, command.getBizNo());
+        assertEquals(RabbitMQConfig.COUPON_EVENT_QUEUE, command.getRoutingKey());
+
+        Map<String, Object> body = (Map<String, Object>) command.getMessageBody();
+        assertEquals("COUPON_EVENT", body.get("bizType"));
+        assertEquals(eventType, body.get("eventType"));
+        assertEquals(bizNo, body.get("bizNo"));
+        assertEquals(501L, body.get("userCouponId"));
+        assertEquals(201L, body.get("couponTemplateId"));
+        assertEquals(couponStatus, body.get("couponStatus"));
+        assertEquals(orderNo, body.get("orderNo"));
     }
 
     private CouponServiceImpl service(CouponTemplateMapper templateMapper,
@@ -529,6 +620,22 @@ class CouponServiceImplTest {
                                       CouponReleaseRecordMapper releaseRecordMapper,
                                       CouponWriteOffRecordMapper writeOffRecordMapper,
                                       CouponExpireRecordMapper expireRecordMapper) {
+        return service(templateMapper, scopeMapper, userCouponMapper, tenantMemberMapper, memberAccountTagMapper,
+                receiveRecordMapper, lockRecordMapper, releaseRecordMapper, writeOffRecordMapper, expireRecordMapper,
+                mock(OutboxPublisher.class));
+    }
+
+    private CouponServiceImpl service(CouponTemplateMapper templateMapper,
+                                      CouponScopeMapper scopeMapper,
+                                      UserCouponMapper userCouponMapper,
+                                      TenantMemberMapper tenantMemberMapper,
+                                      MemberAccountTagMapper memberAccountTagMapper,
+                                      CouponReceiveRecordMapper receiveRecordMapper,
+                                      CouponLockRecordMapper lockRecordMapper,
+                                      CouponReleaseRecordMapper releaseRecordMapper,
+                                      CouponWriteOffRecordMapper writeOffRecordMapper,
+                                      CouponExpireRecordMapper expireRecordMapper,
+                                      OutboxPublisher outboxPublisher) {
         return new CouponServiceImpl(
                 templateMapper,
                 scopeMapper,
@@ -540,7 +647,8 @@ class CouponServiceImplTest {
                 releaseRecordMapper,
                 writeOffRecordMapper,
                 expireRecordMapper,
-                mock(com.payment.service.UserBehaviorLogService.class)
+                mock(com.payment.service.UserBehaviorLogService.class),
+                outboxPublisher
         );
     }
 

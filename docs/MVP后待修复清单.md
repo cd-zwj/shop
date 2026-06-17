@@ -88,7 +88,7 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 
 ---
 
-### 6. Controller 绕过 Service 层
+### 6. Controller 绕过 Service 层（已修复第三批）
 
 **文件**:
 - `V1AppCatalogController.java` — 直接注入 `TenantMapper`、`ProductMapper`
@@ -97,9 +97,16 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 
 **修复方案**: 将 Mapper 操作下沉到 Service 层，Controller 只调用 Service 方法。
 
+**2026-06-15 修复结果**:
+- 新增 `AppCatalogService` / `AppCatalogServiceImpl`，承接 C 端商户与商品浏览，含 VIEW 行为埋点降级。
+- 新增 `V1MerchantProductService` / `V1MerchantProductServiceImpl`，承接商户商品 CRUD、库存初始化与 ES 索引发布。
+- `UserNotificationService` 新增 `countUnread` / `markAllRead`，`V1AppNotificationController` 不再直接调用 Mapper。
+- 三个 Controller 退化为纯路由 + VO 转换，无任何 Mapper 注入。
+- 新增 `AppCatalogServiceImplTest`、`V1MerchantProductServiceImplTest`、`UserNotificationServiceImplTest` 共 25 个新单测；`V1AppCatalogIntegrationTest` 继续保证 API 行为。
+
 ---
 
-### 7. SQL 迁移编号冲突
+### 7. SQL 迁移编号冲突（已修复第三批）
 
 **文件**: `payment-system/sql/` 目录
 
@@ -110,15 +117,29 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 
 **修复方案**: 重命名冲突文件，补齐缺失编号。建议统一迁移到 Flyway 管理。
 
+**2026-06-15 修复结果**:
+- `19_message_retry.sql` → `20_message_retry.sql`
+- `20_payment_bill_status_remark.sql` → `25_payment_bill_status_remark.sql`
+- `20_platform_auth_provider.sql` → `31_platform_auth_provider.sql`
+- `import_all.sql` 与 `sql/README.md` 已同步更新，按编号升序导入，去掉了历史 "19/20 重复编号" 的临时注释。
+- Flyway 已在 P3 阶段接管增量迁移（`db/migration/V*.sql`），本批仅整理裸 SQL 目录的编号语义。
+
 ---
 
-### 8. docker-compose 缺少 Elasticsearch
+### 8. docker-compose 缺少 Elasticsearch（已修复第三批）
 
 **文件**: `docker-compose.yml`
 
 **问题**: `application.yml` 配置了 ES 连接（spring.elasticsearch.uris），但 docker-compose 没有 ES 服务，`docker compose up` 会因连接 ES 失败而报错（虽然有降级，但日志会持续报错）。
 
 **修复方案**: 在 docker-compose.yml 中添加 ES 服务，或在 application.yml 中将 ES 配置改为可选（`@ConditionalOnProperty`）。
+
+**2026-06-15 修复结果**: 选择"搜索默认关、按需开"方案：
+- `ElasticsearchConfig` 改为 `matchIfMissing=false`，未启用时不装配 ES 相关 Bean。
+- `application.yml` 暴露 `app.search.enabled` 配置项（默认 `${APP_SEARCH_ENABLED:false}`），并附启用步骤注释。
+- `docker-compose.yml` 显式注入 `APP_SEARCH_ENABLED=false` 与 `ES_URIS`；附可选 `elasticsearch` service 注释块，启用步骤写入 yaml 注释。
+- `ProductSearchServiceImpl` 在 `elasticsearchOperations == null` 时直接走 DB（DEBUG 日志），不再先抛 `IllegalStateException` 再 catch，启动日志干净。
+- 新增 `ProductSearchServiceImplTest` 的 ES 禁用 fallback 单测：`searchProducts` / `searchByCategory` / `syncProduct` 三条路径在 ES 关闭时均无异常并走降级。
 
 ---
 
@@ -166,8 +187,8 @@ lock.tryLock(30, 60, TimeUnit.SECONDS);
 ## 修复建议顺序
 
 ```
-第一批（安全/稳定性）: #1 Redisson锁 → #2 权限缓存
-第二批（核心功能）:   #3 密码重置 → #4 会员降级 → #5 积分过期
-第三批（代码质量）:   #6 Controller重构 → #7 SQL迁移 → #8 docker-compose
-第四批（体验/测试）:  #9 错误处理 → #10 前端测试 → #11 后端测试
+第一批（安全/稳定性）✅: #1 Redisson锁 → #2 权限缓存
+第二批（核心功能）✅:   #3 密码重置 → #4 会员降级 → #5 积分过期
+第三批（代码质量）✅:   #6 Controller重构 → #7 SQL迁移 → #8 docker-compose
+第四批（体验/测试）:    #9 错误处理 → #10 前端测试 → #11 后端测试
 ```

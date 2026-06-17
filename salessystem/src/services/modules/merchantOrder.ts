@@ -29,4 +29,28 @@ export const merchantOrderService = {
       authRole: 'merchant',
     });
   },
+
+  /**
+   * 实物商品发货 - 提交物流单号后将订单项的 deliveryStatus 置为 DELIVERED。
+   */
+  shipItem(tenantId: number, orderItemId: number, shippingNo: string, logisticsCompany?: string) {
+    return request<unknown>({
+      url: `/v1/merchant/tenants/${tenantId}/orders/items/${orderItemId}/ship`,
+      method: 'post',
+      data: { shippingNo, logisticsCompany },
+      authRole: 'merchant',
+    });
+  },
+
+  /**
+   * 服务商品核销 - 提交用户出示的核销码后将交付状态置为 CONFIRMED。
+   */
+  verifyService(tenantId: number, verifyCode: string) {
+    return request<unknown>({
+      url: `/v1/merchant/tenants/${tenantId}/orders/services/verify`,
+      method: 'post',
+      data: { verifyCode },
+      authRole: 'merchant',
+    });
+  },
 };

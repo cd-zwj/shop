@@ -23,7 +23,7 @@ class ProductIndexMessagePublisherTest {
     @Test
     void publishUpsertShouldInsertPendingOutboxRecord() {
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(new OutboxPublisherImpl(messageOutboxMapper));
         Product product = buildProduct();
 
         publisher.publishUpsert(product);
@@ -51,7 +51,7 @@ class ProductIndexMessagePublisherTest {
     @Test
     void publishDeleteShouldInsertDeleteActionOutboxRecord() {
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(new OutboxPublisherImpl(messageOutboxMapper));
         Product product = buildProduct();
 
         publisher.publishDelete(product);
@@ -67,7 +67,7 @@ class ProductIndexMessagePublisherTest {
     @Test
     void publishUpsertShouldInsertOutboxInsideTransaction() {
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
-        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(messageOutboxMapper);
+        ProductIndexMessagePublisher publisher = new ProductIndexMessagePublisher(new OutboxPublisherImpl(messageOutboxMapper));
         Product product = buildProduct();
 
         TransactionSynchronizationManager.initSynchronization();

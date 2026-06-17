@@ -4,18 +4,23 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.config.RabbitMQConfig;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
 import com.payment.enums.PointsDeductStatusEnum;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
+import com.payment.service.CompensationTaskFactory;
 import com.payment.service.MemberPointsAccountService;
+import com.payment.service.OutboxPublisher;
+import com.payment.service.outbox.OutboxMessageCommand;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
 
@@ -27,9 +32,14 @@ import java.util.function.ToIntFunction;
 public class MemberPointsAccountServiceImpl implements MemberPointsAccountService {
 
     private static final String POINTS_EXPIRE_BIZ_TYPE = "POINTS_EXPIRE";
+    private static final String POINTS_GRANT_COMPENSATION_BIZ_TYPE = "POINTS_GRANT";
+    private static final String POINTS_HOLD_COMPENSATION_BIZ_TYPE = "POINTS_HOLD";
+    private static final String POINTS_RELEASE_COMPENSATION_BIZ_TYPE = "POINTS_RELEASE";
 
     private final MemberPointsAccountMapper accountMapper;
     private final MemberPointsLogMapper logMapper;
+    private final CompensationTaskFactory compensationTaskFactory;
+    private final OutboxPublisher outboxPublisher;
 
     /**
      * 获取账号。
@@ -87,6 +97,8 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         Integer before = account.getPoints();
         Integer after = updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), points),
                 current -> current.setTotalEarned(Math.addExact(current.getTotalEarned(), points)),
+                POINTS_GRANT_COMPENSATION_BIZ_TYPE,
+                bizNo,
                 "积分发放失败，请重试");
 
         MemberPointsLog log = new MemberPointsLog();
@@ -101,6 +113,7 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setExpireTime(expireTime);
         log.setRemark(remark);
         logMapper.insert(log);
+        publishPointsEvent("POINTS_GRANTED", log);
     }
 
     /**
@@ -126,6 +139,8 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
                     return Math.subtractExact(current.getPoints(), points);
                 },
                 current -> current.setTotalUsed(Math.addExact(current.getTotalUsed(), points)),
+                POINTS_HOLD_COMPENSATION_BIZ_TYPE,
+                bizNo,
                 "积分预占失败，请重试");
 
         MemberPointsLog log = new MemberPointsLog();
@@ -139,6 +154,7 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setStatus(PointsDeductStatusEnum.PRE_HOLD.name());
         log.setRemark(remark);
         logMapper.insert(log);
+        publishPointsEvent("POINTS_HOLD", log);
         return log;
     }
 
@@ -155,6 +171,7 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
         log.setConfirmTime(LocalDateTime.now());
         logMapper.updateById(log);
+        publishPointsEvent("POINTS_HOLD_CONFIRMED", log);
     }
 
     /**
@@ -172,12 +189,15 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         Integer holdPoints = Math.abs(log.getChangePoints());
         updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), holdPoints),
                 current -> current.setTotalUsed(Math.max(0, current.getTotalUsed() - holdPoints)),
+                POINTS_RELEASE_COMPENSATION_BIZ_TYPE,
+                bizNo,
                 "积分释放失败，请重试");
 
         log.setStatus(PointsDeductStatusEnum.RELEASED.name());
         log.setReleaseTime(LocalDateTime.now());
         log.setReleaseReason(releaseReason);
         logMapper.updateById(log);
+        publishPointsEvent("POINTS_HOLD_RELEASED", log);
     }
 
     /**
@@ -246,7 +266,8 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         PointsChange change = expireAccountWithRetry(
                 getAccount(sourceLog.getTenantId(), sourceLog.getPlatformUserId()),
-                sourceLog.getChangePoints());
+                sourceLog.getChangePoints(),
+                POINTS_EXPIRE_BIZ_TYPE + "_" + sourceLog.getId());
         if (change.deducted <= 0) {
             return 0;
         }
@@ -262,12 +283,15 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         expireLog.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
         expireLog.setRemark("积分到期自动过期");
         logMapper.insert(expireLog);
+        publishPointsEvent("POINTS_EXPIRED", expireLog);
         return change.deducted;
     }
 
     private Integer updateAccountWithRetry(MemberPointsAccount account,
                                            ToIntFunction<MemberPointsAccount> nextPoints,
                                            Consumer<MemberPointsAccount> extraMutation,
+                                           String compensationBizType,
+                                           String compensationBizNo,
                                            String failureMessage) {
         MemberPointsAccount current = account;
         Integer after = null;
@@ -280,10 +304,11 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
             }
             current = accountMapper.selectById(current.getId());
         }
+        compensationTaskFactory.createIfAbsent(compensationBizType, compensationBizNo, failureMessage);
         throw new BusinessException(failureMessage);
     }
 
-    private PointsChange expireAccountWithRetry(MemberPointsAccount account, Integer sourcePoints) {
+    private PointsChange expireAccountWithRetry(MemberPointsAccount account, Integer sourcePoints, String compensationBizNo) {
         MemberPointsAccount current = account;
         for (int retry = 0; retry < 3; retry++) {
             int before = Math.max(0, current.getPoints());
@@ -300,7 +325,9 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
             }
             current = accountMapper.selectById(current.getId());
         }
-        throw new BusinessException("积分过期扣减失败，请重试");
+        String failureMessage = "积分过期扣减失败，请重试";
+        compensationTaskFactory.createIfAbsent(POINTS_EXPIRE_BIZ_TYPE, compensationBizNo, failureMessage);
+        throw new BusinessException(failureMessage);
     }
 
     private static class PointsChange {
@@ -313,5 +340,25 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
             this.after = after;
             this.deducted = deducted;
         }
+    }
+
+    private void publishPointsEvent(String eventType, MemberPointsLog log) {
+        outboxPublisher.publish(OutboxMessageCommand.builder()
+                .messagePrefix("PTS")
+                .bizType("POINTS_EVENT")
+                .bizNo(log.getBizNo())
+                .routingKey(RabbitMQConfig.POINTS_EVENT_QUEUE)
+                .messageBody(Map.of(
+                        "eventType", eventType,
+                        "tenantId", log.getTenantId(),
+                        "platformUserId", log.getPlatformUserId(),
+                        "bizType", log.getBizType(),
+                        "bizNo", log.getBizNo(),
+                        "changePoints", log.getChangePoints(),
+                        "pointsBefore", log.getPointsBefore(),
+                        "pointsAfter", log.getPointsAfter(),
+                        "status", log.getStatus(),
+                        "logId", log.getId() == null ? "" : log.getId()))
+                .build());
     }
 }

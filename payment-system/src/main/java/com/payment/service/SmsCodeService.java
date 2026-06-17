@@ -11,6 +11,11 @@ public interface SmsCodeService {
     void sendLoginCode(String phone);
 
     /**
+     * 重发 Redis 中仍有效的登录验证码，供重试任务调用。
+     */
+    void retryLoginCode(String phone);
+
+    /**
      * 校验登录验证码。
      */
     void validateLoginCode(String phone, String code, boolean consume);

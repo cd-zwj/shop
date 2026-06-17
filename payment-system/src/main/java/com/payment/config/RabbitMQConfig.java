@@ -20,7 +20,14 @@ public class RabbitMQConfig {
     public static final String RECHARGE_ORDER_DELAY_QUEUE = "payment.recharge.delay";
     public static final String V1_RECHARGE_SUCCESS_QUEUE = "payment.v1.recharge.success";
     public static final String V1_ORDER_PAID_QUEUE = "payment.v1.order.paid";
+    public static final String V1_ORDER_DELIVERY_QUEUE = "payment.v1.order.delivery";
     public static final String PRODUCT_INDEX_QUEUE = "payment.product.index";
+    public static final String COUPON_EVENT_QUEUE = "payment.coupon.event";
+    public static final String USER_NOTIFICATION_QUEUE = "payment.user.notification";
+    public static final String USER_BEHAVIOR_QUEUE = "payment.user.behavior";
+    public static final String SMS_SEND_QUEUE = "payment.sms.send";
+    public static final String POINTS_EVENT_QUEUE = "payment.points.event";
+    public static final String AI_ANALYSIS_QUEUE = "payment.ai.analysis";
     public static final String SCAN_REQUEST_QUEUE = "payment.scan.request";
     public static final String SCAN_RESULT_QUEUE = "payment.scan.result";
     
@@ -70,11 +77,67 @@ public class RabbitMQConfig {
     }
 
     /**
+     * v1 订单交付队列。支付成功后由 Consumer 触发交付分发，独立于支付链路便于重试与限流。
+     */
+    @Bean
+    public Queue v1OrderDeliveryQueue() {
+        return new Queue(V1_ORDER_DELIVERY_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
      * 商品索引同步队列。
      */
     @Bean
     public Queue productIndexQueue() {
         return new Queue(PRODUCT_INDEX_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * 优惠券状态事件队列。
+     */
+    @Bean
+    public Queue couponEventQueue() {
+        return new Queue(COUPON_EVENT_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * 用户通知异步推送队列。
+     */
+    @Bean
+    public Queue userNotificationQueue() {
+        return new Queue(USER_NOTIFICATION_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * 用户行为事件队列，供画像与 AI 推荐链路异步消费。
+     */
+    @Bean
+    public Queue userBehaviorQueue() {
+        return new Queue(USER_BEHAVIOR_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * 短信发送队列。
+     */
+    @Bean
+    public Queue smsSendQueue() {
+        return new Queue(SMS_SEND_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * 积分事件队列。
+     */
+    @Bean
+    public Queue pointsEventQueue() {
+        return new Queue(POINTS_EVENT_QUEUE, true, false, false, dlxQueueArgs());
+    }
+
+    /**
+     * AI 分析任务队列。
+     */
+    @Bean
+    public Queue aiAnalysisQueue() {
+        return new Queue(AI_ANALYSIS_QUEUE, true, false, false, dlxQueueArgs());
     }
     
     /**

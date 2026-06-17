@@ -46,10 +46,14 @@ public class SalesOrderDetailVO {
     @AllArgsConstructor
     public static class SalesOrderItemVO {
         private Long id;
+        private Long productId;
         private String productName;
         private Long price;
         private Integer quantity;
         private Long subtotal;
+        private String productType;
+        private String deliveryStatus;
+        private String deliveredTime;
     }
 
     public static SalesOrderDetailVO from(com.payment.dto.SalesOrderDetailVO detailVO) {
@@ -89,10 +93,14 @@ public class SalesOrderDetailVO {
     private static SalesOrderItemVO toItemVO(SalesOrderItem item) {
         return SalesOrderItemVO.builder()
                 .id(item.getId())
+                .productId(item.getProductId())
                 .productName(item.getProductName())
                 .price(VoConverterUtil.toFen(item.getPrice()))
                 .quantity(item.getQuantity())
                 .subtotal(VoConverterUtil.toFen(item.getSubtotal()))
+                .productType(item.getProductType())
+                .deliveryStatus(item.getDeliveryStatus())
+                .deliveredTime(VoConverterUtil.formatTime(item.getDeliveredTime()))
                 .build();
     }
 }

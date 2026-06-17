@@ -24,5 +24,21 @@ public class SalesOrderItem implements Serializable {
     private BigDecimal price;
     private Integer quantity;
     private BigDecimal subtotal;
+
+    /**
+     * 冗余商品类型，避免商品后续改类型时影响历史订单的交付路由。
+     */
+    private String productType;
+
+    /**
+     * 交付状态：PENDING / DELIVERING / DELIVERED / CONFIRMED / FAILED / REVOKED
+     */
+    private String deliveryStatus;
+
+    /**
+     * 交付完成时间
+     */
+    private LocalDateTime deliveredTime;
+
     private LocalDateTime createTime;
 }

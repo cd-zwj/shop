@@ -7,8 +7,10 @@ import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
 import com.payment.entity.ProductStock;
+import com.payment.entity.Store;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
+import com.payment.mapper.StoreMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,6 +34,7 @@ class V1MerchantProductServiceImplTest {
 
     private ProductMapper productMapper;
     private ProductStockMapper productStockMapper;
+    private StoreMapper storeMapper;
     private V1MerchantSupportService supportService;
     private ProductIndexMessagePublisher productIndexMessagePublisher;
     private V1MerchantProductServiceImpl service;
@@ -40,9 +43,10 @@ class V1MerchantProductServiceImplTest {
     void setUp() {
         productMapper = mock(ProductMapper.class);
         productStockMapper = mock(ProductStockMapper.class);
+        storeMapper = mock(StoreMapper.class);
         supportService = mock(V1MerchantSupportService.class);
         productIndexMessagePublisher = mock(ProductIndexMessagePublisher.class);
-        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, supportService, productIndexMessagePublisher);
+        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, storeMapper, supportService, productIndexMessagePublisher);
     }
 
     @Test
@@ -60,6 +64,7 @@ class V1MerchantProductServiceImplTest {
         assertEquals(1, result.getRecords().size());
         assertEquals("active", result.getRecords().get(0).getStatus());
         assertEquals(5, result.getRecords().get(0).getStock());
+        assertEquals(20L, result.getRecords().get(0).getStoreId());
     }
 
     @Test
@@ -149,6 +154,8 @@ class V1MerchantProductServiceImplTest {
         when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 8));
 
         V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 8, "active");
+        dto.setStoreId(20L);
+        when(storeMapper.selectOne(any())).thenReturn(buildStore(20L, 1L, 1));
         V1MerchantProductVO vo = service.createProduct(1L, 100L, dto);
 
         verify(supportService).requireEmployee(1L, 100L);
@@ -161,6 +168,21 @@ class V1MerchantProductServiceImplTest {
 
         verify(productIndexMessagePublisher).publishUpsert(any(Product.class));
         assertEquals("active", vo.getStatus());
+        assertEquals(20L, vo.getStoreId());
+    }
+
+    @Test
+    void createProductShouldRejectStoreFromOtherTenant() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(storeMapper.selectOne(any())).thenReturn(null);
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 8, "active");
+        dto.setStoreId(20L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+        assertEquals("门店不存在或已停用", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
     }
 
     @Test
@@ -213,11 +235,15 @@ class V1MerchantProductServiceImplTest {
         when(productStockMapper.selectOne(any())).thenReturn(buildStock(10L, 1L, 1L, 0));
         when(productMapper.selectById(any())).thenReturn(buildProduct(1L, 1L, "P001", "咖啡升级", 1));
         when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 12));
+        when(storeMapper.selectOne(any())).thenReturn(buildStore(30L, 1L, 1));
 
         V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡升级", 12, "active");
+        dto.setStoreId(30L);
         V1MerchantProductVO vo = service.updateProduct(1L, 100L, 1L, dto);
 
-        verify(productMapper).updateById(any(Product.class));
+        ArgumentCaptor<Product> productCaptor = ArgumentCaptor.forClass(Product.class);
+        verify(productMapper).updateById(productCaptor.capture());
+        assertEquals(30L, productCaptor.getValue().getStoreId());
         verify(productIndexMessagePublisher).publishUpsert(any(Product.class));
         assertEquals("active", vo.getStatus());
     }
@@ -262,6 +288,7 @@ class V1MerchantProductServiceImplTest {
         product.setPrice(new BigDecimal("28.00"));
         product.setUnit("杯");
         product.setCategory("饮品");
+        product.setStoreId(20L);
         product.setStatus(status);
         product.setDeleted(0);
         return product;
@@ -287,5 +314,14 @@ class V1MerchantProductServiceImplTest {
         dto.setStock(stock);
         dto.setStatus(status);
         return dto;
+    }
+
+    private Store buildStore(Long id, Long tenantId, Integer status) {
+        Store store = new Store();
+        store.setId(id);
+        store.setTenantId(tenantId);
+        store.setStatus(status);
+        store.setDeleted(0);
+        return store;
     }
 }

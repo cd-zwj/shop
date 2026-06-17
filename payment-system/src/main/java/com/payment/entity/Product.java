@@ -66,6 +66,21 @@ public class Product implements Serializable {
     private Long storeId;
 
     /**
+     * 商品类型：PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION
+     * 决定支付成功后走哪一种 DeliveryStrategy。
+     */
+    private String productType;
+
+    /**
+     * 交付配置(JSON)，按 productType 解读：
+     * VIRTUAL = {"contentUrl":"...","accountInfo":"..."}
+     * CARD_KEY = 使用 card_key_pool 库存池上传和锁定卡密。
+     * SERVICE = 可留空，支付后系统生成核销码。
+     * SUBSCRIPTION = {"validityDays":30}
+     */
+    private String deliveryConfig;
+
+    /**
      * 状态：0-下架，1-上架
      */
     private Integer status;

@@ -8,26 +8,25 @@ import com.payment.common.BusinessException;
 import com.payment.config.RabbitMQConfig;
 import com.payment.dto.ExternalPaymentQueryResult;
 import com.payment.dto.PayResponseDTO;
-import com.payment.entity.CompensationTask;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PaymentCallbackRecord;
 import com.payment.enums.CallbackStatusEnum;
 import com.payment.enums.MessageProcessStatusEnum;
-import com.payment.enums.OutboxSendStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.PaymentLateCallbackActionEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.PaymentBizTypeEnum;
-import com.payment.mapper.CompensationTaskMapper;
-import com.payment.mapper.MessageOutboxMapper;
 import com.payment.mapper.PaymentBillMapper;
 import com.payment.mapper.PaymentCallbackRecordMapper;
+import com.payment.service.CompensationTaskFactory;
+import com.payment.service.OutboxPublisher;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
+import com.payment.service.outbox.OutboxMessageCommand;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -48,8 +47,8 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
 
     private final PaymentBillMapper paymentBillMapper;
     private final PaymentCallbackRecordMapper callbackRecordMapper;
-    private final CompensationTaskMapper compensationTaskMapper;
-    private final MessageOutboxMapper messageOutboxMapper;
+    private final CompensationTaskFactory compensationTaskFactory;
+    private final OutboxPublisher outboxPublisher;
     private final List<PaymentProvider> paymentProviders;
     private final RefundService refundService;
 
@@ -316,17 +315,12 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
                 "bizType", paymentBill.getBizType()
         );
 
-        MessageOutbox outbox = new MessageOutbox();
-        outbox.setMessageId(BizNoGenerator.generate("MSG"));
-        outbox.setBizType(paymentBill.getBizType());
-        outbox.setBizNo(paymentBill.getBizNo());
-        outbox.setExchangeName("");
-        outbox.setRoutingKey(queueName);
-        outbox.setMessageBody(JsonUtils.toJson(body));
-        outbox.setSendStatus(OutboxSendStatusEnum.PENDING.name());
-        outbox.setRetryCount(0);
-        outbox.setNextRetryTime(LocalDateTime.now());
-        messageOutboxMapper.insert(outbox);
+        MessageOutbox outbox = outboxPublisher.publish(OutboxMessageCommand.builder()
+                .bizType(paymentBill.getBizType())
+                .bizNo(paymentBill.getBizNo())
+                .routingKey(queueName)
+                .messageBody(body)
+                .build());
 
         log.info("Outbox record inserted with PENDING status, bizNo={}, outboxId={}", paymentBill.getBizNo(), outbox.getId());
     }
@@ -381,21 +375,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     }
 
     private void createCompensationTaskIfAbsent(String bizType, String bizNo, String remark) {
-        CompensationTask existing = compensationTaskMapper.selectOne(new LambdaQueryWrapper<CompensationTask>()
-                .eq(CompensationTask::getBizType, bizType)
-                .eq(CompensationTask::getBizNo, bizNo));
-        if (existing != null) {
-            return;
-        }
-
-        CompensationTask task = new CompensationTask();
-        task.setTaskNo(BizNoGenerator.generate("CT"));
-        task.setBizType(bizType);
-        task.setBizNo(bizNo);
-        task.setTaskStatus("PENDING");
-        task.setRemark(remark);
-        task.setRetryCount(0);
-        compensationTaskMapper.insert(task);
+        compensationTaskFactory.createIfAbsent(bizType, bizNo, remark);
     }
 
     private String firstNonBlank(String... values) {

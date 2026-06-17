@@ -13,6 +13,11 @@ public interface DataAnalysisService extends IService<DataAnalysisResult> {
      * 发起数据分析请求
      */
     DataAnalysisResult analyze(AnalysisRequestDTO request);
+
+    /**
+     * 执行已入队的数据分析任务。
+     */
+    void executeAnalysis(Long resultId, AnalysisRequestDTO request);
     
     /**
      * 查询分析结果

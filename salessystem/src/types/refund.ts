@@ -1,5 +1,6 @@
 export interface RefundCreateDTO {
   orderNo: string;
+  orderItemId?: number | null;
   refundType: 'REFUND_ONLY' | 'RETURN_REFUND';
   refundAmount: number;
   reason: string;
@@ -10,9 +11,14 @@ export interface Refund {
   id: number;
   refundNo: string;
   orderNo: string;
+  orderItemId: number | null;
   refundType: string; // REFUND_ONLY | RETURN_REFUND
-  refundStatus: string; // PENDING | APPROVED | REJECTED | COMPLETED | CANCELLED
+  refundStatus: string; // PENDING | APPROVED | PROCESSING | COMPLETED | FAILED | REJECTED | CANCELLED
   refundAmount: number;
+  deliveryStatus: string | null;
+  refundableAmount: number | null;
+  quickRefundSuggested: boolean | null;
+  refundSuggestion: string | null;
   reason: string;
   description: string | null;
   rejectReason: string | null;

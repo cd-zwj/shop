@@ -10,12 +10,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 门店实体 — 数据预埋，暂不建设。
- * <p>
- * 当前状态（2026-06-12）：实体和 Mapper 存在但完全孤立，
- * 无 Service/Controller 业务代码引用。
- * SalesOrder 和 Product 已预留 store_id 字段，但当前业务代码未读写该字段，
- * 未形成门店业务闭环。多门店能力是后续扩展，当前以单门店商户为主。
+ * 门店实体。
+ *
+ * Product / SalesOrder 通过 store_id 关联门店主数据。
  *
  * @see com.payment.mapper.StoreMapper
  */

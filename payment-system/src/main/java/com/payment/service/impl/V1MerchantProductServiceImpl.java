@@ -7,8 +7,10 @@ import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
 import com.payment.entity.ProductStock;
+import com.payment.entity.Store;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
+import com.payment.mapper.StoreMapper;
 import com.payment.service.V1MerchantProductService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
 
     private final ProductMapper productMapper;
     private final ProductStockMapper productStockMapper;
+    private final StoreMapper storeMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
@@ -90,6 +93,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         if (existing != null) {
             throw new BusinessException("商品编码已存在");
         }
+        validateActiveStore(tenantId, dto.getStoreId());
 
         Product product = new Product();
         product.setTenantId(tenantId);
@@ -100,7 +104,10 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setCategory(dto.getCategory());
         product.setDescription(dto.getDescription());
         product.setImageUrl(dto.getImageUrl());
+        product.setStoreId(dto.getStoreId());
         product.setStatus(toProductStatus(dto.getStatus(), dto.getStock()));
+        product.setProductType(resolveProductType(dto.getProductType()));
+        product.setDeliveryConfig(dto.getDeliveryConfig());
         product.setDeleted(0);
         productMapper.insert(product);
 
@@ -128,6 +135,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         if (existing != null) {
             throw new BusinessException("商品编码已被其他商品使用");
         }
+        validateActiveStore(tenantId, dto.getStoreId());
 
         product.setProductCode(productCode);
         product.setName(dto.getName());
@@ -136,7 +144,10 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setCategory(dto.getCategory());
         product.setDescription(dto.getDescription());
         product.setImageUrl(dto.getImageUrl());
+        product.setStoreId(dto.getStoreId());
         product.setStatus(toProductStatus(dto.getStatus(), dto.getStock()));
+        product.setProductType(resolveProductType(dto.getProductType()));
+        product.setDeliveryConfig(dto.getDeliveryConfig());
         productMapper.updateById(product);
 
         ProductStock stock = getOrCreateStock(tenantId, productId);
@@ -227,8 +238,11 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         vo.setCategory(product.getCategory());
         vo.setDescription(product.getDescription());
         vo.setImageUrl(product.getImageUrl());
+        vo.setStoreId(product.getStoreId());
         vo.setStock(stock == null || stock.getQuantity() == null ? 0 : stock.getQuantity());
         vo.setStatus(resolveStatus(product, stock));
+        vo.setProductType(product.getProductType());
+        vo.setDeliveryConfig(product.getDeliveryConfig());
         vo.setCreateTime(product.getCreateTime());
         vo.setUpdateTime(product.getUpdateTime());
         return vo;
@@ -242,6 +256,20 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         return quantity <= 0 ? "out_of_stock" : "active";
     }
 
+    /**
+     * 入参 productType 字符串校验：非法值或空值兜底为 PHYSICAL，避免商户端误传破坏交付路由。
+     */
+    private String resolveProductType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return com.payment.enums.ProductTypeEnum.PHYSICAL.name();
+        }
+        try {
+            return com.payment.enums.ProductTypeEnum.valueOf(raw.trim().toUpperCase()).name();
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("不支持的商品类型: " + raw);
+        }
+    }
+
     private Integer toProductStatus(String status, Integer stock) {
         if ("inactive".equalsIgnoreCase(status)) {
             return 0;
@@ -250,6 +278,20 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
             return 1;
         }
         return 1;
+    }
+
+    private void validateActiveStore(Long tenantId, Long storeId) {
+        if (storeId == null) {
+            return;
+        }
+        Store store = storeMapper.selectOne(new LambdaQueryWrapper<Store>()
+                .eq(Store::getId, storeId)
+                .eq(Store::getTenantId, tenantId)
+                .eq(Store::getDeleted, 0)
+                .eq(Store::getStatus, 1));
+        if (store == null) {
+            throw new BusinessException("门店不存在或已停用");
+        }
     }
 
     private String resolveProductCode(V1MerchantProductUpsertDTO dto) {

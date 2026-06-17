@@ -14,6 +14,8 @@ public enum RefundApplicationStatus {
     PROCESSING,
     /** 已完成（退款到账） */
     COMPLETED,
+    /** 退款失败（渠道退款或交付撤销失败） */
+    FAILED,
     /** 已取消（用户主动取消） */
     CANCELLED
 }

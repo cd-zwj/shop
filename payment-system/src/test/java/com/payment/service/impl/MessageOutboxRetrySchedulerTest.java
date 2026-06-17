@@ -50,6 +50,34 @@ class MessageOutboxRetrySchedulerTest {
     }
 
     @Test
+    void shouldRepublishWithExchangeNameWhenConfigured() {
+        MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
+        RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
+        MessageOutboxRetryScheduler scheduler = new MessageOutboxRetryScheduler(messageOutboxMapper, rabbitTemplate);
+
+        MessageOutbox record = new MessageOutbox();
+        record.setId(4L);
+        record.setMessageId("MSG4");
+        record.setBizType("CUSTOM");
+        record.setBizNo("BIZ4");
+        record.setExchangeName("payment.events");
+        record.setRoutingKey("payment.custom.route");
+        record.setMessageBody("{}");
+        record.setSendStatus("PENDING");
+        record.setRetryCount(0);
+        record.setNextRetryTime(LocalDateTime.now().minusMinutes(1));
+
+        when(messageOutboxMapper.selectList(any())).thenReturn(List.of(record));
+
+        scheduler.retryPendingOutbox();
+
+        verify(rabbitTemplate).convertAndSend(eq("payment.events"), eq("payment.custom.route"), eq("{}"));
+        ArgumentCaptor<MessageOutbox> captor = ArgumentCaptor.forClass(MessageOutbox.class);
+        verify(messageOutboxMapper).updateById(captor.capture());
+        assertEquals("SENT", captor.getValue().getSendStatus());
+    }
+
+    @Test
     void shouldMarkDeadWhenMaxRetriesReached() {
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
         RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);

@@ -25,6 +25,10 @@ public class RefundApplicationVO {
     private String reason;
     private String description;
     private String rejectReason;
+    private String deliveryStatus;
+    private Long refundableAmount;
+    private Boolean quickRefundSuggested;
+    private String refundSuggestion;
     private String auditTime;
     private String completeTime;
     private String createTime;
@@ -45,6 +49,10 @@ public class RefundApplicationVO {
                 .reason(app.getReason())
                 .description(app.getDescription())
                 .rejectReason(app.getRejectReason())
+                .deliveryStatus(app.getDeliveryStatus())
+                .refundableAmount(VoConverterUtil.toFen(app.getRefundableAmount()))
+                .quickRefundSuggested(app.getQuickRefundSuggested())
+                .refundSuggestion(app.getRefundSuggestion())
                 .auditTime(VoConverterUtil.formatTime(app.getAuditTime()))
                 .completeTime(VoConverterUtil.formatTime(app.getCompleteTime()))
                 .createTime(VoConverterUtil.formatTime(app.getCreateTime()))

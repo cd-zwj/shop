@@ -9,10 +9,12 @@ import {
   Package,
   Send,
   ShieldCheck,
+  TicketCheck,
   Truck,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrderDetail } from '../../types/merchant';
 import { cn } from '../../lib/utils';
@@ -22,10 +24,69 @@ export default function MerchantOrderDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { merchantSession } = useAuth();
+  const { showToast } = useToast();
   const tenantId = merchantSession?.tenantId;
   const [detail, setDetail] = useState<MerchantOrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [shippingItemId, setShippingItemId] = useState<number | null>(null);
+  const [shipForm, setShipForm] = useState({ shippingNo: '', logisticsCompany: '' });
+  const [isShipping, setIsShipping] = useState(false);
+  const [verifyCode, setVerifyCode] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  async function reload() {
+    if (!tenantId || !id) return;
+    try {
+      const result = await merchantOrderService.getOrderDetail(tenantId, id);
+      setDetail(result);
+      setError('');
+    } catch {
+      setError('订单详情加载失败，请稍后重试');
+    }
+  }
+
+  async function handleShip() {
+    if (!tenantId || shippingItemId == null) return;
+    if (!shipForm.shippingNo.trim()) {
+      showToast('请填写物流单号', 'error');
+      return;
+    }
+    setIsShipping(true);
+    try {
+      await merchantOrderService.shipItem(tenantId, shippingItemId, shipForm.shippingNo.trim(), shipForm.logisticsCompany.trim() || undefined);
+      showToast('发货成功', 'success');
+      setShippingItemId(null);
+      setShipForm({ shippingNo: '', logisticsCompany: '' });
+      await reload();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '发货失败';
+      showToast(msg, 'error');
+    } finally {
+      setIsShipping(false);
+    }
+  }
+
+  async function handleVerifyService() {
+    if (!tenantId) return;
+    const code = verifyCode.trim();
+    if (!code) {
+      showToast('请填写核销码', 'error');
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      await merchantOrderService.verifyService(tenantId, code);
+      showToast('核销成功', 'success');
+      setVerifyCode('');
+      await reload();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '核销失败';
+      showToast(msg, 'error');
+    } finally {
+      setIsVerifying(false);
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -145,8 +206,17 @@ export default function MerchantOrderDetail() {
 
             <h3 className="mb-6 text-[10px] font-black uppercase tracking-widest text-slate-400">商品明细</h3>
             <div className="space-y-6">
-              {(isLoading ? Array.from({ length: 1 }) : detail?.items || []).map((item, index) => {
-                const isData = typeof item === 'object';
+              {(isLoading ? Array.from({ length: 1 }) : detail?.items || []).map((item: any, index: number) => {
+                const isData = item && typeof item === 'object' && 'id' in item;
+                const productType = isData ? (item.productType ?? 'PHYSICAL') : null;
+                const deliveryStatus = isData ? (item.deliveryStatus ?? 'PENDING') : null;
+                const canShip =
+                  isData &&
+                  productType === 'PHYSICAL' &&
+                  order?.payStatus === 'SUCCESS' &&
+                  deliveryStatus !== 'DELIVERED' &&
+                  deliveryStatus !== 'CONFIRMED' &&
+                  deliveryStatus !== 'REVOKED';
                 return (
                   <div key={isData ? item.id : index} className="flex gap-6">
                     <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100">
@@ -167,6 +237,22 @@ export default function MerchantOrderDetail() {
                         </span>
                         <span className="text-xs font-black text-slate-900">x {isData ? item.quantity : '--'}</span>
                       </div>
+                      {isData && (
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                            <span className="rounded-md bg-slate-100 px-2 py-0.5 text-slate-600">{productType}</span>
+                            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-amber-700">{deliveryStatus}</span>
+                          </div>
+                          {canShip && (
+                            <button
+                              onClick={() => setShippingItemId(item.id)}
+                              className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+                            >
+                              <Truck className="h-3.5 w-3.5" /> 发货
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -235,6 +321,28 @@ export default function MerchantOrderDetail() {
           <section className="flex flex-col gap-6 rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">操作面板</h3>
             <div className="flex flex-col gap-4">
+              <div className="rounded-2xl bg-sky-50 p-4">
+                <div className="mb-3 flex items-center gap-2 text-sm font-black text-sky-900">
+                  <TicketCheck size={16} /> 服务核销
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value)}
+                    className="min-w-0 flex-1 rounded-xl border border-sky-100 bg-white px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:border-sky-400"
+                    placeholder="输入核销码"
+                  />
+                  <button
+                    onClick={() => void handleVerifyService()}
+                    disabled={isVerifying}
+                    className="shrink-0 rounded-xl bg-sky-600 px-4 py-2 text-xs font-black text-white hover:bg-sky-700 disabled:opacity-50"
+                  >
+                    {isVerifying ? '提交中' : '核销'}
+                  </button>
+                </div>
+              </div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 p-4">
                 <span className="text-sm font-bold text-slate-600">订单状态</span>
                 <ChevronRight size={14} className="text-slate-300" />
@@ -247,6 +355,54 @@ export default function MerchantOrderDetail() {
           </section>
         </div>
       </div>
+
+      {shippingItemId != null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <h3 className="mb-4 text-lg font-black text-slate-900">填写发货信息</h3>
+            <div className="flex flex-col gap-4">
+              <label className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">物流单号</span>
+                <input
+                  type="text"
+                  value={shipForm.shippingNo}
+                  onChange={(e) => setShipForm((p) => ({ ...p, shippingNo: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-primary"
+                  placeholder="如 SF1234567890"
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">承运商(可选)</span>
+                <input
+                  type="text"
+                  value={shipForm.logisticsCompany}
+                  onChange={(e) => setShipForm((p) => ({ ...p, logisticsCompany: e.target.value }))}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none focus:border-primary"
+                  placeholder="顺丰 / 圆通 / 中通 ..."
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShippingItemId(null);
+                  setShipForm({ shippingNo: '', logisticsCompany: '' });
+                }}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => void handleShip()}
+                disabled={isShipping}
+                className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {isShipping ? '提交中...' : '确认发货'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

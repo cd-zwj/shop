@@ -73,6 +73,11 @@ export interface SalesOrderItem {
   price: number;
   quantity: number;
   subtotal: number;
+  /** PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION */
+  productType?: string | null;
+  /** PENDING / DELIVERING / DELIVERED / CONFIRMED / FAILED / REVOKED */
+  deliveryStatus?: string | null;
+  deliveredTime?: string | null;
   createTime?: string | null;
 }
 
