@@ -16,7 +16,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { fileUploadService } from '../../services/modules/fileUpload';
 import { merchantProductService } from '../../services/modules/merchantProduct';
-import type { MerchantCardKey, MerchantCardKeySummary, MerchantProductUpsertPayload } from '../../types/merchant';
+import { merchantProductTaxonomyService } from '../../services/modules/merchantProductTaxonomy';
+import { merchantStoreService } from '../../services/modules/merchantStore';
+import type {
+  FulfillmentMode,
+  MerchantCardKey,
+  MerchantCardKeySummary,
+  MerchantProductUpsertPayload,
+  MerchantStore,
+  ProductType,
+  VirtualProductCategory,
+  VirtualProductType,
+} from '../../types/merchant';
 import { ApiError } from '../../types/api';
 
 const EMPTY_FORM: MerchantProductUpsertPayload = {
@@ -30,6 +41,7 @@ const EMPTY_FORM: MerchantProductUpsertPayload = {
   stock: 0,
   status: 'active',
   productType: 'PHYSICAL',
+  fulfillmentMode: 'EXPRESS_DELIVERY',
   deliveryConfig: '',
 };
 
@@ -40,6 +52,14 @@ const PRODUCT_TYPE_OPTIONS: { value: NonNullable<MerchantProductUpsertPayload['p
   { value: 'SERVICE', label: '服务', hint: '支付后生成核销码,商户侧确认核销' },
   { value: 'SUBSCRIPTION', label: '订阅 / 权益', hint: '可配置 validityDays' },
 ];
+
+const FULFILLMENT_OPTIONS: { value: FulfillmentMode; label: string; hint: string }[] = [
+  { value: 'ONLINE_VIRTUAL', label: '线上虚拟', hint: '资料、卡密、权益即时交付' },
+  { value: 'OFFLINE_SERVICE', label: '线下服务', hint: '到店预约或核销' },
+  { value: 'EXPRESS_DELIVERY', label: '快递发货', hint: '手工录入发货信息' },
+];
+
+const ONLINE_PRODUCT_TYPES: ProductType[] = ['VIRTUAL', 'CARD_KEY', 'SUBSCRIPTION'];
 
 export default function MerchantProductEdit() {
   const navigate = useNavigate();
@@ -58,6 +78,9 @@ export default function MerchantProductEdit() {
   const [cardKeyInput, setCardKeyInput] = useState('');
   const [isCardKeyLoading, setIsCardKeyLoading] = useState(false);
   const [isCardKeyUploading, setIsCardKeyUploading] = useState(false);
+  const [stores, setStores] = useState<MerchantStore[]>([]);
+  const [virtualTypes, setVirtualTypes] = useState<VirtualProductType[]>([]);
+  const [virtualCategories, setVirtualCategories] = useState<VirtualProductCategory[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -85,6 +108,10 @@ export default function MerchantProductEdit() {
               ? product.status
               : 'active',
           productType: loadedProductType,
+          fulfillmentMode: product.fulfillmentMode || inferFulfillmentMode(loadedProductType),
+          storeId: product.storeId || undefined,
+          virtualTypeId: product.virtualTypeId || undefined,
+          virtualCategoryId: product.virtualCategoryId || undefined,
           deliveryConfig: product.deliveryConfig || '',
         });
         if (loadedProductType === 'CARD_KEY') {
@@ -106,6 +133,35 @@ export default function MerchantProductEdit() {
       isMounted = false;
     };
   }, [id, isEdit, tenantId]);
+
+  useEffect(() => {
+    if (!tenantId) return;
+    let isMounted = true;
+
+    async function loadOptions() {
+      try {
+        const [storePage, types, categories] = await Promise.all([
+          merchantStoreService.listStores(tenantId, { current: 1, size: 100, status: 1 }),
+          merchantProductTaxonomyService.listTypes(tenantId, 1),
+          merchantProductTaxonomyService.listCategories(tenantId, { status: 1 }),
+        ]);
+        if (!isMounted) return;
+        setStores(storePage.records || []);
+        setVirtualTypes(types || []);
+        setVirtualCategories(categories || []);
+      } catch {
+        if (isMounted) {
+          setError('商品履约选项加载失败，请稍后重试');
+        }
+      }
+    }
+
+    void loadOptions();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [tenantId]);
 
   async function loadCardKeys() {
     if (!tenantId || !id) {
@@ -132,6 +188,46 @@ export default function MerchantProductEdit() {
     value: MerchantProductUpsertPayload[K],
   ) {
     setFormData((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleFulfillmentModeChange(mode: FulfillmentMode) {
+    setFormData((prev) => {
+      const next: MerchantProductUpsertPayload = {
+        ...prev,
+        fulfillmentMode: mode,
+      };
+      if (mode === 'EXPRESS_DELIVERY') {
+        next.productType = 'PHYSICAL';
+        next.virtualTypeId = undefined;
+        next.virtualCategoryId = undefined;
+      }
+      if (mode === 'OFFLINE_SERVICE') {
+        next.productType = 'SERVICE';
+        next.virtualTypeId = undefined;
+        next.virtualCategoryId = undefined;
+      }
+      if (mode === 'ONLINE_VIRTUAL' && !ONLINE_PRODUCT_TYPES.includes((prev.productType || 'VIRTUAL') as ProductType)) {
+        next.productType = 'VIRTUAL';
+      }
+      return next;
+    });
+  }
+
+  function handleProductTypeChange(nextType: ProductType) {
+    setFormData((prev) => ({
+      ...prev,
+      productType: nextType,
+      fulfillmentMode: inferFulfillmentMode(nextType),
+      virtualTypeId: nextType === 'PHYSICAL' ? undefined : prev.virtualTypeId,
+      virtualCategoryId: nextType === 'PHYSICAL' ? undefined : prev.virtualCategoryId,
+      ...(nextType !== prev.productType ? { virtualTypeId: undefined, virtualCategoryId: undefined } : {}),
+    }));
+    if (nextType === 'CARD_KEY' && isEdit) {
+      void loadCardKeys();
+    } else {
+      setCardKeySummary(null);
+      setCardKeys([]);
+    }
   }
 
   async function handleFileUpload(file: File | null) {
@@ -220,6 +316,10 @@ export default function MerchantProductEdit() {
         stock: Number(formData.stock || 0),
         status: formData.status || 'active',
         productType: formData.productType || 'PHYSICAL',
+        fulfillmentMode: formData.fulfillmentMode || inferFulfillmentMode(formData.productType || 'PHYSICAL'),
+        storeId: formData.storeId ? Number(formData.storeId) : undefined,
+        virtualTypeId: formData.virtualTypeId ? Number(formData.virtualTypeId) : undefined,
+        virtualCategoryId: formData.virtualCategoryId ? Number(formData.virtualCategoryId) : undefined,
         deliveryConfig: formData.deliveryConfig?.trim() || undefined,
       };
 
@@ -348,6 +448,103 @@ export default function MerchantProductEdit() {
               </div>
             </div>
 
+            <div className="flex flex-col gap-3">
+              <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                履约形态
+              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {FULFILLMENT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleFulfillmentModeChange(option.value)}
+                    className={`rounded-[20px] border-2 px-4 py-4 text-left transition-all ${
+                      formData.fulfillmentMode === option.value
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-slate-100 bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    <div className="text-sm font-black">{option.label}</div>
+                    <div className="mt-1 text-xs font-bold opacity-70">{option.hint}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {(formData.fulfillmentMode === 'OFFLINE_SERVICE' || formData.fulfillmentMode === 'EXPRESS_DELIVERY') && (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-3">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    关联门店
+                  </label>
+                  <select
+                    value={formData.storeId || ''}
+                    onChange={(event) => updateField('storeId', event.target.value ? Number(event.target.value) : undefined)}
+                    className="w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
+                  >
+                    <option value="">不绑定门店</option>
+                    {stores.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.storeName} / {store.storeNo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="rounded-[20px] bg-slate-50 px-5 py-4 text-xs font-bold leading-relaxed text-slate-500">
+                  {formData.fulfillmentMode === 'OFFLINE_SERVICE'
+                    ? '线下服务商品建议绑定门店，支付后继续使用现有核销码和商户订单核销流程。'
+                    : '快递商品可绑定发货门店，物流公司和物流单号仍在订单发货流程中手工录入。'}
+                </div>
+              </div>
+            )}
+
+            {formData.fulfillmentMode === 'ONLINE_VIRTUAL' && (
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="flex flex-col gap-3">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    虚拟商品类型
+                  </label>
+                  <select
+                    value={formData.virtualTypeId || ''}
+                    onChange={(event) => {
+                      const value = event.target.value ? Number(event.target.value) : undefined;
+                      updateField('virtualTypeId', value);
+                      updateField('virtualCategoryId', undefined);
+                    }}
+                    className="w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
+                  >
+                    <option value="">选择虚拟类型</option>
+                    {virtualTypes
+                      .filter((type) => type.deliveryStrategy === formData.productType)
+                      .map((type) => (
+                        <option key={type.id} value={type.id}>
+                          {type.typeName} / {type.typeCode}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    虚拟商品分类
+                  </label>
+                  <select
+                    value={formData.virtualCategoryId || ''}
+                    onChange={(event) => updateField('virtualCategoryId', event.target.value ? Number(event.target.value) : undefined)}
+                    className="w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
+                  >
+                    <option value="">可不选分类</option>
+                    {virtualCategories
+                      .filter((category) => category.typeId === formData.virtualTypeId)
+                      .map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.categoryName} / {category.categoryCode}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
             {/* 商品类型 + 交付配置：不同类型走不同 DeliveryStrategy */}
             <div className="flex flex-col gap-3">
               <label className="ml-1 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -356,18 +553,11 @@ export default function MerchantProductEdit() {
               <select
                 value={formData.productType || 'PHYSICAL'}
                 onChange={(event) => {
-                  const nextType = event.target.value as MerchantProductUpsertPayload['productType'];
-                  updateField('productType', nextType);
-                  if (nextType === 'CARD_KEY' && isEdit) {
-                    void loadCardKeys();
-                  } else {
-                    setCardKeySummary(null);
-                    setCardKeys([]);
-                  }
+                  handleProductTypeChange(event.target.value as ProductType);
                 }}
                 className="w-full rounded-[20px] border-2 border-slate-50 bg-slate-50 px-6 py-4 font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
               >
-                {PRODUCT_TYPE_OPTIONS.map((opt) => (
+                {PRODUCT_TYPE_OPTIONS.filter((opt) => isProductTypeAllowed(formData.fulfillmentMode || 'EXPRESS_DELIVERY', opt.value)).map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label} — {opt.hint}
                   </option>
@@ -645,4 +835,24 @@ function formatDate(value?: string | null) {
     return '-';
   }
   return value.replace('T', ' ').slice(0, 16);
+}
+
+function inferFulfillmentMode(productType: ProductType): FulfillmentMode {
+  if (productType === 'PHYSICAL') {
+    return 'EXPRESS_DELIVERY';
+  }
+  if (productType === 'SERVICE') {
+    return 'OFFLINE_SERVICE';
+  }
+  return 'ONLINE_VIRTUAL';
+}
+
+function isProductTypeAllowed(mode: FulfillmentMode, productType: ProductType) {
+  if (mode === 'EXPRESS_DELIVERY') {
+    return productType === 'PHYSICAL';
+  }
+  if (mode === 'OFFLINE_SERVICE') {
+    return productType === 'SERVICE';
+  }
+  return ONLINE_PRODUCT_TYPES.includes(productType);
 }

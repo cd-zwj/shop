@@ -18,6 +18,8 @@ export interface MerchantCouponTemplate {
   validDaysAfterReceive: number | null;
   description: string | null;
   stackStrategy: string | null;
+  receivedQuantity?: number | null;
+  usedQuantity?: number | null;
   createTime: string;
 }
 
@@ -108,4 +110,23 @@ export interface MemberTag {
   tenantId: number;
   name: string;
   memberCount?: number;
+}
+
+export interface MarketingEffectSummary {
+  templateCount: number;
+  activeTemplateCount: number;
+  receivedCount: number;
+  usedCount: number;
+  remainingStock: number;
+  writeOffRate: number;
+}
+
+export interface CouponEffect {
+  templateId: number;
+  templateName: string;
+  totalQuantity: number;
+  receivedCount: number;
+  usedCount: number;
+  remainingStock: number;
+  writeOffRate: number;
 }

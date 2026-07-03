@@ -29,7 +29,9 @@ import {
   Settings2,
   Sparkles,
   Ticket,
-  HeartHandshake
+  HeartHandshake,
+  Database,
+  FolderTree
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -38,6 +40,7 @@ import AuthGuard from './components/guards/AuthGuard';
 import RoleGuard from './components/guards/RoleGuard';
 import GuestGuard from './components/guards/GuestGuard';
 import { ToastProvider } from './context/ToastContext';
+import { useAuth } from './context/AuthContext';
 
 // --- Lazy-loaded page chunks ---
 const Home = lazy(() => import('./pages/Home'));
@@ -63,6 +66,7 @@ const ApplyRefund = lazy(() => import('./pages/ApplyRefund'));
 const AddressList = lazy(() => import('./pages/AddressList'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const AccountSecurity = lazy(() => import('./pages/AccountSecurity'));
+const AIAssistant = lazy(() => import('./pages/AIAssistant'));
 const Success = lazy(() => import('./pages/Success'));
 
 // --- Admin chunk ---
@@ -82,6 +86,7 @@ const AdminMerchantEdit = lazy(() => import('./pages/AdminMerchantEdit'));
 const AdminPermissions = lazy(() => import('./pages/AdminPermissions'));
 const AdminOrderDetail = lazy(() => import('./pages/AdminOrderDetail'));
 const AdminMarketing = lazy(() => import('./pages/AdminMarketing'));
+const AdminDocuments = lazy(() => import('./pages/AdminDocuments'));
 
 // --- Merchant chunk ---
 const MerchantDashboard = lazy(() => import('./pages/merchant/MerchantDashboard'));
@@ -91,6 +96,8 @@ const MerchantFinance = lazy(() => import('./pages/merchant/MerchantFinance'));
 const MerchantProducts = lazy(() => import('./pages/merchant/MerchantProducts'));
 const MerchantProductDetail = lazy(() => import('./pages/merchant/MerchantProductDetail'));
 const MerchantProductEdit = lazy(() => import('./pages/merchant/MerchantProductEdit'));
+const MerchantStores = lazy(() => import('./pages/merchant/MerchantStores'));
+const MerchantProductTaxonomy = lazy(() => import('./pages/merchant/MerchantProductTaxonomy'));
 const MerchantRules = lazy(() => import('./pages/merchant/MerchantRules'));
 const MerchantWithdraw = lazy(() => import('./pages/merchant/MerchantWithdraw'));
 const MerchantRefunds = lazy(() => import('./pages/merchant/MerchantRefunds'));
@@ -113,12 +120,22 @@ const PageLoader = () => (
 const TopNav = ({ title }: { title: string }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
   const isLogin = location.pathname === '/login';
   const isResetPassword = location.pathname === '/reset-password';
 
   if (isLogin || isResetPassword) return null;
+
+  async function handleAuthAction() {
+    if (isAdmin || isMerchant) {
+      await logout();
+      navigate('/login', { replace: true });
+      return;
+    }
+    navigate('/login');
+  }
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between px-4">
@@ -142,11 +159,13 @@ const TopNav = ({ title }: { title: string }) => {
 
       <div className="flex items-center gap-2">
         <button 
-          onClick={() => navigate('/login')}
+          onClick={handleAuthAction}
           className="p-2 text-primary hover:bg-primary/5 rounded-xl flex items-center gap-1 transition-all mr-2"
         >
           <LogOut className="w-5 h-5" />
-          <span className="text-[10px] font-black uppercase hidden sm:inline">切换后台</span>
+          <span className="text-[10px] font-black uppercase hidden sm:inline">
+            {isAdmin || isMerchant ? '退出登录' : '切换后台'}
+          </span>
         </button>
         <button className="p-2 text-slate-600 hover:bg-slate-50 rounded-full relative">
           <Search className="w-5 h-5 transition-opacity" />
@@ -166,6 +185,7 @@ const BottomNav = () => {
 
   const navItems = [
     { icon: Store, label: '首页', path: '/' },
+    { icon: Bot, label: 'AI', path: '/ai' },
     { icon: ShoppingCart, label: '购物车', path: '/cart', badge: true },
     { icon: Wallet, label: '钱包', path: '/wallet' },
     { icon: User, label: '我的', path: '/profile' },
@@ -206,6 +226,7 @@ const BottomNav = () => {
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
@@ -221,11 +242,15 @@ const Sidebar = () => {
     { icon: ShieldCheck, label: '用户安全治理', path: '/admin/users' },
     { icon: ArrowUpRight, label: '提现审批中心', path: '/admin/withdrawals' },
     { icon: Sparkles, label: '平台营销运营', path: '/admin/marketing' },
+    { icon: Database, label: '知识库管理', path: '/admin/documents' },
+    { icon: Bot, label: 'AI 治理助手', path: '/admin/ai' },
   ];
 
   const merchantMenu = [
     { icon: LayoutDashboard, label: '商户工作台', path: '/merchant' },
+    { icon: Store, label: '门店管理', path: '/merchant/stores' },
     { icon: Package, label: '我的商品', path: '/merchant/products' },
+    { icon: FolderTree, label: '商品形态字典', path: '/merchant/product-taxonomy' },
     { icon: ShoppingBag, label: '订单管理', path: '/merchant/orders' },
     { icon: Wallet, label: '财务结算', path: '/merchant/finance' },
     { icon: Ticket, label: '优惠券管理', path: '/merchant/marketing/coupons' },
@@ -234,6 +259,7 @@ const Sidebar = () => {
     { icon: HeartHandshake, label: '售后退款审核', path: '/merchant/refunds' },
     { icon: Settings2, label: '规则配置', path: '/merchant/rules' },
     { icon: ArrowUpRight, label: '提现中心', path: '/merchant/withdrawals' },
+    { icon: Bot, label: 'AI 经营助手', path: '/merchant/ai' },
   ];
 
   if (!isAdmin && !isMerchant) return null;
@@ -241,6 +267,12 @@ const Sidebar = () => {
   const currentMenu = isAdmin ? adminMenu : merchantMenu;
   const title = isAdmin ? '管理控制台' : '商户中心';
   const subtitle = isAdmin ? '全局治理' : '店铺管理';
+
+  async function handleLogout() {
+    await logout();
+    setIsOpen(false);
+    navigate('/login', { replace: true });
+  }
 
   return (
     <>
@@ -301,8 +333,8 @@ const Sidebar = () => {
         </div>
 
         <div className="mt-auto px-4 pt-4 border-t border-white/5 space-y-1">
-          <button onClick={() => navigate('/login')} className="w-full flex items-center px-4 py-3 gap-3 rounded-xl text-slate-400 hover:bg-white/5 transition-all text-sm font-bold">
-            <LogOut className="w-5 h-5" /> 切换角色
+          <button onClick={handleLogout} className="w-full flex items-center px-4 py-3 gap-3 rounded-xl text-slate-400 hover:bg-white/5 transition-all text-sm font-bold">
+            <LogOut className="w-5 h-5" /> 退出登录
           </button>
         </div>
       </aside>
@@ -324,7 +356,7 @@ function AppContent() {
       
       <main className={cn(
         "transition-all duration-300",
-        (isAdmin || isMerchant) ? "md:pl-64 pt-0" : (isLogin || isResetPassword) ? "p-0" : "pt-16 pb-20 md:pb-0"
+        (isAdmin || isMerchant) ? "pt-16 md:pl-64" : (isLogin || isResetPassword) ? "p-0" : "pt-16 pb-20 md:pb-0"
       )}>
         <div className="max-w-7xl mx-auto w-full h-full">
           <ErrorBoundary>
@@ -347,8 +379,7 @@ function AppContent() {
             <Route path="/orders/:orderNo/refund" element={<AuthGuard><ApplyRefund /></AuthGuard>} />
             <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
             <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />
-            {/* AI 助手已隐藏：后端功能未联调，待后续需要时恢复 */}
-            {/* <Route path="/ai" element={<AuthGuard><AIAssistant /></AuthGuard>} /> */}
+            <Route path="/ai" element={<AuthGuard><RoleGuard allowedRoles={['user']}><AIAssistant /></RoleGuard></AuthGuard>} />
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/success" element={<AuthGuard><Success /></AuthGuard>} />
             <Route path="/coupons" element={<AuthGuard><CouponCenter /></AuthGuard>} />
@@ -376,10 +407,14 @@ function AppContent() {
             <Route path="/admin/permissions" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminPermissions /></RoleGuard></AuthGuard>} />
             <Route path="/admin/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminWithdrawals /></RoleGuard></AuthGuard>} />
             <Route path="/admin/marketing" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMarketing /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/documents" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDocuments /></RoleGuard></AuthGuard>} />
+            <Route path="/admin/ai" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AIAssistant /></RoleGuard></AuthGuard>} />
             
             {/* --- Merchant routes (merchant role required) --- */}
             <Route path="/merchant" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantDashboard /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/stores" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantStores /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/products" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProducts /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/product-taxonomy" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductTaxonomy /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/product/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductDetail /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/product/new" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/product/edit/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
@@ -392,6 +427,7 @@ function AppContent() {
             <Route path="/merchant/refunds" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRefunds /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/rules" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRules /></RoleGuard></AuthGuard>} />
             <Route path="/merchant/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantWithdraw /></RoleGuard></AuthGuard>} />
+            <Route path="/merchant/ai" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><AIAssistant /></RoleGuard></AuthGuard>} />
           </Routes>
             </Suspense>
           </ErrorBoundary>

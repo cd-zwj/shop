@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
-import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload } from '../../types/marketing';
+import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload, MarketingEffectSummary } from '../../types/marketing';
 import { formatCurrency } from '../../utils/display';
 import { cn } from '../../lib/utils';
 
@@ -29,10 +29,11 @@ export default function MerchantCoupons() {
   const tenantId = merchantSession?.tenantId;
 
   const [templates, setTemplates] = useState<MerchantCouponTemplate[]>([]);
+  const [effectSummary, setEffectSummary] = useState<MarketingEffectSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>('ALL'); // ALL, DRAFT, ACTIVE, DISABLED
+  const [activeTab, setActiveTab] = useState<string>('ALL'); // 全部、草稿、已上线、已下线
   
-  // Create Modal
+  // 新建优惠券弹窗
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState('');
   const [couponType, setCouponType] = useState<'FIXED' | 'RATE'>('FIXED');
@@ -52,11 +53,11 @@ export default function MerchantCoupons() {
   const [stackStrategy, setStackStrategy] = useState('EXCLUSIVE');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Scope Modal
+  // 优惠券适用范围弹窗
   const [selectedTemplate, setSelectedTemplate] = useState<MerchantCouponTemplate | null>(null);
   const [scopes, setScopes] = useState<CouponScope[]>([]);
   const [isScopesLoading, setIsScopesLoading] = useState(false);
-  const [newScopeType, setNewScopeType] = useState<string>('ALL'); // ALL, PRODUCT, CATEGORY
+  const [newScopeType, setNewScopeType] = useState<string>('ALL'); // 全部商品、指定商品、指定分类
   const [newScopeId, setNewScopeId] = useState<number | ''>('');
   const [newScopeCode, setNewScopeCode] = useState<string>('');
   const [isAddingScope, setIsAddingScope] = useState(false);
@@ -77,6 +78,8 @@ export default function MerchantCoupons() {
         activeTab === 'ALL' ? undefined : activeTab
       );
       setTemplates(data || []);
+      const summary = await merchantMarketingService.getEffectSummary(tenantId);
+      setEffectSummary(summary);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '获取优惠券模板列表失败', 'error');
     } finally {
@@ -245,7 +248,7 @@ export default function MerchantCoupons() {
       setNewScopeId('');
       setNewScopeCode('');
       
-      // reload scopes
+      // 重新加载适用范围
       const data = await merchantMarketingService.getCouponScopes(tenantId, selectedTemplate.id);
       setScopes(data || []);
     } catch (err) {
@@ -273,7 +276,14 @@ export default function MerchantCoupons() {
         </button>
       </header>
 
-      {/* Tabs */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <EffectMetric label="模板数" value={effectSummary?.templateCount ?? templates.length} />
+        <EffectMetric label="领取数" value={effectSummary?.receivedCount ?? 0} />
+        <EffectMetric label="使用数" value={effectSummary?.usedCount ?? 0} />
+        <EffectMetric label="核销率" value={`${Math.round((effectSummary?.writeOffRate ?? 0) * 100)}%`} />
+      </div>
+
+      {/* 状态页签 */}
       <div className="flex border-b border-slate-100 overflow-x-auto hide-scrollbar">
         {tabs.map((tab) => (
           <button
@@ -357,6 +367,14 @@ export default function MerchantCoupons() {
                     <span>限额/领用</span>
                     <span className="font-bold text-slate-700">限 {tpl.perUserLimit} 张 / 总 {tpl.totalStock} 张</span>
                   </div>
+                  <div className="flex justify-between">
+                    <span>领取/使用</span>
+                    <span className="font-bold text-slate-700">{tpl.receivedQuantity ?? 0} / {tpl.usedQuantity ?? 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>核销率/库存</span>
+                    <span className="font-bold text-slate-700">{formatWriteOffRate(tpl)} / 剩 {resolveRemainingStock(tpl)}</span>
+                  </div>
                   <div className="flex justify-between items-start">
                     <span>有效期</span>
                     <span className="font-bold text-slate-700 text-right">
@@ -407,7 +425,7 @@ export default function MerchantCoupons() {
         </div>
       )}
 
-      {/* Create Modal */}
+      {/* 新建优惠券弹窗 */}
       <AnimatePresence>
         {isCreateOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm overflow-y-auto">
@@ -425,7 +443,7 @@ export default function MerchantCoupons() {
               </div>
 
               <form onSubmit={handleCreateTemplate} className="max-h-[70vh] overflow-y-auto p-6 space-y-5">
-                {/* Name */}
+                {/* 优惠券名称 */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="name" className="text-xs font-bold text-slate-700">优惠券名称</label>
                   <input
@@ -439,7 +457,7 @@ export default function MerchantCoupons() {
                   />
                 </div>
 
-                {/* Coupon Type */}
+                {/* 优惠类型 */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">优惠类型</label>
                   <div className="grid grid-cols-2 gap-3">
@@ -464,7 +482,7 @@ export default function MerchantCoupons() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Threshold Amount */}
+                  {/* 门槛金额 */}
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="threshold" className="text-xs font-bold text-slate-700">门槛金额 (元)</label>
                     <input
@@ -479,7 +497,7 @@ export default function MerchantCoupons() {
                     />
                   </div>
 
-                  {/* Discount value field */}
+                  {/* 优惠面值 */}
                   {couponType === 'FIXED' ? (
                     <div className="flex flex-col gap-1.5">
                       <label htmlFor="discount" className="text-xs font-bold text-slate-700">满减面值 (元)</label>
@@ -531,7 +549,7 @@ export default function MerchantCoupons() {
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                  {/* Stock */}
+                  {/* 发行库存 */}
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="stock" className="text-xs font-bold text-slate-700">发行总量 (张)</label>
                     <input
@@ -546,7 +564,7 @@ export default function MerchantCoupons() {
                     />
                   </div>
 
-                  {/* Limit per user */}
+                  {/* 每人限领 */}
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="limit" className="text-xs font-bold text-slate-700">每人限领 (张)</label>
                     <input
@@ -561,7 +579,7 @@ export default function MerchantCoupons() {
                   </div>
                 </div>
 
-                {/* Validity Type */}
+                {/* 有效期类型 */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-bold text-slate-700">有效期类型</label>
                   <div className="grid grid-cols-2 gap-3">
@@ -626,7 +644,7 @@ export default function MerchantCoupons() {
                   </div>
                 )}
 
-                {/* Receive Time (Optional) */}
+                {/* 可领取时间 */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="receiveStart" className="text-xs font-bold text-slate-700">可领取开始 (选填)</label>
@@ -650,7 +668,7 @@ export default function MerchantCoupons() {
                   </div>
                 </div>
 
-                {/* Description */}
+                {/* 使用说明 */}
                 <div className="flex flex-col gap-1.5">
                   <label htmlFor="description" className="text-xs font-bold text-slate-700">使用说明 (选填)</label>
                   <textarea
@@ -688,7 +706,7 @@ export default function MerchantCoupons() {
         )}
       </AnimatePresence>
 
-      {/* Scopes Modal */}
+      {/* 适用范围弹窗 */}
       <AnimatePresence>
         {selectedTemplate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm">
@@ -709,7 +727,7 @@ export default function MerchantCoupons() {
               </div>
 
               <div className="p-6 space-y-6">
-                {/* Existing Scopes list */}
+                {/* 已配置范围列表 */}
                 <div>
                   <h4 className="mb-2.5 text-xs font-black uppercase tracking-widest text-slate-400">已配置规则</h4>
                   {isScopesLoading ? (
@@ -737,7 +755,7 @@ export default function MerchantCoupons() {
                   )}
                 </div>
 
-                {/* Add Scope Form */}
+                {/* 添加范围表单 */}
                 <form onSubmit={handleAddScope} className="border-t border-slate-50 pt-5 space-y-4">
                   <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">添加限制规则</h4>
                   
@@ -810,4 +828,30 @@ export default function MerchantCoupons() {
       </AnimatePresence>
     </div>
   );
+}
+
+function EffectMetric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-[24px] border border-slate-100 bg-white p-5 shadow-sm">
+      <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</div>
+      <div className="mt-2 text-2xl font-black text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function formatWriteOffRate(template: MerchantCouponTemplate) {
+  const received = template.receivedQuantity ?? 0;
+  const used = template.usedQuantity ?? 0;
+  if (received <= 0) {
+    return '0%';
+  }
+  return `${Math.round((used / received) * 100)}%`;
+}
+
+function resolveRemainingStock(template: MerchantCouponTemplate) {
+  const total = template.totalStock ?? 0;
+  if (total <= 0) {
+    return '不限';
+  }
+  return Math.max(total - (template.receivedQuantity ?? 0), 0);
 }

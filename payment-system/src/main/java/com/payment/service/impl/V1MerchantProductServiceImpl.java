@@ -8,9 +8,14 @@ import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
 import com.payment.entity.ProductStock;
 import com.payment.entity.Store;
+import com.payment.entity.VirtualProductCategory;
+import com.payment.entity.VirtualProductType;
+import com.payment.enums.ProductTypeEnum;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
 import com.payment.mapper.StoreMapper;
+import com.payment.mapper.VirtualProductCategoryMapper;
+import com.payment.mapper.VirtualProductTypeMapper;
 import com.payment.service.V1MerchantProductService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +38,8 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     private final ProductMapper productMapper;
     private final ProductStockMapper productStockMapper;
     private final StoreMapper storeMapper;
+    private final VirtualProductTypeMapper virtualProductTypeMapper;
+    private final VirtualProductCategoryMapper virtualProductCategoryMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
 
@@ -43,10 +50,10 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
 
         boolean filterOutOfStock = "out_of_stock".equalsIgnoreCase(status);
         // 缺货过滤需要先按库存表锁定 productId 子集，再让 product 分页查询使用，
-        // 保证 total 计入"缺货商品总数"而非"全部商品总数"，跨页也不会漏。
+        // 保证 total 计入“缺货商品总数”而非“全部商品总数”，跨页也不会漏。
         List<Long> outOfStockProductIds = filterOutOfStock ? loadOutOfStockProductIds(tenantId) : List.of();
         if (filterOutOfStock && outOfStockProductIds.isEmpty()) {
-            // 该租户无缺货商品时直接返回空页，避免向 Mapper 传空集合触发 in() 全表扫描
+            // 该租户无缺货商品时直接返回空页，避免向数据访问层传空集合触发 in() 全表扫描。
             return new Page<>(current, size, 0L);
         }
 
@@ -94,6 +101,9 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
             throw new BusinessException("商品编码已存在");
         }
         validateActiveStore(tenantId, dto.getStoreId());
+        String productType = resolveProductType(dto.getProductType());
+        String fulfillmentMode = resolveFulfillmentMode(productType, dto.getFulfillmentMode());
+        validateVirtualTaxonomy(tenantId, productType, dto.getVirtualTypeId(), dto.getVirtualCategoryId());
 
         Product product = new Product();
         product.setTenantId(tenantId);
@@ -105,8 +115,11 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setDescription(dto.getDescription());
         product.setImageUrl(dto.getImageUrl());
         product.setStoreId(dto.getStoreId());
+        product.setFulfillmentMode(fulfillmentMode);
+        product.setVirtualTypeId(dto.getVirtualTypeId());
+        product.setVirtualCategoryId(dto.getVirtualCategoryId());
         product.setStatus(toProductStatus(dto.getStatus(), dto.getStock()));
-        product.setProductType(resolveProductType(dto.getProductType()));
+        product.setProductType(productType);
         product.setDeliveryConfig(dto.getDeliveryConfig());
         product.setDeleted(0);
         productMapper.insert(product);
@@ -136,6 +149,9 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
             throw new BusinessException("商品编码已被其他商品使用");
         }
         validateActiveStore(tenantId, dto.getStoreId());
+        String productType = resolveProductType(dto.getProductType());
+        String fulfillmentMode = resolveFulfillmentMode(productType, dto.getFulfillmentMode());
+        validateVirtualTaxonomy(tenantId, productType, dto.getVirtualTypeId(), dto.getVirtualCategoryId());
 
         product.setProductCode(productCode);
         product.setName(dto.getName());
@@ -145,8 +161,11 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setDescription(dto.getDescription());
         product.setImageUrl(dto.getImageUrl());
         product.setStoreId(dto.getStoreId());
+        product.setFulfillmentMode(fulfillmentMode);
+        product.setVirtualTypeId(dto.getVirtualTypeId());
+        product.setVirtualCategoryId(dto.getVirtualCategoryId());
         product.setStatus(toProductStatus(dto.getStatus(), dto.getStock()));
-        product.setProductType(resolveProductType(dto.getProductType()));
+        product.setProductType(productType);
         product.setDeliveryConfig(dto.getDeliveryConfig());
         productMapper.updateById(product);
 
@@ -214,7 +233,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
      * 查询当前租户所有缺货商品 ID（quantity ≤ 0）。
      *
      * <p>新建商品时 {@code getOrCreateStock} 会同步建立 {@code ProductStock} 行（quantity 默认为 0），
-     * 所以缺货等价于 "stock 行存在且 quantity ≤ 0"。如果未来允许只有 product、无 stock 行的脏数据，
+     * 所以缺货等价于“stock 行存在且 quantity ≤ 0”。如果未来允许只有 product、无 stock 行的脏数据，
      * 应在此处补 NOT EXISTS 兜底。</p>
      */
     private List<Long> loadOutOfStockProductIds(Long tenantId) {
@@ -239,6 +258,11 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         vo.setDescription(product.getDescription());
         vo.setImageUrl(product.getImageUrl());
         vo.setStoreId(product.getStoreId());
+        vo.setFulfillmentMode(product.getFulfillmentMode() == null
+                ? defaultFulfillmentMode(product.getProductType())
+                : product.getFulfillmentMode());
+        vo.setVirtualTypeId(product.getVirtualTypeId());
+        vo.setVirtualCategoryId(product.getVirtualCategoryId());
         vo.setStock(stock == null || stock.getQuantity() == null ? 0 : stock.getQuantity());
         vo.setStatus(resolveStatus(product, stock));
         vo.setProductType(product.getProductType());
@@ -261,12 +285,92 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
      */
     private String resolveProductType(String raw) {
         if (raw == null || raw.isBlank()) {
-            return com.payment.enums.ProductTypeEnum.PHYSICAL.name();
+            return ProductTypeEnum.PHYSICAL.name();
         }
         try {
-            return com.payment.enums.ProductTypeEnum.valueOf(raw.trim().toUpperCase()).name();
+            return ProductTypeEnum.valueOf(raw.trim().toUpperCase()).name();
         } catch (IllegalArgumentException ex) {
             throw new BusinessException("不支持的商品类型: " + raw);
+        }
+    }
+
+    private String resolveFulfillmentMode(String productType, String raw) {
+        String mode = raw == null || raw.isBlank()
+                ? defaultFulfillmentMode(productType)
+                : raw.trim().toUpperCase();
+        if (!"ONLINE_VIRTUAL".equals(mode) && !"OFFLINE_SERVICE".equals(mode) && !"EXPRESS_DELIVERY".equals(mode)) {
+            throw new BusinessException("不支持的履约形态: " + raw);
+        }
+        if (ProductTypeEnum.PHYSICAL.name().equals(productType) && !"EXPRESS_DELIVERY".equals(mode)) {
+            throw new BusinessException("实物商品必须使用快递发货履约形态");
+        }
+        if (ProductTypeEnum.SERVICE.name().equals(productType) && !"OFFLINE_SERVICE".equals(mode)) {
+            throw new BusinessException("服务商品必须使用线下服务履约形态");
+        }
+        if (isOnlineVirtualProduct(productType) && !"ONLINE_VIRTUAL".equals(mode)) {
+            throw new BusinessException("虚拟商品必须使用线上虚拟履约形态");
+        }
+        return mode;
+    }
+
+    private String defaultFulfillmentMode(String productType) {
+        if (ProductTypeEnum.SERVICE.name().equals(productType)) {
+            return "OFFLINE_SERVICE";
+        }
+        if (isOnlineVirtualProduct(productType)) {
+            return "ONLINE_VIRTUAL";
+        }
+        return "EXPRESS_DELIVERY";
+    }
+
+    private boolean isOnlineVirtualProduct(String productType) {
+        return ProductTypeEnum.VIRTUAL.name().equals(productType)
+                || ProductTypeEnum.CARD_KEY.name().equals(productType)
+                || ProductTypeEnum.SUBSCRIPTION.name().equals(productType);
+    }
+
+    private void validateVirtualTaxonomy(Long tenantId, String productType, Long virtualTypeId, Long virtualCategoryId) {
+        if (ProductTypeEnum.PHYSICAL.name().equals(productType)) {
+            if (virtualTypeId != null || virtualCategoryId != null) {
+                throw new BusinessException("实物商品不允许绑定虚拟商品类型或分类");
+            }
+            return;
+        }
+        if (isOnlineVirtualProduct(productType) && virtualTypeId == null) {
+            throw new BusinessException("虚拟商品必须绑定虚拟商品类型");
+        }
+        if (virtualTypeId == null) {
+            if (virtualCategoryId != null) {
+                throw new BusinessException("虚拟商品分类必须跟随虚拟商品类型选择");
+            }
+            return;
+        }
+
+        VirtualProductType type = virtualProductTypeMapper.selectOne(new LambdaQueryWrapper<VirtualProductType>()
+                .eq(VirtualProductType::getId, virtualTypeId)
+                .eq(VirtualProductType::getTenantId, tenantId)
+                .eq(VirtualProductType::getDeleted, 0)
+                .eq(VirtualProductType::getStatus, 1));
+        if (type == null) {
+            throw new BusinessException("虚拟商品类型不存在或已停用");
+        }
+        if (!productType.equals(type.getDeliveryStrategy())) {
+            throw new BusinessException("虚拟商品类型交付策略必须和商品类型一致");
+        }
+        if (virtualCategoryId == null) {
+            return;
+        }
+
+        VirtualProductCategory category = virtualProductCategoryMapper.selectOne(new LambdaQueryWrapper<VirtualProductCategory>()
+                .eq(VirtualProductCategory::getId, virtualCategoryId)
+                .eq(VirtualProductCategory::getTenantId, tenantId)
+                .eq(VirtualProductCategory::getDeleted, 0)
+                .eq(VirtualProductCategory::getStatus, 1));
+        if (category == null) {
+            throw new BusinessException("虚拟商品分类不存在或已停用");
+        }
+        if (!virtualTypeId.equals(category.getTypeId())) {
+            throw new BusinessException("虚拟商品分类必须属于所选虚拟商品类型");
         }
     }
 

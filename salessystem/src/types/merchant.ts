@@ -7,6 +7,8 @@ export type ProductType =
   | 'SERVICE'
   | 'SUBSCRIPTION';
 
+export type FulfillmentMode = 'ONLINE_VIRTUAL' | 'OFFLINE_SERVICE' | 'EXPRESS_DELIVERY';
+
 export interface MerchantProduct {
   id: number;
   tenantId: number;
@@ -17,6 +19,10 @@ export interface MerchantProduct {
   category?: string | null;
   description?: string | null;
   imageUrl?: string | null;
+  storeId?: number | null;
+  fulfillmentMode?: FulfillmentMode | null;
+  virtualTypeId?: number | null;
+  virtualCategoryId?: number | null;
   stock: number;
   status: 'active' | 'inactive' | 'out_of_stock' | string;
   productType?: ProductType | null;
@@ -34,6 +40,10 @@ export interface MerchantProductUpsertPayload {
   category?: string;
   description?: string;
   imageUrl?: string;
+  storeId?: number;
+  fulfillmentMode?: FulfillmentMode;
+  virtualTypeId?: number;
+  virtualCategoryId?: number;
   stock: number;
   status?: 'active' | 'inactive' | 'out_of_stock';
   productType?: ProductType;
@@ -169,3 +179,88 @@ export interface MerchantTransactionFilters {
 
 export type MerchantOrder = SalesOrder;
 export type MerchantOrderDetail = SalesOrderDetail;
+
+export interface MerchantStore {
+  id: number;
+  tenantId: number;
+  storeNo: string;
+  storeName: string;
+  storeType?: string | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  province?: string | null;
+  city?: string | null;
+  district?: string | null;
+  address?: string | null;
+  longitude?: number | null;
+  latitude?: number | null;
+  rating?: number | null;
+  businessHours?: string | null;
+  serviceTags?: string | null;
+  status: number;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface MerchantStorePayload {
+  storeNo?: string;
+  storeName: string;
+  storeType?: string;
+  contactName?: string;
+  contactPhone?: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  address?: string;
+  longitude?: number;
+  latitude?: number;
+  businessHours?: string;
+  serviceTags?: string;
+  status?: number;
+}
+
+export interface VirtualProductType {
+  id: number;
+  tenantId: number;
+  typeCode: string;
+  typeName: string;
+  deliveryStrategy: Exclude<ProductType, 'PHYSICAL'>;
+  description?: string | null;
+  status: number;
+  sortOrder: number;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface VirtualProductTypePayload {
+  typeCode: string;
+  typeName: string;
+  deliveryStrategy: Exclude<ProductType, 'PHYSICAL'>;
+  description?: string;
+  status?: number;
+  sortOrder?: number;
+}
+
+export interface VirtualProductCategory {
+  id: number;
+  tenantId: number;
+  typeId: number;
+  categoryCode: string;
+  categoryName: string;
+  parentId: number;
+  description?: string | null;
+  status: number;
+  sortOrder: number;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
+export interface VirtualProductCategoryPayload {
+  typeId: number;
+  categoryCode: string;
+  categoryName: string;
+  parentId?: number;
+  description?: string;
+  status?: number;
+  sortOrder?: number;
+}

@@ -8,9 +8,13 @@ import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
 import com.payment.entity.ProductStock;
 import com.payment.entity.Store;
+import com.payment.entity.VirtualProductCategory;
+import com.payment.entity.VirtualProductType;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
 import com.payment.mapper.StoreMapper;
+import com.payment.mapper.VirtualProductCategoryMapper;
+import com.payment.mapper.VirtualProductTypeMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -35,6 +39,8 @@ class V1MerchantProductServiceImplTest {
     private ProductMapper productMapper;
     private ProductStockMapper productStockMapper;
     private StoreMapper storeMapper;
+    private VirtualProductTypeMapper virtualProductTypeMapper;
+    private VirtualProductCategoryMapper virtualProductCategoryMapper;
     private V1MerchantSupportService supportService;
     private ProductIndexMessagePublisher productIndexMessagePublisher;
     private V1MerchantProductServiceImpl service;
@@ -44,9 +50,11 @@ class V1MerchantProductServiceImplTest {
         productMapper = mock(ProductMapper.class);
         productStockMapper = mock(ProductStockMapper.class);
         storeMapper = mock(StoreMapper.class);
+        virtualProductTypeMapper = mock(VirtualProductTypeMapper.class);
+        virtualProductCategoryMapper = mock(VirtualProductCategoryMapper.class);
         supportService = mock(V1MerchantSupportService.class);
         productIndexMessagePublisher = mock(ProductIndexMessagePublisher.class);
-        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, storeMapper, supportService, productIndexMessagePublisher);
+        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, storeMapper, virtualProductTypeMapper, virtualProductCategoryMapper, supportService, productIndexMessagePublisher);
     }
 
     @Test
@@ -279,6 +287,65 @@ class V1MerchantProductServiceImplTest {
         verify(productIndexMessagePublisher, never()).publishDelete(any());
     }
 
+    @Test
+    void createProductShouldRejectPhysicalWithVirtualTaxonomy() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 8, "active");
+        dto.setProductType("PHYSICAL");
+        dto.setVirtualTypeId(1L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+
+        assertEquals("实物商品不允许绑定虚拟商品类型或分类", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+    }
+
+    @Test
+    void createProductShouldRequireVirtualTypeForOnlineVirtualProduct() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "资料包", 8, "active");
+        dto.setProductType("VIRTUAL");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+
+        assertEquals("虚拟商品必须绑定虚拟商品类型", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+    }
+
+    @Test
+    void createProductShouldRejectVirtualTypeStrategyMismatch() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(virtualProductTypeMapper.selectOne(any())).thenReturn(buildVirtualType(1L, 1L, "CARD_KEY"));
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "资料包", 8, "active");
+        dto.setProductType("VIRTUAL");
+        dto.setVirtualTypeId(1L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+
+        assertEquals("虚拟商品类型交付策略必须和商品类型一致", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+    }
+
+    @Test
+    void createProductShouldRejectVirtualCategoryTypeMismatch() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(virtualProductTypeMapper.selectOne(any())).thenReturn(buildVirtualType(1L, 1L, "VIRTUAL"));
+        when(virtualProductCategoryMapper.selectOne(any())).thenReturn(buildVirtualCategory(2L, 1L, 99L));
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "资料包", 8, "active");
+        dto.setProductType("VIRTUAL");
+        dto.setVirtualTypeId(1L);
+        dto.setVirtualCategoryId(2L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+
+        assertEquals("虚拟商品分类必须属于所选虚拟商品类型", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+    }
+
     private Product buildProduct(Long id, Long tenantId, String code, String name, Integer status) {
         Product product = new Product();
         product.setId(id);
@@ -324,4 +391,24 @@ class V1MerchantProductServiceImplTest {
         store.setDeleted(0);
         return store;
     }
+    private VirtualProductType buildVirtualType(Long id, Long tenantId, String deliveryStrategy) {
+        VirtualProductType type = new VirtualProductType();
+        type.setId(id);
+        type.setTenantId(tenantId);
+        type.setDeliveryStrategy(deliveryStrategy);
+        type.setStatus(1);
+        type.setDeleted(0);
+        return type;
+    }
+
+    private VirtualProductCategory buildVirtualCategory(Long id, Long tenantId, Long typeId) {
+        VirtualProductCategory category = new VirtualProductCategory();
+        category.setId(id);
+        category.setTenantId(tenantId);
+        category.setTypeId(typeId);
+        category.setStatus(1);
+        category.setDeleted(0);
+        return category;
+    }
+
 }

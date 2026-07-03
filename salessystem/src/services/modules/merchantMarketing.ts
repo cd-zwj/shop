@@ -9,10 +9,28 @@ import type {
   ActivityRuleCreatePayload,
   MemberLevel,
   MemberTag,
+  MarketingEffectSummary,
+  CouponEffect,
 } from '../../types/marketing';
 
 export const merchantMarketingService = {
-  // Coupon Templates
+  getEffectSummary(tenantId: number) {
+    return request<MarketingEffectSummary>({
+      url: `/v1/merchant/tenants/${tenantId}/marketing/effect/summary`,
+      method: 'get',
+      authRole: 'merchant',
+    });
+  },
+
+  getCouponEffect(tenantId: number, templateId: number) {
+    return request<CouponEffect>({
+      url: `/v1/merchant/tenants/${tenantId}/marketing/coupons/${templateId}/effect`,
+      method: 'get',
+      authRole: 'merchant',
+    });
+  },
+
+  // 优惠券模板
   getCouponTemplates(tenantId: number, status?: string) {
     return request<MerchantCouponTemplate[]>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/coupons`,
@@ -64,7 +82,7 @@ export const merchantMarketingService = {
     });
   },
 
-  // Promotion Activities
+  // 营销活动
   getActivities(tenantId: number, status?: string) {
     return request<PromotionActivity[]>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/activities`,
@@ -116,7 +134,7 @@ export const merchantMarketingService = {
     });
   },
 
-  // Member Levels & Tags
+  // 会员等级与标签
   getMemberLevels(tenantId: number) {
     return request<MemberLevel[]>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/member-levels`,
@@ -129,7 +147,7 @@ export const merchantMarketingService = {
     return request<MemberLevel>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/member-levels`,
       method: 'post',
-      params, // query params, since backend uses @RequestParam
+      params, // 后端使用 @RequestParam 接收参数
       authRole: 'merchant',
     });
   },
@@ -146,7 +164,7 @@ export const merchantMarketingService = {
     return request<MemberTag>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/member-tags`,
       method: 'post',
-      params: { name }, // query params, since backend uses @RequestParam
+      params: { name }, // 后端使用 @RequestParam 接收参数
       authRole: 'merchant',
     });
   },
