@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
+import com.payment.config.AuthStpKit;
+import com.payment.config.RbacPrincipalType;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
@@ -33,7 +34,6 @@ import com.payment.entity.Tenant;
 import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
 import com.payment.entity.UnifiedWalletAccount;
-import com.payment.entity.User;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MerchantWalletAccountMapper;
 import com.payment.mapper.PaymentBillMapper;
@@ -51,6 +51,7 @@ import com.payment.service.UserPermissionService;
 import com.payment.service.UserService;
 import com.payment.service.V1AdminService;
 import com.payment.service.WithdrawalService;
+import com.payment.util.AuthLoginIdHelper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -64,6 +65,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * 平台管理端核心服务实现类。
+ * <p>提供管理员登录、仪表盘数据概览、趋势统计、商户管理、用户管理、
+ * 提现审批、权限配置、订单与支付账单查询、充值订单查询等功能，
+ * 是平台管理端各 Controller 的统一后端入口。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class V1AdminServiceImpl implements V1AdminService {
@@ -85,6 +92,13 @@ public class V1AdminServiceImpl implements V1AdminService {
     private final RechargeOrderV1Mapper rechargeOrderV1Mapper;
     private final AppOrderService appOrderService;
 
+    /**
+     * 管理员登录。
+     *
+     * @param username 用户名
+     * @param password 密码
+     * @return 登录 Token
+     */
     @Override
     public String login(String username, String password) {
         LoginDTO loginDTO = new LoginDTO();
@@ -93,29 +107,39 @@ public class V1AdminServiceImpl implements V1AdminService {
         return userService.loginadmin(loginDTO);
     }
 
+    /**
+     * 获取管理员会话信息。
+     *
+     * @return 管理员会话视图对象，包含用户ID、角色、权限等信息
+     */
     @Override
     public V1AdminSessionVO getAdminSession() {
-        Long loginId = StpUtil.getLoginIdAsLong();
-        User user = (User) StpUtil.getSession().get("user");
-        if (user == null) {
-            user = userService.getById(loginId);
+        Long loginId = AuthLoginIdHelper.parse(AuthStpKit.ADMIN.getLoginId(), AuthStpKit.ADMIN_TYPE);
+        PlatformUser admin = (PlatformUser) AuthStpKit.ADMIN.getSession().get("platformUser");
+        if (admin == null) {
+            admin = platformUserMapper.selectById(loginId);
         }
-        if (user == null || user.getStatus() == 0 || !Integer.valueOf(2).equals(user.getUserType())) {
+        if (admin == null || admin.getDeleted() == 1 || admin.getStatus() == null || admin.getStatus() == 0) {
             throw new BusinessException("管理员会话不存在或已失效");
         }
 
         V1AdminSessionVO vo = new V1AdminSessionVO();
-        vo.setUserId(user.getId());
-        vo.setUsername(user.getUsername());
-        vo.setNickname(user.getNickname());
-        vo.setUserType(user.getUserType());
+        vo.setUserId(admin.getId());
+        vo.setUsername(admin.getUsername());
+        vo.setNickname(admin.getUsername());
+        vo.setUserType(2);
         vo.setRole("ADMIN");
         vo.setScope("V1_ADMIN");
-        vo.setRoles(roleMapper.selectRoleCodesByUserId(user.getId()));
-        vo.setPermissions(permissionMapper.selectPermissionCodesByUserId(user.getId()));
+        vo.setRoles(roleMapper.selectRoleCodesByPrincipal(admin.getId(), RbacPrincipalType.ADMIN));
+        vo.setPermissions(permissionMapper.selectPermissionCodesByPrincipal(admin.getId(), RbacPrincipalType.ADMIN));
         return vo;
     }
 
+    /**
+     * 获取管理员基本信息。
+     *
+     * @return 包含管理员用户ID、用户名、昵称、角色、权限等信息的 Map
+     */
     @Override
     public Map<String, Object> getAdminInfo() {
         V1AdminSessionVO session = getAdminSession();
@@ -130,6 +154,14 @@ public class V1AdminServiceImpl implements V1AdminService {
         return info;
     }
 
+    /**
+     * 获取仪表盘总览数据。
+     * <p>
+     * 使用 SQL 端聚合查询订单、支付账单、充值订单的统计数据，
+     * 避免全表加载到内存导致 OOM。
+     *
+     * @return 仪表盘概览对象，包含平台用户数、商户数、订单统计、支付统计、充值统计、待提现数量等
+     */
     @Override
     public AdminDashboardOverviewVO getDashboardOverview() {
         AdminDashboardOverviewVO vo = new AdminDashboardOverviewVO();
@@ -171,6 +203,14 @@ public class V1AdminServiceImpl implements V1AdminService {
         return vo;
     }
 
+    /**
+     * 获取订单/用户趋势数据。
+     *
+     * @param startDate   开始日期，格式 yyyy-MM-dd，默认为结束日期前29天
+     * @param endDate     结束日期，格式 yyyy-MM-dd，默认为当天
+     * @param granularity 粒度，支持 DAY、WEEK、MONTH，默认 DAY
+     * @return 趋势数据对象，包含按时间维度聚合的订单量、订单金额、新增用户数
+     */
     @Override
     public AdminTrendVO getTrend(String startDate, String endDate, String granularity) {
         LocalDate end = endDate != null ? LocalDate.parse(endDate) : LocalDate.now();
@@ -284,6 +324,11 @@ public class V1AdminServiceImpl implements V1AdminService {
         return p;
     }
 
+    /**
+     * 获取交易总览数据。
+     *
+     * @return 交易总览对象，包含订单统计、支付账单统计、充值订单统计等汇总数据
+     */
     @Override
     public AdminTradeOverviewVO getTradeOverview() {
         // SQL 端聚合，避免全表加载到内存（修复 OOM 风险）
@@ -324,6 +369,15 @@ public class V1AdminServiceImpl implements V1AdminService {
         return vo;
     }
 
+    /**
+     * 分页查询平台用户。
+     *
+     * @param current  当前页码
+     * @param size     每页条数
+     * @param keyword  搜索关键词（匹配用户名、手机号、邮箱）
+     * @param status   用户状态筛选，null 表示不过滤
+     * @return 平台用户分页列表
+     */
     @Override
     public Page<AdminPlatformUserVO> listPlatformUsers(Integer current, Integer size, String keyword, Integer status) {
         Page<PlatformUser> page = new Page<>(current, size);
@@ -343,6 +397,13 @@ public class V1AdminServiceImpl implements V1AdminService {
         return result;
     }
 
+    /**
+     * 获取平台用户详情。
+     *
+     * @param userId 平台用户ID
+     * @return 平台用户详情视图对象
+     * @throws BusinessException 用户不存在时抛出
+     */
     @Override
     public AdminPlatformUserVO getPlatformUserDetail(Long userId) {
         PlatformUser platformUser = platformUserMapper.selectById(userId);
@@ -352,18 +413,37 @@ public class V1AdminServiceImpl implements V1AdminService {
         return toPlatformUserVO(platformUser);
     }
 
+    /**
+     * 启用平台用户。
+     *
+     * @param userId 平台用户ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void enablePlatformUser(Long userId) {
         updatePlatformUserStatus(userId, 1);
     }
 
+    /**
+     * 禁用平台用户。
+     *
+     * @param userId 平台用户ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disablePlatformUser(Long userId) {
         updatePlatformUserStatus(userId, 0);
     }
 
+    /**
+     * 分页查询商户列表。
+     *
+     * @param current 当前页码
+     * @param size    每页条数
+     * @param name    商户名称筛选，null 表示不过滤
+     * @param status  商户状态筛选，null 表示不过滤
+     * @return 商户列表分页数据
+     */
     @Override
     public Page<MerchantListVO> listMerchants(Integer current, Integer size, String name, Integer status) {
         MerchantQueryDTO queryDTO = new MerchantQueryDTO();
@@ -388,74 +468,160 @@ public class V1AdminServiceImpl implements V1AdminService {
         return result;
     }
 
+    /**
+     * 获取商户详情。
+     *
+     * @param tenantId 租户ID
+     * @return 商户详情视图对象
+     */
     @Override
     public MerchantDetailVO getMerchantDetail(Long tenantId) {
         return merchantService.getMerchantDetail(tenantId);
     }
 
+    /**
+     * 创建商户。
+     *
+     * @param dto 商户信息 DTO
+     * @return 创建成功的租户实体
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Tenant createMerchant(MerchantDTO dto) {
         return merchantService.createMerchant(dto);
     }
 
+    /**
+     * 更新商户信息。
+     *
+     * @param tenantId 租户ID
+     * @param dto      商户信息 DTO
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateMerchant(Long tenantId, MerchantDTO dto) {
         merchantService.updateMerchant(tenantId, dto);
     }
 
+    /**
+     * 启用商户。
+     *
+     * @param tenantId 租户ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void enableMerchant(Long tenantId) {
         merchantService.enableMerchant(tenantId);
     }
 
+    /**
+     * 禁用商户。
+     *
+     * @param tenantId 租户ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableMerchant(Long tenantId) {
         merchantService.disableMerchant(tenantId);
     }
 
+    /**
+     * 分页查询提现记录。
+     *
+     * @param current      当前页码
+     * @param size         每页条数
+     * @param merchantName 商户名称筛选，null 表示不过滤
+     * @param status       提现状态筛选，null 表示不过滤
+     * @param startDate    开始日期，null 表示不过滤
+     * @param endDate      结束日期，null 表示不过滤
+     * @return 提现记录分页数据
+     */
     @Override
     public Page<WithdrawalVO> listWithdrawals(Integer current, Integer size, String merchantName, Integer status, String startDate, String endDate) {
         return withdrawalService.listWithdrawalsForAdmin(current, size, merchantName, status, startDate, endDate);
     }
 
+    /**
+     * 审批通过提现申请。
+     *
+     * @param withdrawalId 提现记录ID
+     * @param approverId   审批人ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approveWithdrawal(Long withdrawalId, Long approverId) {
         withdrawalService.approveWithdrawal(approverId, buildWithdrawalApproveDTO(withdrawalId, true, null));
     }
 
+    /**
+     * 驳回提现申请。
+     *
+     * @param withdrawalId 提现记录ID
+     * @param approverId   审批人ID
+     * @param reason       驳回原因
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void rejectWithdrawal(Long withdrawalId, Long approverId, String reason) {
         withdrawalService.approveWithdrawal(approverId, buildWithdrawalApproveDTO(withdrawalId, false, reason));
     }
 
+    /**
+     * 获取所有权限列表（按模块分组）。
+     *
+     * @return 以模块名为 key、权限列表为 value 的 Map
+     */
     @Override
     public Map<String, List<Permission>> listPermissions() {
         return permissionMapper.selectList(null).stream().collect(Collectors.groupingBy(Permission::getModule));
     }
 
+    /**
+     * 获取用户权限配置。
+     *
+     * @param userId 用户ID
+     * @return 用户权限视图对象，包含角色和权限列表
+     */
     @Override
     public UserPermissionVO getUserPermissions(Long userId) {
         return userPermissionService.getUserPermissions(userId);
     }
 
+    /**
+     * 设置用户权限。
+     *
+     * @param userId 用户ID
+     * @param dto    包含权限ID列表的 DTO
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setUserPermissions(Long userId, UserPermissionDTO dto) {
         userPermissionService.setUserPermissions(userId, dto.getPermissionIds());
     }
 
+    /**
+     * 移除用户单条权限。
+     *
+     * @param userId       用户ID
+     * @param permissionId 权限ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void removeUserPermission(Long userId, Long permissionId) {
         userPermissionService.revokePermission(userId, permissionId);
     }
 
+    /**
+     * 分页查询订单列表。
+     *
+     * @param current     当前页码
+     * @param size        每页条数
+     * @param orderNo     订单号模糊搜索，null 表示不过滤
+     * @param orderStatus 订单状态筛选，null 表示不过滤
+     * @param payStatus   支付状态筛选，null 表示不过滤
+     * @param tenantId    租户ID筛选，null 表示不过滤
+     * @return 订单列表分页数据
+     */
     @Override
     public Page<AdminOrderListVO> listOrders(Integer current, Integer size, String orderNo, String orderStatus, String payStatus, Long tenantId) {
         Page<SalesOrder> page = new Page<>(current, size);
@@ -486,6 +652,13 @@ public class V1AdminServiceImpl implements V1AdminService {
         return result;
     }
 
+    /**
+     * 获取订单详情。
+     *
+     * @param orderNo 订单号
+     * @return 订单详情视图对象
+     * @throws BusinessException 订单不存在时抛出
+     */
     @Override
     public SalesOrderDetailVO getOrderDetail(String orderNo) {
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
@@ -497,6 +670,16 @@ public class V1AdminServiceImpl implements V1AdminService {
         return appOrderService.getOrderDetail(salesOrder.getPlatformUserId(), orderNo);
     }
 
+    /**
+     * 分页查询支付账单。
+     *
+     * @param current     当前页码
+     * @param size        每页条数
+     * @param bizType     业务类型筛选，null 表示不过滤
+     * @param payStatus   支付状态筛选，null 表示不过滤
+     * @param channelCode 支付渠道筛选，null 表示不过滤
+     * @return 支付账单分页数据
+     */
     @Override
     public Page<AdminPaymentBillVO> listPaymentBills(Integer current, Integer size, String bizType, String payStatus, String channelCode) {
         Page<PaymentBill> page = new Page<>(current, size);
@@ -527,6 +710,16 @@ public class V1AdminServiceImpl implements V1AdminService {
         return result;
     }
 
+    /**
+     * 分页查询充值订单。
+     *
+     * @param current   当前页码
+     * @param size      每页条数
+     * @param walletType 钱包类型筛选，null 表示不过滤
+     * @param bizStatus  业务状态筛选，null 表示不过滤
+     * @param tenantId   租户ID筛选，null 表示不过滤
+     * @return 充值订单分页数据
+     */
     @Override
     public Page<AdminRechargeOrderVO> listRechargeOrders(Integer current, Integer size, String walletType, String bizStatus, Long tenantId) {
         Page<RechargeOrderV1> page = new Page<>(current, size);
@@ -557,6 +750,13 @@ public class V1AdminServiceImpl implements V1AdminService {
         return result;
     }
 
+    /**
+     * 更新平台用户状态。
+     *
+     * @param userId 用户 ID
+     * @param status 目标状态（1=启用，0=禁用）
+     * @throws BusinessException 用户不存在时抛出
+     */
     private void updatePlatformUserStatus(Long userId, Integer status) {
         PlatformUser platformUser = platformUserMapper.selectById(userId);
         if (platformUser == null || platformUser.getDeleted() == 1) {
@@ -566,6 +766,12 @@ public class V1AdminServiceImpl implements V1AdminService {
         platformUserMapper.updateById(platformUser);
     }
 
+    /**
+     * 将平台用户实体转换为视图对象，同时查询关联的钱包余额、会员商户数等聚合信息。
+     *
+     * @param user 平台用户实体
+     * @return 平台用户详情视图对象
+     */
     private AdminPlatformUserVO toPlatformUserVO(PlatformUser user) {
         AdminPlatformUserVO vo = new AdminPlatformUserVO();
         vo.setId(user.getId());

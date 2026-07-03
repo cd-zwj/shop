@@ -40,6 +40,20 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * 支付账单核心服务实现。
+ * <p>
+ * 负责支付单的全生命周期管理，包括：
+ * <ul>
+ *   <li>创建支付账单并发起第三方支付</li>
+ *   <li>处理支付异步回调（验签、幂等、状态流转）</li>
+ *   <li>标记业务关闭（超时、取消等场景）</li>
+ *   <li>主动同步第三方支付状态</li>
+ *   <li>支付成功后通过 Outbox 发布业务事件</li>
+ * </ul>
+ * 迟到回调（Late Callback）支持三种处理策略：直接标记成功、触发退款、转人工审核。
+ * 所有状态变更均通过事务保护。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -52,6 +66,20 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     private final List<PaymentProvider> paymentProviders;
     private final RefundService refundService;
 
+    /**
+     * 创建支付账单。
+     * <p>
+     * 生成唯一账单号（PB 前缀），设置初始状态为待支付，有效期 30 分钟。
+     *
+     * @param bizType       业务类型（如 ORDER、RECHARGE）
+     * @param bizNo         业务单号
+     * @param tenantId      租户 ID（可为 null）
+     * @param platformUserId 平台用户 ID
+     * @param payAmount     支付金额
+     * @param channelCode   支付渠道编码
+     * @return 新创建的支付账单实体
+     * @throws BusinessException 支付渠道为空时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PaymentBill createBill(String bizType,
@@ -80,11 +108,27 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         return paymentBill;
     }
 
+    /**
+     * 调用第三方支付渠道创建实际支付。
+     *
+     * @param paymentBill 已持久化的支付账单
+     * @return 包含支付链接的响应 DTO
+     */
     @Override
     public PayResponseDTO createExternalPayment(PaymentBill paymentBill) {
         return getProvider(paymentBill.getChannelCode()).createPayment(paymentBill);
     }
 
+    /**
+     * 处理第三方支付回调。
+     * <p>
+     * 流程：幂等检查（按回调请求 ID 去重） → 验签 → 状态更新 → 发布业务事件。
+     * 已成功的账单不会重复处理。
+     *
+     * @param channelCode 支付渠道编码
+     * @param callbackDTO 回调数据
+     * @throws BusinessException 账单不存在或验签失败时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleCallback(String channelCode, PaymentCallbackDTO callbackDTO) {
@@ -129,6 +173,13 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         callbackRecordMapper.updateById(callbackRecord);
     }
 
+    /**
+     * 根据业务单号关闭支付账单（如订单取消、超时等场景）。
+     *
+     * @param bizType      业务类型
+     * @param bizNo        业务单号
+     * @param statusReason 关闭原因枚举
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void markBizClosed(String bizType, String bizNo, PaymentStatusReasonEnum statusReason) {
@@ -145,6 +196,12 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         closePaymentBill(paymentBill, statusReason);
     }
 
+    /**
+     * 根据账单号关闭支付账单。
+     *
+     * @param billNo       支付账单号
+     * @param statusReason 关闭原因枚举
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void markBillClosed(String billNo, PaymentStatusReasonEnum statusReason) {
@@ -159,6 +216,11 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         closePaymentBill(paymentBill, statusReason);
     }
 
+    /**
+     * 关闭支付账单（内部方法）。
+     * <p>
+     * 仅对待支付状态的账单执行关闭，记录关闭原因到扩展 JSON。
+     */
     private void closePaymentBill(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
@@ -171,18 +233,35 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         paymentBillMapper.updateById(paymentBill);
     }
 
+    /**
+     * 根据账单号查询支付账单。
+     */
     @Override
     public PaymentBill getByBillNo(String billNo) {
         return paymentBillMapper.selectOne(new LambdaQueryWrapper<PaymentBill>()
                 .eq(PaymentBill::getBillNo, billNo));
     }
 
+    /**
+     * 获取指定业务单号对应的最新一笔支付账单。
+     *
+     * @param bizType 业务类型
+     * @param bizNo   业务单号
+     * @return 最新支付账单，不存在时返回 null
+     */
     @Override
     public PaymentBill getLatestByBizTypeAndBizNo(String bizType, String bizNo) {
         List<PaymentBill> paymentBills = listByBizTypeAndBizNo(bizType, bizNo);
         return paymentBills.isEmpty() ? null : paymentBills.get(0);
     }
 
+    /**
+     * 列出指定业务单号对应的所有支付账单，按创建时间降序排列。
+     *
+     * @param bizType 业务类型
+     * @param bizNo   业务单号
+     * @return 支付账单列表
+     */
     @Override
     public List<PaymentBill> listByBizTypeAndBizNo(String bizType, String bizNo) {
         return paymentBillMapper.selectList(new LambdaQueryWrapper<PaymentBill>()
@@ -192,6 +271,16 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
                 .orderByDesc(PaymentBill::getId));
     }
 
+    /**
+     * 主动向第三方支付渠道同步账单状态。
+     * <p>
+     * 若查询结果为已支付，则更新账单状态并发布业务成功事件。
+     * 已成功的账单直接返回，不重复查询。
+     *
+     * @param billNo 支付账单号
+     * @return 最新的支付账单实体
+     * @throws BusinessException 账单不存在时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PaymentBill syncBillStatus(String billNo) {
@@ -217,6 +306,11 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         return paymentBill;
     }
 
+    /**
+     * 处理支付成功结果。
+     * <p>
+     * 若账单已关闭，则根据迟到回调策略决定是标记成功、触发退款还是转人工审核。
+     */
     private void handlePaidResult(PaymentBill paymentBill, String thirdPartyBillNo, String callbackStatus) {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
@@ -231,6 +325,16 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         markBillPaid(paymentBill, thirdPartyBillNo, callbackStatus, true, null, true);
     }
 
+    /**
+     * 处理已关闭账单的迟到回调。
+     * <p>
+     * 根据关闭原因的迟到回调策略执行不同操作：
+     * <ul>
+     *   <li>MARK_SUCCESS：直接标记为支付成功</li>
+     *   <li>TRIGGER_REFUND：标记成功并触发退款流程</li>
+     *   <li>其他：标记成功但不发布业务事件，创建人工审核补偿任务</li>
+     * </ul>
+     */
     private void handleClosedBillLateSuccess(PaymentBill paymentBill,
                                              String thirdPartyBillNo,
                                              String callbackStatus,
@@ -279,6 +383,12 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         );
     }
 
+    /**
+     * 将账单标记为已支付。
+     * <p>
+     * 更新支付状态、回调状态、第三方交易号，可选清除状态原因。
+     * 当 publishBizSuccess 为 true 时，通过 Outbox 发布业务成功事件。
+     */
     private void markBillPaid(PaymentBill paymentBill,
                               String thirdPartyBillNo,
                               String callbackStatus,
@@ -304,6 +414,11 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         }
     }
 
+    /**
+     * 通过 Outbox 发布业务支付成功事件。
+     * <p>
+     * 根据业务类型（RECHARGE / 其他）选择不同的消息队列。
+     */
     private void publishBizSuccess(PaymentBill paymentBill) {
         String queueName = PaymentBizTypeEnum.RECHARGE.name().equals(paymentBill.getBizType())
                 ? RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE
@@ -325,6 +440,9 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         log.info("Outbox record inserted with PENDING status, bizNo={}, outboxId={}", paymentBill.getBizNo(), outbox.getId());
     }
 
+    /**
+     * 根据渠道编码查找对应的支付提供商。
+     */
     private PaymentProvider getProvider(String channelCode) {
         Map<String, PaymentProvider> providerMap = paymentProviders.stream()
                 .collect(Collectors.toMap(PaymentProvider::getChannelCode, Function.identity()));
@@ -335,6 +453,9 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         return paymentProvider;
     }
 
+    /**
+     * 从账单扩展 JSON 中解析状态原因枚举。
+     */
     private PaymentStatusReasonEnum resolveStatusReason(PaymentBill paymentBill) {
         if (paymentBill.getExtensionJson() == null || paymentBill.getExtensionJson().isBlank()) {
             return null;
@@ -350,18 +471,27 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         }
     }
 
+    /**
+     * 将状态原因编码写入账单扩展 JSON。
+     */
     private void applyStatusReason(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
         ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
         extension.put(RefundConstants.EXTENSION_STATUS_REASON_CODE, statusReason.getCode());
         paymentBill.setExtensionJson(JsonUtils.toJson(extension));
     }
 
+    /**
+     * 从账单扩展 JSON 中清除状态原因字段。
+     */
     private void clearStatusReason(PaymentBill paymentBill) {
         ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
         extension.remove(RefundConstants.EXTENSION_STATUS_REASON_CODE);
         paymentBill.setExtensionJson(extension.isEmpty() ? null : JsonUtils.toJson(extension));
     }
 
+    /**
+     * 安全解析账单扩展 JSON 为 ObjectNode，解析失败返回空节点。
+     */
     private ObjectNode parseExtensionJson(String extensionJson) {
         if (extensionJson == null || extensionJson.isBlank()) {
             return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode();
@@ -374,10 +504,12 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         }
     }
 
+    /** 若补偿任务不存在则创建（幂等）。 */
     private void createCompensationTaskIfAbsent(String bizType, String bizNo, String remark) {
         compensationTaskFactory.createIfAbsent(bizType, bizNo, remark);
     }
 
+    /** 返回参数列表中第一个非空值，全部为空时返回 null。 */
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (value != null && !value.isBlank()) {

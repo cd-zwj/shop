@@ -145,13 +145,11 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 5 }) : users).map((user, index) => {
-                const isData = typeof user === 'object';
-                return (
+              {(isLoading ? Array.from<AdminPlatformUser | undefined>({ length: 5 }) : users).map((user, index) => {                return (
                   <tr
-                    key={isData ? user.id : index}
+                    key={user ? user.id : index}
                     className="cursor-pointer transition-colors hover:bg-slate-50/50"
-                    onClick={() => isData && navigate(`/admin/user/${user.id}`)}
+                    onClick={() => user && navigate(`/admin/user/${user.id}`)}
                   >
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
@@ -160,34 +158,34 @@ export default function AdminUsersPage() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-900">
-                            {isData ? user.username : '加载中...'}
+                            {user ? user.username : '加载中...'}
                           </p>
                           <p className="mt-1 text-xs font-medium text-slate-400">
-                            {isData ? user.userNo || `ID ${user.id}` : '--'}
+                            {user ? user.userNo || `ID ${user.id}` : '--'}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
-                      <p className="text-sm font-medium text-slate-700">{isData ? user.phone || '--' : '--'}</p>
-                      <p className="mt-1 text-xs font-medium text-slate-400">{isData ? user.email || '--' : '--'}</p>
+                      <p className="text-sm font-medium text-slate-700">{user ? user.phone || '--' : '--'}</p>
+                      <p className="mt-1 text-xs font-medium text-slate-400">{user ? user.email || '--' : '--'}</p>
                     </td>
                     <td className="px-8 py-6 text-sm font-black text-slate-900">
-                      {isData ? formatCurrency(user.unifiedWalletBalance) : '--'}
+                      {user ? formatCurrency(user.unifiedWalletBalance) : '--'}
                     </td>
                     <td className="px-8 py-6">
                       <span
                         className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                          isData && user.status === 1
+                          user && user.status === 1
                             ? 'bg-green-100 text-green-700'
                             : 'bg-slate-200 text-slate-500'
                         }`}
                       >
-                        {isData ? (user.status === 1 ? '启用中' : '已禁用') : '...'}
+                        {user ? (user.status === 1 ? '启用中' : '已禁用') : '...'}
                       </span>
                     </td>
                     <td className="px-8 py-6">
-                      {isData && (
+                      {user && (
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={(event) => {

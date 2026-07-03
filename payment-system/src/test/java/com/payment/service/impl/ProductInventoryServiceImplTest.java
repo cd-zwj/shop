@@ -23,12 +23,12 @@ class ProductInventoryServiceImplTest {
         when(productStockMapper.selectOne(any()))
                 .thenReturn(buildStock(9L, 1L, 10))
                 .thenReturn(buildStock(9L, 1L, 10));
-        when(productStockMapper.updateById(any()))
+        when(productStockMapper.updateById(any(ProductStock.class)))
                 .thenReturn(0)
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.deductStock(9L, 1L, 3, "SO001"));
-        verify(productStockMapper, times(2)).updateById(any());
+        verify(productStockMapper, times(2)).updateById(any(ProductStock.class));
     }
 
     @Test
@@ -39,7 +39,7 @@ class ProductInventoryServiceImplTest {
         when(productStockMapper.selectOne(any())).thenReturn(buildStock(9L, 1L, 1));
 
         assertThrows(BusinessException.class, () -> service.deductStock(9L, 1L, 3, "SO002"));
-        verify(productStockMapper, times(0)).updateById(any());
+        verify(productStockMapper, times(0)).updateById(any(ProductStock.class));
     }
 
     private ProductStock buildStock(Long tenantId, Long productId, Integer quantity) {

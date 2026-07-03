@@ -18,7 +18,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * v1 商户端退款审核接口。
+ * 商户端退款审核控制器（Merchant 端）。
+ * <p>提供商户对退款申请的列表查询和审核（通过/拒绝）操作。
+ * 需要商户角色登录，并通过 RBAC 权限（merchant:refund:list / audit）控制访问。</p>
  */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/refunds")
@@ -28,7 +30,16 @@ public class V1MerchantRefundController {
     private final RefundApplicationService refundApplicationService;
     private final V1MerchantSupportService v1MerchantSupportService;
 
-    @SaCheckPermission("merchant:refund:list")
+    /**
+     * 分页查询租户下的退款申请列表。
+     *
+     * @param tenantId 租户 ID
+     * @param status   退款状态筛选（可选）
+     * @param pageNum  当前页码，默认 1
+     * @param pageSize 每页条数，默认 10
+     * @return 退款申请分页列表
+     */
+    @SaCheckPermission(type = "merchant", value = "merchant:refund:list")
     @GetMapping
     public Result<PageResult<RefundApplicationVO>> listTenantRefunds(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                       @RequestParam(required = false) String status,
@@ -41,7 +52,15 @@ public class V1MerchantRefundController {
         return Result.success(PageResult.from(page, RefundApplicationVO::from));
     }
 
-    @SaCheckPermission("merchant:refund:audit")
+    /**
+     * 审核退款申请（通过或拒绝）。
+     *
+     * @param tenantId 租户 ID
+     * @param refundId 退款申请 ID
+     * @param request  审核请求（是否通过、拒绝原因）
+     * @return 操作结果
+     */
+    @SaCheckPermission(type = "merchant", value = "merchant:refund:audit")
     @PutMapping("/{refundId}/audit")
     public Result<Void> auditRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId,

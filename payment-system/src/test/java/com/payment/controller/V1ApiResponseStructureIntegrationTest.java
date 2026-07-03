@@ -1,6 +1,5 @@
 package com.payment.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
 import com.payment.config.TestSaTokenConfig;
@@ -67,10 +66,7 @@ class V1ApiResponseStructureIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        try {
-            StpUtil.logout();
-        } catch (Exception ignored) {
-        }
+        SaTokenTestSupport.logoutPlatformUser();
     }
 
     // ===== 统一返回结构验证 =====
@@ -118,11 +114,11 @@ class V1ApiResponseStructureIntegrationTest {
         @Test
         @DisplayName("商户列表接口返回结构包含 code/message/data/timestamp")
         void listTenants_返回结构正确() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             when(tenantMapper.selectList(any())).thenReturn(List.of());
 
             MvcResult result = mockMvc.perform(get("/v1/app/tenants")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andReturn();
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
@@ -132,7 +128,7 @@ class V1ApiResponseStructureIntegrationTest {
         @Test
         @DisplayName("商户详情接口返回结构包含 code/message/data/timestamp")
         void getTenant_返回结构正确() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             Tenant t = new Tenant();
             t.setId(1L);
             t.setTenantCode("T001");
@@ -141,7 +137,7 @@ class V1ApiResponseStructureIntegrationTest {
             when(tenantMapper.selectById(1L)).thenReturn(t);
 
             MvcResult result = mockMvc.perform(get("/v1/app/tenants/1")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andReturn();
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
@@ -151,11 +147,11 @@ class V1ApiResponseStructureIntegrationTest {
         @Test
         @DisplayName("商品列表接口返回结构包含 code/message/data/timestamp")
         void listProducts_返回结构正确() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             when(productMapper.selectList(any())).thenReturn(List.of());
 
             MvcResult result = mockMvc.perform(get("/v1/app/tenants/1/products")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andReturn();
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());
@@ -165,7 +161,7 @@ class V1ApiResponseStructureIntegrationTest {
         @Test
         @DisplayName("商品详情接口返回结构包含 code/message/data/timestamp")
         void getProduct_返回结构正确() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             Product p = new Product();
             p.setId(1L);
             p.setName("商品A");
@@ -174,7 +170,7 @@ class V1ApiResponseStructureIntegrationTest {
             when(productMapper.selectById(1L)).thenReturn(p);
 
             MvcResult result = mockMvc.perform(get("/v1/app/products/1")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andReturn();
 
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(result.getResponse().getContentAsString());

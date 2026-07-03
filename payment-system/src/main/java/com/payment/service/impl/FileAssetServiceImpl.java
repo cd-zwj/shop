@@ -23,6 +23,19 @@ public class FileAssetServiceImpl
         extends ServiceImpl<FileAssetMapper, FileAsset>
         implements FileAssetService {
 
+    /**
+     * 记录文件上传信息（文件名、路径、MD5、大小、类型等）。
+     *
+     * @param tenantId    租户ID
+     * @param userId      上传用户ID
+     * @param fileName    文件名
+     * @param filePath    文件存储路径
+     * @param md5         文件MD5摘要
+     * @param size        文件大小（字节）
+     * @param contentType 文件MIME类型
+     * @return 文件资产视图对象
+     * @throws BusinessException 当文件路径为空时抛出
+     */
     @Override
     public FileAssetVO recordUpload(Long tenantId, Long userId, String fileName,
                                     String filePath, String md5, Long size, String contentType) {

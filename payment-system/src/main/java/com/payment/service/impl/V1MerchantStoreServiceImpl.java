@@ -14,6 +14,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+/**
+ * 商户端门店管理服务实现类。
+ * <p>提供门店的增删改查、状态变更等操作，
+ * 所有操作前均校验当前用户是否为该租户的有效员工。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
@@ -23,6 +28,17 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     private final StoreMapper storeMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
 
+    /**
+     * 分页查询当前租户的门店列表，支持关键字搜索和状态过滤。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param current        当前页码
+     * @param size           每页条数
+     * @param keyword        搜索关键字（匹配门店名称、编号、联系电话）
+     * @param status         门店状态过滤，null表示不过滤
+     * @return 分页结果
+     */
     @Override
     public Page<V1MerchantStoreVO> listStores(Long tenantId, Long platformUserId, Integer current, Integer size,
                                               String keyword, Integer status) {
@@ -44,12 +60,30 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
         return result;
     }
 
+    /**
+     * 获取单个门店详情。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param storeId        门店ID
+     * @return 门店详情
+     * @throws BusinessException 门店不存在或不属于当前租户时抛出异常
+     */
     @Override
     public V1MerchantStoreVO getStore(Long tenantId, Long platformUserId, Long storeId) {
         v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
         return toStoreVO(getTenantStore(tenantId, storeId));
     }
 
+    /**
+     * 新增门店。门店编号可选，未指定时自动生成。编号在租户内唯一。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param dto            门店创建参数
+     * @return 新建门店详情
+     * @throws BusinessException 门店编号重复时抛出异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO createStore(Long tenantId, Long platformUserId, V1MerchantStoreUpsertDTO dto) {
@@ -68,6 +102,16 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
         return toStoreVO(storeMapper.selectById(store.getId()));
     }
 
+    /**
+     * 更新门店信息。若修改了门店编号，会校验编号在租户内的唯一性。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param storeId        门店ID
+     * @param dto            门店更新参数
+     * @return 更新后的门店详情
+     * @throws BusinessException 门店不存在或编号重复时抛出异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO updateStore(Long tenantId, Long platformUserId, Long storeId, V1MerchantStoreUpsertDTO dto) {
@@ -86,6 +130,16 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
         return toStoreVO(storeMapper.selectById(storeId));
     }
 
+    /**
+     * 更新门店状态（启用/停用）。状态值只能为0（停用）或1（启用）。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param storeId        门店ID
+     * @param status         目标状态，0-停用 1-启用
+     * @return 更新后的门店详情
+     * @throws BusinessException 状态值非法或门店不存在时抛出异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO updateStoreStatus(Long tenantId, Long platformUserId, Long storeId, Integer status) {
@@ -100,6 +154,14 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
         return toStoreVO(storeMapper.selectById(storeId));
     }
 
+    /**
+     * 删除门店（逻辑删除）。将门店标记为已删除并停用。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param storeId        门店ID
+     * @throws BusinessException 门店不存在时抛出异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteStore(Long tenantId, Long platformUserId, Long storeId) {

@@ -17,7 +17,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * RabbitMQ消费者 - 处理扫码请求
+ * 扫码请求消费者
+ * <p>
+ * 从 {@link RabbitMQConfig#SCAN_REQUEST_QUEUE} 队列中消费扫码请求消息，
+ * 根据租户编码查询租户信息并设置租户上下文，调用 {@link ScanService} 处理扫码逻辑，
+ * 将处理结果发送到结果队列供 Netty 服务或其他消费者使用。
+ * </p>
+ *
+ * @deprecated POS 功能已下线，代码保留用于参考。
  */
 /**
  * @deprecated POS 功能已下线，代码保留用于参考。
@@ -26,30 +33,39 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class ScanConsumer {
-    
+
+    /** 扫码服务 */
     @Autowired
     private ScanService scanService;
-    
+
+    /** 租户 Mapper，用于根据租户编码查询租户 */
     @Autowired
     private TenantMapper tenantMapper;
-    
+
+    /** RabbitMQ 操作模板，用于发送处理结果到结果队列 */
     @Autowired
     private RabbitTemplate rabbitTemplate;
-    
+
     /**
      * 消费扫码请求
-     * 从RabbitMQ队列中获取扫码请求，处理后将结果发送到结果队列
+     * <p>
+     * 从 RabbitMQ 队列中获取扫码请求，处理后将结果发送到结果队列。
+     * 处理流程：解析消息 -> 查询租户并设置上下文 -> 调用扫码服务 -> 发送结果 -> 确认消息。
+     * </p>
+     *
+     * @param message RabbitMQ 原始消息对象
+     * @param channel RabbitMQ 通道，用于手动确认消息
      */
-    @RabbitListener(queues = RabbitMQConfig.SCAN_REQUEST_QUEUE)
+    @RabbitListener(queues = RabbitMQConfig.SCAN_REQUEST_QUEUE, ackMode = "MANUAL")
     public void handleScanRequest(Message message, Channel channel) {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
-        
+
         try {
             String messageBody = new String(message.getBody());
             log.info("RabbitMQ收到扫码请求消息：{}", messageBody);
-            
+
             ScanRequestDTO request = JsonUtils.fromJson(messageBody, ScanRequestDTO.class);
-            
+
             // 根据tenantCode查询tenantId并设置上下文
             if (request.getTenantCode() != null) {
                 Tenant tenant = tenantMapper.selectOne(
@@ -67,24 +83,24 @@ public class ScanConsumer {
                     errorResponse.setStatus("ERROR");
                     errorResponse.setMessage("租户不存在或已被禁用");
                     rabbitTemplate.convertAndSend(RabbitMQConfig.SCAN_RESULT_QUEUE, JsonUtils.toJson(errorResponse));
-                    
+
                     // 确认消息
                     channel.basicAck(deliveryTag, false);
                     return;
                 }
             }
-            
+
             // 调用ScanService处理扫码请求
             ScanResponseDTO response = scanService.handleScan(request);
             log.info("扫码请求处理完成，响应状态: {}", response.getStatus());
-            
+
             // 发送处理结果到结果队列（供Netty服务器或其他消费者使用）
             rabbitTemplate.convertAndSend(RabbitMQConfig.SCAN_RESULT_QUEUE, JsonUtils.toJson(response));
             log.info("扫码处理结果已发送到结果队列");
-            
+
             // 手动确认消息
             channel.basicAck(deliveryTag, false);
-            
+
         } catch (Exception e) {
             log.error("处理扫码请求失败", e);
             try {
@@ -93,7 +109,7 @@ public class ScanConsumer {
                 errorResponse.setStatus("ERROR");
                 errorResponse.setMessage("处理失败，请稍后重试");
                 rabbitTemplate.convertAndSend("payment.scan.result", JsonUtils.toJson(errorResponse));
-                
+
                 // 拒绝消息，不重新入队（避免死循环）
                 channel.basicNack(deliveryTag, false, false);
             } catch (Exception ex) {
@@ -105,6 +121,3 @@ public class ScanConsumer {
         }
     }
 }
-
-
-

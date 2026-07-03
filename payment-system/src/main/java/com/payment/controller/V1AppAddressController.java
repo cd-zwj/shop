@@ -26,21 +26,21 @@ public class V1AppAddressController {
 
     private final UserShippingAddressService addressService;
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping
     public Result<List<AddressVO>> listAddresses() {
         List<UserShippingAddress> addresses = addressService.list(PlatformSessionHelper.getPlatformUserId());
         return Result.success(addresses.stream().map(AddressVO::from).collect(Collectors.toList()));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PostMapping
     public Result<AddressVO> createAddress(@Valid @RequestBody UserShippingAddressDTO dto) {
         UserShippingAddress address = addressService.create(PlatformSessionHelper.getPlatformUserId(), dto);
         return Result.success(AddressVO.from(address));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PutMapping("/{id}")
     public Result<AddressVO> updateAddress(@PathVariable @Min(value = 1, message = "ID必须大于0") Long id,
                                            @Valid @RequestBody UserShippingAddressDTO dto) {
@@ -48,14 +48,14 @@ public class V1AppAddressController {
         return Result.success(AddressVO.from(address));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @DeleteMapping("/{id}")
     public Result<Void> deleteAddress(@PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
         addressService.delete(PlatformSessionHelper.getPlatformUserId(), id);
         return Result.success();
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PutMapping("/{id}/default")
     public Result<AddressVO> setDefaultAddress(@PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
         UserShippingAddress address = addressService.setDefault(PlatformSessionHelper.getPlatformUserId(), id);

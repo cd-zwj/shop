@@ -53,7 +53,7 @@ class MemberGrowthServiceImplTest {
 
         service.checkAndAdjustLevel(200L, 9L);
 
-        verify(memberMapper, never()).updateById(any());
+        verify(memberMapper, never()).updateById(any(TenantMember.class));
     }
 
     @Test

@@ -24,7 +24,12 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 商家管理服务实现
+ * 商家管理服务实现类。
+ * <p>
+ * 提供商家（租户）全生命周期管理能力，包括：商家创建与信息更新、
+ * 启用/禁用状态切换、分页列表查询、商家详情（含商品数/订单数/销售额聚合）、
+ * 平台级数据看板统计以及商家注册趋势与销售趋势的月度报表查询。
+ * </p>
  */
 @Slf4j
 @Service
@@ -42,6 +47,17 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
     @Autowired
     private com.payment.mapper.WithdrawalMapper withdrawalMapper;
     
+    /**
+     * 创建新商家（租户）。
+     * <p>
+     * 校验租户编码唯一性后，初始化商家状态为启用（status=1），
+     * 并设置创建/更新时间后持久化到数据库。
+     * </p>
+     *
+     * @param dto 商家创建参数，包含租户编码、名称等基本信息
+     * @return 创建成功的租户实体
+     * @throws BusinessException 若租户编码已存在则抛出 400 异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Tenant createMerchant(MerchantDTO dto) {
@@ -70,6 +86,17 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         return tenant;
     }
     
+    /**
+     * 更新商家基本信息。
+     * <p>
+     * 若修改了租户编码，会额外校验新编码的唯一性（排除自身）。
+     * 商家不存在或已逻辑删除时抛出异常。
+     * </p>
+     *
+     * @param tenantId 待更新的商家租户 ID
+     * @param dto      更新参数，包含新的商家名称、编码、联系方式等
+     * @throws BusinessException 若商家不存在抛出 404，若新编码冲突抛出 400
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateMerchant(Long tenantId, MerchantDTO dto) {
@@ -102,6 +129,15 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         log.info("商家信息更新成功，tenantId: {}", tenantId);
     }
     
+    /**
+     * 启用商家。
+     * <p>
+     * 将指定商家的状态设置为启用（status=1），使其可以正常开展业务。
+     * </p>
+     *
+     * @param tenantId 待启用的商家租户 ID
+     * @throws BusinessException 若商家不存在或已逻辑删除则抛出 404 异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void enableMerchant(Long tenantId) {
@@ -122,6 +158,15 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         log.info("商家启用成功，tenantId: {}", tenantId);
     }
     
+    /**
+     * 禁用商家。
+     * <p>
+     * 将指定商家的状态设置为禁用（status=0），暂停其业务能力。
+     * </p>
+     *
+     * @param tenantId 待禁用的商家租户 ID
+     * @throws BusinessException 若商家不存在或已逻辑删除则抛出 404 异常
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableMerchant(Long tenantId) {
@@ -142,6 +187,16 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         log.info("商家禁用成功，tenantId: {}", tenantId);
     }
     
+    /**
+     * 分页查询商家列表。
+     * <p>
+     * 支持按商家名称模糊查询和状态精确过滤，结果按创建时间倒序排列。
+     * 自动排除已逻辑删除的商家。
+     * </p>
+     *
+     * @param query 查询条件，包含名称、状态、页码、每页大小
+     * @return 分页结果，包含商家列表和总数
+     */
     @Override
     public Page<Tenant> listMerchants(MerchantQueryDTO query) {
         log.info("查询商家列表，query: {}", query);
@@ -171,6 +226,16 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         return result;
     }
     
+    /**
+     * 查询商家详情。
+     * <p>
+     * 返回商家基本信息，并聚合统计该商家的商品数量、订单数量及已支付订单的总销售额。
+     * </p>
+     *
+     * @param tenantId 商家租户 ID
+     * @return 商家详情 VO，包含基本信息及商品数、订单数、总销售额
+     * @throws BusinessException 若商家不存在或已逻辑删除则抛出 404 异常
+     */
     @Override
     public MerchantDetailVO getMerchantDetail(Long tenantId) {
         log.info("查询商家详情，tenantId: {}", tenantId);
@@ -224,6 +289,15 @@ public class MerchantServiceImpl extends ServiceImpl<TenantMapper, Tenant> imple
         return detailVO;
     }
 
+    /**
+     * 获取平台级数据看板统计。
+     * <p>
+     * 汇总以下关键指标：商家总数、启用商家数、平台总销售额（已支付订单）、
+     * 待审核提现申请数量。用于管理端首页数据概览展示。
+     * </p>
+     *
+     * @return 统计数据 Map，包含 totalMerchants、activeMerchants、totalSales、pendingWithdrawals
+     */
     @Override
     public java.util.Map<String, Object> getDashboardStats() {
         log.info("获取平台数据概览");

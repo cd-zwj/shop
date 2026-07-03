@@ -14,12 +14,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 商户端租户配置管理接口
+ * 商户端租户配置管理控制器（Merchant 端）。
+ * <p>提供商户对自身租户级配置项的查询和更新操作，
+ * 采用 key-value 结构存储配置，支持按 key 精确读取和整体列表查看。</p>
  */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/configs")
 @RequiredArgsConstructor
-@SaCheckLogin
+@SaCheckLogin(type = "merchant")
 public class V1MerchantConfigController {
 
     private final TenantConfigService tenantConfigService;

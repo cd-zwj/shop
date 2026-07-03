@@ -31,27 +31,52 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * v1 支付异步消费者。
- *
+ * v1 支付异步消费者
+ * <p>
  * 充值到账和订单支付成功都从这里进入，避免在回调线程里堆业务逻辑。
+ * 处理流程包括：充值到账处理、订单支付成功后扣库存/更新状态/商户入账/积分发放/会员升级/发送通知/投递交付事件。
+ * 通过 {@link MessageIdempotentService} 保障消息幂等性。
+ * </p>
+ *
+ * @author payment-system
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PaymentV1Consumer {
 
+    /** 钱包充值服务 */
     private final WalletRechargeService walletRechargeService;
+    /** 销售订单 Mapper */
     private final SalesOrderMapper salesOrderMapper;
+    /** 销售订单明细 Mapper */
     private final SalesOrderItemMapper salesOrderItemMapper;
+    /** 商品库存服务 */
     private final ProductInventoryService productInventoryService;
+    /** 提现/商户余额服务 */
     private final WithdrawalService withdrawalService;
+    /** 会员积分账户服务 */
     private final MemberPointsAccountService memberPointsAccountService;
+    /** 积分规则 Mapper */
     private final PointsRuleMapper pointsRuleMapper;
+    /** 会员服务 */
     private final MemberService memberService;
+    /** 用户通知服务 */
     private final UserNotificationService notificationService;
+    /** 消息幂等服务 */
     private final MessageIdempotentService messageIdempotentService;
+    /** 订单交付服务 */
     private final OrderDeliveryService orderDeliveryService;
 
+    /**
+     * 处理充值成功消息
+     * <p>
+     * 从 {@link RabbitMQConfig#V1_RECHARGE_SUCCESS_QUEUE} 队列中消费充值成功事件，
+     * 调用钱包充值服务完成入账操作。
+     * </p>
+     *
+     * @param body 消息体 JSON 字符串，必须包含 bizNo（充值订单编号）
+     */
     @RabbitListener(queues = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)
     public void handleRechargeSuccess(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
@@ -81,6 +106,16 @@ public class PaymentV1Consumer {
         }
     }
 
+    /**
+     * 处理订单支付成功消息
+     * <p>
+     * 从 {@link RabbitMQConfig#V1_ORDER_PAID_QUEUE} 队列中消费订单支付成功事件，
+     * 在事务中完成扣库存、更新订单状态、商户余额入账、积分发放、会员升级检查、
+     * 通知发送和交付事件投递等操作。
+     * </p>
+     *
+     * @param body 消息体 JSON 字符串，必须包含 bizNo（销售订单编号）
+     */
     @RabbitListener(queues = RabbitMQConfig.V1_ORDER_PAID_QUEUE)
     public void handleOrderPaid(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
@@ -110,6 +145,24 @@ public class PaymentV1Consumer {
         }
     }
 
+    /**
+     * 执行订单支付成功的完整业务处理流程
+     * <p>
+     * 处理步骤：
+     * <ol>
+     *   <li>校验订单存在性和当前状态</li>
+     *   <li>扣减商品库存</li>
+     *   <li>更新订单支付状态和订单状态为已支付</li>
+     *   <li>商户财务余额入账（扣除商户钱包抵扣部分）</li>
+     *   <li>按积分规则发放消费积分</li>
+     *   <li>检查并自动升级会员等级</li>
+     *   <li>发送订单支付成功通知</li>
+     *   <li>投递交付事件到交付队列</li>
+     * </ol>
+     * </p>
+     *
+     * @param orderNo 销售订单编号
+     */
     @Transactional(rollbackFor = Exception.class)
     public void processOrderPaid(String orderNo) {
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
@@ -186,5 +239,3 @@ public class PaymentV1Consumer {
         orderDeliveryService.enqueueDelivery(orderNo);
     }
 }
-
-

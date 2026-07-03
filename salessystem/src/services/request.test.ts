@@ -6,6 +6,14 @@ const { mockHttp } = vi.hoisted(() => ({
 }));
 vi.mock('./http', () => ({
   http: mockHttp,
+  AUTH_TOKEN_CLEAR_EVENT: 'salessystem:auth:clear-tokens',
+}));
+
+const { mockGetCurrentAuthRole } = vi.hoisted(() => ({
+  mockGetCurrentAuthRole: vi.fn(),
+}));
+vi.mock('../utils/authSession', () => ({
+  getCurrentAuthRole: mockGetCurrentAuthRole,
 }));
 
 import { request, requestResponse } from './request';
@@ -13,6 +21,7 @@ import { ApiError } from '../types/api';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetCurrentAuthRole.mockReturnValue(null);
 });
 
 describe('request', () => {
@@ -49,6 +58,50 @@ describe('request', () => {
     // Act & Assert
     await expect(request({ url: '/test', method: 'get' })).rejects.toThrow('请求失败');
   });
+
+  it('响应 code 为 401 时应通知认证上下文清理状态但不直接跳转', async () => {
+    // Arrange
+    mockGetCurrentAuthRole.mockReturnValue('user');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { href: 'http://localhost/current' },
+    });
+    mockHttp.request.mockResolvedValue({
+      data: { code: 401, message: '未提供Token', data: null, timestamp: Date.now() },
+    });
+
+    try {
+      // Act & Assert
+      await expect(request({ url: '/test', method: 'get' })).rejects.toThrow('未提供Token');
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.any(CustomEvent));
+      const event = dispatchSpy.mock.calls[0]?.[0] as CustomEvent;
+      expect(event.type).toBe('salessystem:auth:clear-tokens');
+      expect(event.detail).toEqual({ role: 'user' });
+      expect(window.location.href).toBe('http://localhost/current');
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+  });
+
+  it('公开请求响应 code 为 401 时不应清理当前登录态', async () => {
+    // Arrange
+    mockGetCurrentAuthRole.mockReturnValue('user');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    mockHttp.request.mockResolvedValue({
+      data: { code: 401, message: '公开商品不可访问', data: null, timestamp: Date.now() },
+    });
+
+    // Act & Assert
+    await expect(request({ url: '/public/products', method: 'get', authRole: false })).rejects.toThrow(
+      '公开商品不可访问',
+    );
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.any(CustomEvent));
+  });
 });
 
 describe('requestResponse', () => {
@@ -72,5 +125,20 @@ describe('requestResponse', () => {
 
     // Act & Assert
     await expect(requestResponse({ url: '/test', method: 'get' })).rejects.toThrow(ApiError);
+  });
+
+  it('公开请求响应 code 为 401 时不应通知认证上下文清理状态', async () => {
+    // Arrange
+    mockGetCurrentAuthRole.mockReturnValue('user');
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+    mockHttp.request.mockResolvedValue({
+      data: { code: 401, message: '公开接口未授权', data: null, timestamp: Date.now() },
+    });
+
+    // Act & Assert
+    await expect(requestResponse({ url: '/public', method: 'get', authRole: false })).rejects.toThrow(
+      '公开接口未授权',
+    );
+    expect(dispatchSpy).not.toHaveBeenCalledWith(expect.any(CustomEvent));
   });
 });

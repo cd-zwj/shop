@@ -1,6 +1,5 @@
 package com.payment.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
@@ -71,11 +70,7 @@ class V1AppAuthFlowIntegrationTest {
     @BeforeEach
     void setUp() {
         // 每次测试前清除 Sa-Token 登录态
-        try {
-            StpUtil.logout();
-        } catch (Exception ignored) {
-            // 未登录时 logout 可能抛异常，忽略
-        }
+        SaTokenTestSupport.logoutPlatformUser();
 
         testUser = new PlatformUser();
         testUser.setId(1L);
@@ -416,10 +411,10 @@ class V1AppAuthFlowIntegrationTest {
         @DisplayName("退出登录应返回200")
         void logout_成功退出() throws Exception {
             // 先登录
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
 
             mockMvc.perform(post("/v1/app/auth/logout")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.message").value("操作成功"))
@@ -427,8 +422,8 @@ class V1AppAuthFlowIntegrationTest {
         }
 
         @Test
-        @DisplayName("未登录退出也应返回200")
-        void logout_未登录_仍然返回200() throws Exception {
+        @DisplayName("未登录退出应返回401")
+        void logout_未登录_返回401() throws Exception {
             mockMvc.perform(post("/v1/app/auth/logout"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(401))

@@ -23,13 +23,13 @@ public class V1AdminProductCategoryController {
 
     private final ProductCategoryService productCategoryService;
 
-    @SaCheckPermission("admin:category:list")
+    @SaCheckPermission(type = "admin", value = "admin:category:list")
     @GetMapping
     public Result<List<ProductCategoryVO>> listCategories() {
         return Result.success(productCategoryService.listTreeByTenant(null));
     }
 
-    @SaCheckPermission("admin:category:create")
+    @SaCheckPermission(type = "admin", value = "admin:category:create")
     @PostMapping
     public Result<ProductCategoryVO> createCategory(@RequestBody AdminCategoryCreateDTO dto) {
         ProductCategory category = new ProductCategory();
@@ -42,7 +42,7 @@ public class V1AdminProductCategoryController {
         return Result.success(productCategoryService.create(category));
     }
 
-    @SaCheckPermission("admin:category:update")
+    @SaCheckPermission(type = "admin", value = "admin:category:update")
     @PutMapping("/{id}")
     public Result<ProductCategoryVO> updateCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id,
@@ -56,7 +56,7 @@ public class V1AdminProductCategoryController {
         return Result.success(productCategoryService.update(id, category));
     }
 
-    @SaCheckPermission("admin:category:delete")
+    @SaCheckPermission(type = "admin", value = "admin:category:delete")
     @DeleteMapping("/{id}")
     public Result<Void> deleteCategory(@PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
         productCategoryService.delete(id);

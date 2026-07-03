@@ -22,7 +22,7 @@ public class V1AdminAuthProviderController {
 
     private final PlatformAuthProviderAdminService platformAuthProviderAdminService;
 
-    @SaCheckPermission("admin:auth-provider:list")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:list")
     @GetMapping
     public Result<PageResult<PlatformAuthProviderVO>> listProviders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                                      @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
@@ -32,33 +32,33 @@ public class V1AdminAuthProviderController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckPermission("admin:auth-provider:detail")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:detail")
     @GetMapping("/{providerId}")
     public Result<PlatformAuthProviderVO> getProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         return Result.success(platformAuthProviderAdminService.getProvider(providerId));
     }
 
-    @SaCheckPermission("admin:auth-provider:create")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:create")
     @PostMapping
     public Result<PlatformAuthProviderVO> createProvider(@Valid @RequestBody PlatformAuthProviderDTO dto) {
         return Result.success(platformAuthProviderAdminService.createProvider(dto));
     }
 
-    @SaCheckPermission("admin:auth-provider:update")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:update")
     @PutMapping("/{providerId}")
     public Result<Void> updateProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId, @Valid @RequestBody PlatformAuthProviderDTO dto) {
         platformAuthProviderAdminService.updateProvider(providerId, dto);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:auth-provider:enable")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:enable")
     @PutMapping("/{providerId}/enable")
     public Result<Void> enableProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         platformAuthProviderAdminService.enableProvider(providerId);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:auth-provider:disable")
+    @SaCheckPermission(type = "admin", value = "admin:auth-provider:disable")
     @PutMapping("/{providerId}/disable")
     public Result<Void> disableProvider(@PathVariable @Min(value = 1, message = "ID必须大于0") Long providerId) {
         platformAuthProviderAdminService.disableProvider(providerId);

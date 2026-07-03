@@ -22,7 +22,11 @@ import java.util.List;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 /**
- * 商品搜索服务实现
+ * 商品搜索服务实现类。
+ * <p>
+ * 基于 Elasticsearch 提供全文搜索能力，在 ES 不可用或未启用时自动降级到数据库查询，
+ * 保证商品搜索功能的高可用性。所有查询均受多租户隔离约束（tenant_id 过滤）。
+ * </p>
  */
 @Slf4j
 @Service
@@ -37,6 +41,14 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     @Autowired
     private ProductMapper productMapper;
     
+    /**
+     * 将单个商品同步到 Elasticsearch 索引。
+     * <p>
+     * ES 未启用时静默跳过；同步失败仅记录日志，不抛出异常，避免影响主流程。
+     * </p>
+     *
+     * @param product 待同步的商品实体
+     */
     @Override
     public void syncProduct(Product product) {
         try {
@@ -53,6 +65,14 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
     }
     
+    /**
+     * 从 Elasticsearch 索引中删除指定商品。
+     * <p>
+     * ES 未启用时静默跳过；删除失败仅记录日志，不抛出异常。
+     * </p>
+     *
+     * @param productId 待删除的商品 ID
+     */
     @Override
     public void deleteProduct(Long productId) {
         try {
@@ -67,6 +87,18 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
     }
     
+    /**
+     * 按关键字全文搜索商品（商品名称、编码、描述）。
+     * <p>
+     * 优先使用 Elasticsearch 进行全文检索，ES 不可用时自动降级为数据库模糊查询。
+     * 仅返回当前租户下已上架（status=1）的商品。
+     * </p>
+     *
+     * @param keyword  搜索关键字
+     * @param tenantId 租户 ID，为 null 时从 {@link TenantContextHolder} 获取
+     * @return 匹配的商品列表，无结果时返回空列表
+     * @throws BusinessException 租户信息不存在时抛出
+     */
     @Override
     public List<Product> searchProducts(String keyword, Long tenantId) {
         // 如果没有传入 tenantId，从上下文获取
@@ -108,6 +140,17 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
     }
 
+    /**
+     * 按商品分类搜索商品。
+     * <p>
+     * 优先使用 Elasticsearch 进行分类精确匹配，ES 不可用时自动降级为数据库查询。
+     * 查询范围限定为当前租户下未删除的所有商品（不过滤上架状态）。
+     * </p>
+     *
+     * @param category 商品分类名称
+     * @return 该分类下的商品列表，无结果时返回空列表
+     * @throws BusinessException 租户信息不存在时抛出
+     */
     @Override
     public List<Product> searchByCategory(String category) {
         Long tenantId = TenantContextHolder.getTenantId();
@@ -137,6 +180,12 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         }
     }
 
+    /**
+     * 将 Elasticsearch 文档对象转换为商品实体。
+     *
+     * @param document ES 商品文档
+     * @return 商品实体，deleted 标记重置为 0
+     */
     private Product toProduct(ProductDocument document) {
         Product product = new Product();
         BeanUtils.copyProperties(document, product);

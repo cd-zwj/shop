@@ -49,6 +49,7 @@ minio:
   endpoint: http://localhost:9000
   access-key: testkey
   secret-key: testsecret
+  bucket: test-bucket
   bucket-name: test-bucket
 
 mybatis-plus:
@@ -65,3 +66,10 @@ logging:
   level:
     com.payment: WARN
     cn.dev33.satoken: WARN
+
+
+# Spring AI 测试占位，避免测试上下文依赖真实外部凭据
+spring.ai.mcp.client.enabled: false
+spring.ai.dashscope.api-key: test-dashscope-key
+spring.ai.dashscope.connect-timeout-ms: 100
+spring.ai.dashscope.read-timeout-ms: 1000

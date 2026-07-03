@@ -44,6 +44,11 @@ public class MinioConfig {
      */
     private Integer urlExpiryDays = 7;
     
+    /**
+     * 创建 MinIO 客户端 Bean。
+     *
+     * @return MinioClient 实例，配置了连接地址和访问凭证
+     */
     @Bean
     public MinioClient minioClient() {
         return MinioClient.builder()

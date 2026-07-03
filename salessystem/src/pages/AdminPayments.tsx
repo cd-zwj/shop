@@ -121,44 +121,42 @@ export default function AdminPayments() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 5 }) : payments).map((payment, index) => {
-                const isData = typeof payment === 'object';
-                return (
-                  <tr key={isData ? payment.billNo : index} className="transition-colors hover:bg-slate-50/50">
+              {(isLoading ? Array.from<AdminPaymentBill | undefined>({ length: 5 }) : payments).map((payment, index) => {                return (
+                  <tr key={payment ? payment.billNo : index} className="transition-colors hover:bg-slate-50/50">
                     <td className="px-8 py-6">
-                      <p className="text-sm font-black text-slate-900">{isData ? payment.billNo : '加载中...'}</p>
+                      <p className="text-sm font-black text-slate-900">{payment ? payment.billNo : '加载中...'}</p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        {isData ? formatDateTime(payment.createTime) : '--'}
+                        {payment ? formatDateTime(payment.createTime) : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-medium text-slate-700">
-                        {isData ? `${payment.bizType || '--'} / ${payment.bizNo || '--'}` : '--'}
+                        {payment ? `${payment.bizType || '--'} / ${payment.bizNo || '--'}` : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        渠道 {isData ? payment.channelCode || '--' : '--'} · userId {isData ? payment.platformUserId ?? '--' : '--'}
+                        渠道 {payment ? payment.channelCode || '--' : '--'} · userId {payment ? payment.platformUserId ?? '--' : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-slate-900">
-                        {isData ? formatCurrency(payment.payAmount) : '--'}
+                        {payment ? formatCurrency(payment.payAmount) : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        第三方单号 {isData ? payment.thirdPartyBillNo || '--' : '--'}
+                        第三方单号 {payment ? payment.thirdPartyBillNo || '--' : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex flex-col gap-2">
                         <span className="w-fit rounded-lg bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
-                          {isData ? payment.payStatus || '--' : '--'}
+                          {payment ? payment.payStatus || '--' : '--'}
                         </span>
                         <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                          callback {isData ? payment.callbackStatus || '--' : '--'}
+                          callback {payment ? payment.callbackStatus || '--' : '--'}
                         </span>
                       </div>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {isData && payment.bizType === 'ORDER' && payment.bizNo && (
+                      {payment && payment.bizType === 'ORDER' && payment.bizNo && (
                         <button
                           onClick={() => navigate(`/admin/order/${payment.bizNo}`)}
                           className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 transition-all hover:border-primary hover:text-primary"

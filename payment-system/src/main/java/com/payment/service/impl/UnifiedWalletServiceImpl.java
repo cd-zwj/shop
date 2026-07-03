@@ -33,6 +33,7 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
     private final UnifiedWalletAccountMapper accountMapper;
     private final UnifiedWalletLogMapper logMapper;
 
+    /** 查询用户统一钱包余额信息，账户不存在时自动创建。 */
     @Override
     public WalletAccountVO getWallet(Long platformUserId) {
         UnifiedWalletAccount account = getOrCreateAccount(platformUserId);
@@ -46,6 +47,14 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
         return vo;
     }
 
+    /**
+     * 分页查询用户统一钱包的资金变动流水。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param current        当前页码
+     * @param size           每页数量
+     * @return 分页流水记录
+     */
     @Override
     public Page<WalletLogVO> listLogs(Long platformUserId, Integer current, Integer size) {
         Page<UnifiedWalletLog> entityPage = new Page<>(current, size);
@@ -69,6 +78,19 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
         return result;
     }
 
+    /**
+     * 统一钱包入账（充值、退款等场景）。
+     * <p>
+     * 采用乐观锁 + 重试机制（最多 3 次）保障并发安全，
+     * 成功后同步写入资金变动流水记录。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param amount         入账金额，必须大于 0
+     * @param bizType        业务类型
+     * @param bizNo          业务单号
+     * @param remark         备注说明
+     * @throws BusinessException 金额不合法或重试耗尽时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void credit(Long platformUserId, BigDecimal amount, String bizType, String bizNo, String remark) {
@@ -95,6 +117,19 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
         throw new BusinessException("统一钱包入账失败，请稍后重试");
     }
 
+    /**
+     * 统一钱包扣款（消费场景）。
+     * <p>
+     * 采用乐观锁 + 重试机制（最多 3 次）保障并发安全，
+     * 扣款前校验可用余额是否充足，成功后同步写入资金变动流水。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param amount         扣减金额，必须大于 0
+     * @param bizType        业务类型
+     * @param bizNo          业务单号
+     * @param remark         备注说明
+     * @throws BusinessException 余额不足、金额不合法或重试耗尽时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void debit(Long platformUserId, BigDecimal amount, String bizType, String bizNo, String remark) {
@@ -125,6 +160,11 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
         throw new BusinessException("统一钱包扣款失败，请稍后重试");
     }
 
+    /**
+     * 获取或创建用户的钱包账户。
+     * <p>
+     * 账户不存在时自动创建初始账户，并发创建时通过 DuplicateKeyException 兜底。
+     */
     private UnifiedWalletAccount getOrCreateAccount(Long platformUserId) {
         UnifiedWalletAccount account = accountMapper.selectOne(new LambdaQueryWrapper<UnifiedWalletAccount>()
                 .eq(UnifiedWalletAccount::getPlatformUserId, platformUserId));
@@ -154,6 +194,7 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
         }
     }
 
+    /** 插入统一钱包资金变动流水记录。 */
     private void insertLog(Long platformUserId,
                            BigDecimal changeAmount,
                            String bizType,

@@ -19,9 +19,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * v1 商户端订单明细接口。
- *
- * 显式携带 tenantId，避免一个商户员工绑定多个商户时出现歧义。
+ * 商户端订单管理控制器（Merchant 端）。
+ * <p>显式携带 tenantId，避免一个商户员工绑定多个商户时出现歧义。
+ * 提供订单列表查询、订单详情查看、实物商品发货和服务商品核销等功能。</p>
  */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/orders")
@@ -32,7 +32,18 @@ public class V1MerchantOrderController {
     private final V1MerchantSupportService v1MerchantSupportService;
     private final OrderDeliveryService orderDeliveryService;
 
-    @SaCheckLogin
+    /**
+     * 分页查询商户订单列表。
+     *
+     * @param tenantId    租户 ID
+     * @param current     当前页码，默认 1
+     * @param size        每页条数，默认 10
+     * @param orderStatus 订单状态筛选（可选）
+     * @param payStatus   支付状态筛选（可选）
+     * @param keyword     搜索关键字（可选）
+     * @return 订单分页列表
+     */
+    @SaCheckLogin(type = "merchant")
     @GetMapping
     public Result<PageResult<SalesOrderListVO>> listOrders(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                       @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -47,7 +58,14 @@ public class V1MerchantOrderController {
         return Result.success(PageResult.from(result, SalesOrderListVO::from));
     }
 
-    @SaCheckLogin
+    /**
+     * 获取订单详情。
+     *
+     * @param tenantId 租户 ID
+     * @param orderNo  订单编号
+     * @return 订单详情信息
+     */
+    @SaCheckLogin(type = "merchant")
     @GetMapping("/{orderNo}")
     public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable String orderNo) {
         return Result.success(appOrderService.getMerchantOrderDetail(tenantId, PlatformSessionHelper.getPlatformUserId(), orderNo));
@@ -56,7 +74,7 @@ public class V1MerchantOrderController {
     /**
      * 实物商品发货：填写物流单号后将订单项的交付状态置为 DELIVERED。
      */
-    @SaCheckLogin
+    @SaCheckLogin(type = "merchant")
     @PostMapping("/items/{orderItemId}/ship")
     public Result<OrderDeliveryVO> shipItem(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                             @PathVariable @Min(value = 1, message = "ID必须大于0") Long orderItemId,
@@ -70,7 +88,7 @@ public class V1MerchantOrderController {
     /**
      * 服务商品核销：商户录入用户出示的核销码后将交付状态置为 CONFIRMED。
      */
-    @SaCheckLogin
+    @SaCheckLogin(type = "merchant")
     @PostMapping("/services/verify")
     public Result<OrderDeliveryVO> verifyService(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                  @RequestBody VerifyServiceRequest request) {

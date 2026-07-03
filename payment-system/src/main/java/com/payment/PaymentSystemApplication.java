@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
-@MapperScan("com.payment.mapper")
+@MapperScan({"com.payment.mapper", "com.payment.rag.mapper"})
 @EnableAsync
 @EnableScheduling
 public class PaymentSystemApplication {

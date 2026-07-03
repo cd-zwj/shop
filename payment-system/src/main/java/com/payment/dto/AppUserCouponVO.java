@@ -6,22 +6,36 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * 用户端券包视图对象。
+ * 用户端个人券包视图对象，用于展示用户已领取的优惠券详情及使用状态。
  */
 @Data
 public class AppUserCouponVO {
+    /** 用户优惠券记录 ID */
     private Long id;
+    /** 优惠券编号 */
     private String couponNo;
+    /** 优惠券模板 ID */
     private Long templateId;
+    /** 所属商户租户 ID */
     private Long tenantId;
+    /** 优惠券状态（如 AVAILABLE-可用、USED-已使用、EXPIRED-已过期） */
     private String couponStatus;
+    /** 优惠券名称 */
     private String templateName;
+    /** 优惠券类型（如 FIXED-满减、DISCOUNT-折扣） */
     private String couponType;
+    /** 使用门槛金额 */
     private BigDecimal thresholdAmount;
+    /** 固定减免金额 */
     private BigDecimal discountAmount;
+    /** 折扣率 */
     private BigDecimal discountRate;
+    /** 最大减免金额 */
     private BigDecimal maxDiscountAmount;
+    /** 领取时间 */
     private LocalDateTime receiveTime;
+    /** 过期时间 */
     private LocalDateTime expireTime;
+    /** 使用时间 */
     private LocalDateTime useTime;
 }

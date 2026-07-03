@@ -6,7 +6,7 @@ import type { CartItem, CheckoutSource } from '../types/cart';
 export function buildOrderPayload(
   items: CartItem[],
   source: CheckoutSource,
-  selectedUserCouponId?: number,
+  selectedUserCouponId: number | undefined,
   walletStrategy: WalletStrategy,
   paymentChannelCode: PaymentChannelCode,
 ): AppCreateOrderPayload {
@@ -40,7 +40,7 @@ export function buildOrderPayload(
 export function createOrderForItems(
   items: CartItem[],
   source: CheckoutSource,
-  selectedUserCouponId?: number,
+  selectedUserCouponId: number | undefined,
   walletStrategy: WalletStrategy,
   paymentChannelCode: PaymentChannelCode,
 ): Promise<OrderPayment> {

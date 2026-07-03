@@ -273,10 +273,8 @@ export default function UserOrders() {
         )}
 
         <div className="flex flex-col gap-4">
-          {(isLoading ? Array.from({ length: 3 }) : filteredOrders).map((order, index) => {
-            const isData = typeof order === 'object';
-
-            if (!isData) {
+          {(isLoading ? Array.from<SalesOrder | undefined>({ length: 3 }) : filteredOrders).map((order, index) => {
+            if (!order) {
               return (
                 <motion.div
                   key={index}

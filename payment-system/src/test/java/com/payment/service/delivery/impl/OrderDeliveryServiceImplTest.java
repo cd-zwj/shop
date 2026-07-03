@@ -125,7 +125,7 @@ class OrderDeliveryServiceImplTest {
         service.deliverOrder("ORDER-MULTI");
 
         // 3 条 record 插入
-        verify(deliveryRecordMapper, atLeastOnce()).insert(any());
+        verify(deliveryRecordMapper, atLeastOnce()).insert(any(OrderDeliveryRecord.class));
         ArgumentCaptor<OrderDeliveryRecord> recordCaptor = ArgumentCaptor.forClass(OrderDeliveryRecord.class);
         verify(deliveryRecordMapper, atLeastOnce()).insert(recordCaptor.capture());
         List<OrderDeliveryRecord> all = recordCaptor.getAllValues();
@@ -176,7 +176,7 @@ class OrderDeliveryServiceImplTest {
         when(deliveryRecordMapper.selectOne(any())).thenReturn(record);
 
         assertThrows(BusinessException.class, () -> service.verifyService(7L, "654321"));
-        verify(deliveryRecordMapper, never()).updateById(any());
+        verify(deliveryRecordMapper, never()).updateById(any(OrderDeliveryRecord.class));
     }
 
     @Test
@@ -188,7 +188,7 @@ class OrderDeliveryServiceImplTest {
         OrderDeliveryRecord result = service.verifyService(7L, "111222");
 
         assertEquals(DeliveryStatusEnum.CONFIRMED.name(), result.getStatus());
-        verify(deliveryRecordMapper, never()).updateById(any());
+        verify(deliveryRecordMapper, never()).updateById(any(OrderDeliveryRecord.class));
         verify(salesOrderItemMapper, never()).update(any(), any());
     }
 
@@ -204,7 +204,7 @@ class OrderDeliveryServiceImplTest {
         service.deliverOrder("ORDER-SKIP");
 
         // 已 DELIVERED 的 item 应被幂等跳过，不再产生新的 record 插入
-        verify(deliveryRecordMapper, never()).insert(any());
+        verify(deliveryRecordMapper, never()).insert(any(OrderDeliveryRecord.class));
     }
 
     @Test

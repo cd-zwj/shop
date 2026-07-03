@@ -46,6 +46,23 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * 退款服务实现类，处理退款的完整生命周期。
+ * <p>
+ * 核心职责：
+ * <ul>
+ *   <li><b>迟到回调退款</b>：支付回调晚于业务关闭时，自动创建退款单并提交渠道退款</li>
+ *   <li><b>商家审核退款</b>：商家审核通过退款申请后，创建退款单并提交渠道退款</li>
+ *   <li><b>补偿任务处理</b>：由调度器拾取退款补偿任务，执行退款提交或重试</li>
+ *   <li><b>退款对账</b>：定期查询第三方退款状态，确认退款最终结果</li>
+ * </ul>
+ * <p>
+ * 退款流程涉及多表协作：RefundOrder（退款单）、RefundRecord（退款渠道记录）、
+ * RefundReconcileTask（对账任务）、CompensationTask（补偿任务）。
+ * 采用抢占式任务领取机制，防止多个调度器并发处理同一退款任务。
+ *
+ * @see com.payment.service.RefundService
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -63,6 +80,15 @@ public class RefundServiceImpl implements RefundService {
     private final CompensationTaskFactory compensationTaskFactory;
     private final ObjectProvider<RefundApplicationService> refundApplicationServiceProvider;
 
+    /**
+     * 准备迟到回调退款。
+     * <p>
+     * 当支付回调到达时业务已关闭（如订单已取消/超时），根据迟到回调策略需要退款。
+     * 创建退款单和退款渠道记录，关联补偿任务供调度器异步执行退款。
+     *
+     * @param paymentBill  已支付的账单
+     * @param statusReason 关闭原因（决定迟到回调处理策略）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void prepareLateCallbackRefund(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
@@ -109,6 +135,14 @@ public class RefundServiceImpl implements RefundService {
         createLateCallbackRefundTaskIfAbsent(paymentBill.getBillNo(), refundOrder.getRefundNo());
     }
 
+    /**
+     * 准备商家审核通过的退款。
+     * <p>
+     * 商家审核通过退款申请后，校验支付单存在性和退款金额合法性，
+     * 创建退款单和退款渠道记录，关联补偿任务供调度器异步执行退款。
+     *
+     * @param application 已审核通过的退款申请
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void prepareMerchantApprovedRefund(RefundApplication application) {
@@ -169,6 +203,20 @@ public class RefundServiceImpl implements RefundService {
                 application.getRefundNo(), application.getRefundNo());
     }
 
+    /**
+     * 处理退款补偿任务。
+     * <p>
+     * 由调度器拾取 PENDING 状态的补偿任务后调用。流程：
+     * <ol>
+     *   <li>抢占式领取任务（防止并发）</li>
+     *   <li>查找退款单和支付单</li>
+     *   <li>若退款已提交但未确认，创建对账任务</li>
+     *   <li>调用支付渠道提交退款请求</li>
+     *   <li>根据渠道返回状态标记成功/处理中/重试或失败</li>
+     * </ol>
+     *
+     * @param compensationTask 待处理的补偿任务
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void processLateCallbackRefundTask(CompensationTask compensationTask) {
@@ -262,6 +310,14 @@ public class RefundServiceImpl implements RefundService {
         retryOrFailCompensationTask(compensationTask, refundOrder, refundRecord, submitResult.getMessage());
     }
 
+    /**
+     * 处理退款对账任务。
+     * <p>
+     * 向第三方支付渠道查询退款状态，确认退款最终结果。
+     * 查询成功则标记退款完成，查询失败则重试或标记失败。
+     *
+     * @param reconcileTask 待处理的退款对账任务
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void processRefundReconcileTask(RefundReconcileTask reconcileTask) {
@@ -315,6 +371,13 @@ public class RefundServiceImpl implements RefundService {
         retryOrFailReconcileTask(reconcileTask, refundOrder, refundRecord, queryResult.getMessage());
     }
 
+    /**
+     * 根据支付渠道编码查找对应的支付提供商。
+     *
+     * @param channelCode 支付渠道编码
+     * @return 支付提供商实例
+     * @throws BusinessException 渠道不存在时抛出
+     */
     private PaymentProvider resolveProvider(String channelCode) {
         Map<String, PaymentProvider> providerMap = paymentProviders.stream()
                 .collect(Collectors.toMap(PaymentProvider::getChannelCode, Function.identity()));

@@ -34,6 +34,9 @@ spring:
 
   # Redis配置
   data:
+    elasticsearch:
+      repositories:
+        enabled: false
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
@@ -85,6 +88,50 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  ai:
+    mcp:
+      client:
+        type: async
+        request-timeout: 60s
+        toolcallback:
+          enabled: true
+        sse:
+          baidu-mcp:
+            url: https://mcp.map.baidu.com/sse
+            headers:
+              ak: ${BAIDU_MAP_AK:}
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      connect-timeout-ms: 10000
+      read-timeout-ms: 60000
+      chat:
+        options:
+          stream: true
+      embedding:
+        options:
+          model: text-embedding-v3
+    vectorstore:
+      milvus:
+        initialize-schema: ${MILVUS_INITIALIZE_SCHEMA:true}
+        database-name: ${MILVUS_DATABASE_NAME:default}
+        leaf-collection-name: ${MILVUS_LEAF_COLLECTION_NAME:rag_leaf_vectors}
+        summary-collection-name: ${MILVUS_SUMMARY_COLLECTION_NAME:rag_summary_vectors}
+        index-type: ${MILVUS_INDEX_TYPE:IVF_FLAT}
+        metric-type: ${MILVUS_METRIC_TYPE:COSINE}
+        index-parameters: ${MILVUS_INDEX_PARAMETERS:'{"nlist":1024}'}
+        client:
+          host: ${MILVUS_HOST:localhost}
+          port: ${MILVUS_PORT:19530}
+          secure: ${MILVUS_SECURE:false}
+          username: ${MILVUS_USERNAME:}
+          password: ${MILVUS_PASSWORD:}
+          token: ${MILVUS_TOKEN:}
+
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+
 # Flyway 数据库迁移
 spring.flyway:
   enabled: ${FLYWAY_ENABLED:true}
@@ -135,43 +182,28 @@ payment:
     default-device: pc
     client-ip: 127.0.0.1
 
-# AI模块配置（API Key 由 profile 或环境变量提供）
-langchain4j:
-  community:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-  open-ai:
-    embedding-model:
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-      api-key: ${AI_API_KEY:}
-      model-name: text-embedding-v3
-      log-requests: ${AI_LOG_REQUESTS:false}
-      log-responses: ${AI_LOG_RESPONSES:false}
-    streaming-chat-model:
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-      api-key: ${AI_API_KEY:}
-      model-name: qwen-plus
-      log-requests: ${AI_LOG_REQUESTS:false}
-      log-responses: ${AI_LOG_RESPONSES:false}
-    chat-model:
-      base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-      api-key: ${AI_API_KEY:}
-      model-name: qwen-plus
-      log-requests: ${AI_LOG_REQUESTS:false}
-      log-responses: ${AI_LOG_RESPONSES:false}
+# 外部数据分析服务配置（非 LangChain4j；由 DataAnalysisServiceImpl 调用）
+ai:
+  base-url: ${AI_ANALYSIS_BASE_URL:http://localhost:9999}
+  analyze-endpoint: ${AI_ANALYSIS_ENDPOINT:/analyze}
 
 sa-token:
   token-name: Authorization
+  token-prefix: Bearer
   timeout: 86400
-  active-timeout: ${SA_TOKEN_ACTIVE_TIMEOUT:-1}
+  active-timeout: ${SA_TOKEN_ACTIVE_TIMEOUT:1800}
   is-concurrent: ${SA_TOKEN_IS_CONCURRENT:true}
-  is-share: ${SA_TOKEN_IS_SHARE:true}
+  is-share: ${SA_TOKEN_IS_SHARE:false}
   token-style: uuid
   is-log: true
 
 # Actuator 健康检查 + Prometheus 监控
 management:
+  health:
+    mail:
+      enabled: ${MAIL_HEALTH_ENABLED:${MAIL_ENABLED:false}}
+    elasticsearch:
+      enabled: ${ELASTICSEARCH_HEALTH_ENABLED:${APP_SEARCH_ENABLED:false}}
   endpoints:
     web:
       exposure:
@@ -192,6 +224,8 @@ jwt:
 file:
   upload-path: /uploads
   max-size: 10485760
+  upload:
+    temp-dir: ./temp/chunks
 
 app:
   swagger:
@@ -219,6 +253,7 @@ minio:
   access-key: ${MINIO_ACCESS_KEY:}
   secret-key: ${MINIO_SECRET_KEY:}
   bucket-name: ${MINIO_BUCKET:payment-system}
+  bucket: ${MINIO_BUCKET:payment-system}
   path-prefix: uploads/
   url-expiry-days: 7
 
@@ -228,3 +263,38 @@ netty:
     port: 8888
     boss-threads: 1
     worker-threads: 4
+
+auth:
+  password-recovery:
+    expose-reset-code: false
+
+mineru:
+  api-key: ${MINERU_API_KEY:}
+  model-version: vlm
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      dashscope-chat:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 10s
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+      dashscope-rerank:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 5s
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        register-health-indicator: true
+  timelimiter:
+    instances:
+      dashscope-chat:
+        timeout-duration: 60s
+        cancel-running-future: false

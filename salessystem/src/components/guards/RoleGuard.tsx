@@ -2,6 +2,12 @@ import { type ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import type { AuthRole } from '../../types/auth';
+import {
+  getAdminSession,
+  getCurrentAuthRole,
+  getMerchantSession,
+  getPlatformUserProfile,
+} from '../../utils/authSession';
 
 interface RoleGuardProps {
   children: ReactNode;
@@ -10,13 +16,22 @@ interface RoleGuardProps {
 
 export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   const { currentRole, currentUser, merchantSession, adminSession } = useAuth();
+  const effectiveRole = currentRole ?? getCurrentAuthRole();
+  const storedSession =
+    effectiveRole === 'user'
+      ? getPlatformUserProfile()
+      : effectiveRole === 'merchant'
+        ? getMerchantSession()
+        : effectiveRole === 'admin'
+          ? getAdminSession()
+          : null;
 
-  if (!currentRole || !allowedRoles.includes(currentRole)) {
+  if (!effectiveRole || !allowedRoles.includes(effectiveRole)) {
     // Redirect to the default home page for the current role
-    if (currentRole === 'merchant') {
+    if (effectiveRole === 'merchant') {
       return <Navigate to="/merchant" replace />;
     }
-    if (currentRole === 'admin') {
+    if (effectiveRole === 'admin') {
       return <Navigate to="/admin" replace />;
     }
     return <Navigate to="/" replace />;
@@ -27,13 +42,13 @@ export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   // object (currentUser / merchantSession / adminSession) is present do we know
   // the server accepted the token.  If no session object exists, the role is
   // unverified -- redirect to login so the server can re-validate.
-  if (currentRole === 'user' && !currentUser) {
+  if (effectiveRole === 'user' && !currentUser && !storedSession) {
     return <Navigate to="/login" replace />;
   }
-  if (currentRole === 'merchant' && !merchantSession) {
+  if (effectiveRole === 'merchant' && !merchantSession && !storedSession) {
     return <Navigate to="/login" replace />;
   }
-  if (currentRole === 'admin' && !adminSession) {
+  if (effectiveRole === 'admin' && !adminSession && !storedSession) {
     return <Navigate to="/login" replace />;
   }
 

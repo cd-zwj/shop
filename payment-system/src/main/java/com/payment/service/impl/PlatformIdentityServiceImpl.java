@@ -1,8 +1,9 @@
 package com.payment.service.impl;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
+import com.payment.common.ResultCode;
+import com.payment.config.AuthStpKit;
 import com.payment.dto.PlatformRegisterDTO;
 import com.payment.entity.PlatformUser;
 import com.payment.enums.PlatformLoginTypeEnum;
@@ -10,11 +11,14 @@ import com.payment.mapper.PlatformUserMapper;
 import com.payment.service.PlatformIdentityService;
 import com.payment.service.login.PlatformLoginHandler;
 import com.payment.service.login.PlatformLoginRequest;
+import com.payment.util.AuthLoginIdHelper;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.PlatformSessionHelper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.EnumMap;
 import java.util.List;
@@ -43,12 +47,7 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PlatformUser register(PlatformRegisterDTO dto) {
-        PlatformUser existUser = platformUserMapper.selectOne(new LambdaQueryWrapper<PlatformUser>()
-                .eq(PlatformUser::getUsername, dto.getUsername())
-                .eq(PlatformUser::getDeleted, 0));
-        if (existUser != null) {
-            throw new BusinessException("用户名已存在");
-        }
+        assertUniqueRegistrationFields(dto);
 
         PlatformUser platformUser = new PlatformUser();
         platformUser.setUserNo(BizNoGenerator.generate("PU"));
@@ -58,19 +57,28 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
         platformUser.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         platformUser.setStatus(1);
         platformUser.setDeleted(0);
-        platformUserMapper.insert(platformUser);
+        try {
+            platformUserMapper.insert(platformUser);
+        } catch (DuplicateKeyException e) {
+            throw toRegistrationConflict(e);
+        }
         platformUser.setPasswordHash(null);
         return platformUser;
     }
 
     @Override
     public String login(PlatformLoginRequest request) {
+        PlatformUser platformUser = authenticate(request);
+        return createPlatformSession(platformUser);
+    }
+
+    @Override
+    public PlatformUser authenticate(PlatformLoginRequest request) {
         PlatformLoginHandler loginHandler = loginHandlerMap.get(request.loginType());
         if (loginHandler == null) {
             throw new BusinessException("暂不支持该登录方式");
         }
-        PlatformUser platformUser = loginHandler.authenticate(request);
-        return createLoginSession(platformUser);
+        return loginHandler.authenticate(request);
     }
 
     @Override
@@ -84,11 +92,50 @@ public class PlatformIdentityServiceImpl implements PlatformIdentityService {
         return platformUser;
     }
 
-    String createLoginSession(PlatformUser platformUser) {
-        // 使用带前缀的 loginId，避免和旧 sys_user 体系冲突。
-        StpUtil.login("platform:" + platformUser.getId());
-        StpUtil.getSession().set("platformUserId", platformUser.getId());
-        StpUtil.getSession().set("platformUsername", platformUser.getUsername());
-        return StpUtil.getTokenValue();
+    String createPlatformSession(PlatformUser platformUser) {
+        AuthStpKit.PLATFORM.login(AuthLoginIdHelper.platform(platformUser.getId()));
+        AuthStpKit.PLATFORM.getSession().set("platformUserId", platformUser.getId());
+        AuthStpKit.PLATFORM.getSession().set("platformUsername", platformUser.getUsername());
+        return AuthStpKit.PLATFORM.getTokenValue();
+    }
+
+    private void assertUniqueRegistrationFields(PlatformRegisterDTO dto) {
+        if (existsByField(PlatformUser::getUsername, dto.getUsername())) {
+            throw registrationConflict("用户名已存在");
+        }
+        if (StringUtils.hasText(dto.getPhone()) && existsByField(PlatformUser::getPhone, dto.getPhone())) {
+            throw registrationConflict("手机号已注册");
+        }
+        if (StringUtils.hasText(dto.getEmail()) && existsByField(PlatformUser::getEmail, dto.getEmail())) {
+            throw registrationConflict("邮箱已注册");
+        }
+    }
+
+    private boolean existsByField(com.baomidou.mybatisplus.core.toolkit.support.SFunction<PlatformUser, ?> column, String value) {
+        return platformUserMapper.selectOne(new LambdaQueryWrapper<PlatformUser>()
+                .eq(column, value)
+                .eq(PlatformUser::getDeleted, 0)) != null;
+    }
+
+    private BusinessException toRegistrationConflict(DuplicateKeyException e) {
+        String message = e.getMostSpecificCause() != null
+                ? e.getMostSpecificCause().getMessage()
+                : e.getMessage();
+        if (message != null) {
+            if (message.contains("uk_phone")) {
+                return registrationConflict("手机号已注册");
+            }
+            if (message.contains("uk_email")) {
+                return registrationConflict("邮箱已注册");
+            }
+            if (message.contains("uk_username") || message.contains("uk_platform_username")) {
+                return registrationConflict("用户名已存在");
+            }
+        }
+        return registrationConflict("用户已存在");
+    }
+
+    private BusinessException registrationConflict(String message) {
+        return new BusinessException(ResultCode.USER_ALREADY_EXISTS.getCode(), message);
     }
 }

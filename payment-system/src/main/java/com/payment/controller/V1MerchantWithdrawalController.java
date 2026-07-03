@@ -22,16 +22,21 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
+/**
+ * 商户端提现管理控制器（Merchant 端）。
+ * <p>提供商户钱包余额查看、提现记录查询和提现申请提交等功能。
+ * 需要商户角色登录，并通过 RBAC 权限（merchant:withdrawal:view / list / create）控制访问。</p>
+ */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/withdrawals")
 @RequiredArgsConstructor
-@SaCheckLogin
+@SaCheckLogin(type = "merchant")
 public class V1MerchantWithdrawalController {
 
     private final V1MerchantSupportService v1MerchantSupportService;
     private final WithdrawalService withdrawalService;
 
-    @SaCheckPermission("merchant:withdrawal:view")
+    @SaCheckPermission(type = "merchant", value = "merchant:withdrawal:view")
     @GetMapping("/balance")
     public Result<V1MerchantBalanceVO> getBalance(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -45,7 +50,7 @@ public class V1MerchantWithdrawalController {
         return Result.success(vo);
     }
 
-    @SaCheckPermission("merchant:withdrawal:list")
+    @SaCheckPermission(type = "merchant", value = "merchant:withdrawal:list")
     @GetMapping
     public Result<PageResult<WithdrawalVO>> listWithdrawals(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -65,7 +70,7 @@ public class V1MerchantWithdrawalController {
         }));
     }
 
-    @SaCheckPermission("merchant:withdrawal:create")
+    @SaCheckPermission(type = "merchant", value = "merchant:withdrawal:create")
     @PostMapping
     public Result<WithdrawalVO> createWithdrawal(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());

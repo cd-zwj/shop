@@ -33,6 +33,13 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
     private final MerchantWalletAccountMapper accountMapper;
     private final MerchantWalletLogMapper logMapper;
 
+    /**
+     * 查询指定商户下用户的商户钱包余额信息。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     * @return 钱包余额信息 VO
+     */
     @Override
     public WalletAccountVO getWallet(Long tenantId, Long platformUserId) {
         MerchantWalletAccount account = getOrCreateAccount(tenantId, platformUserId);
@@ -47,6 +54,15 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
         return vo;
     }
 
+    /**
+     * 分页查询商户钱包的资金变动流水。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     * @param current        当前页码
+     * @param size           每页数量
+     * @return 分页流水记录
+     */
     @Override
     public Page<WalletLogVO> listLogs(Long tenantId, Long platformUserId, Integer current, Integer size) {
         Page<MerchantWalletLog> entityPage = new Page<>(current, size);
@@ -72,6 +88,20 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
         return result;
     }
 
+    /**
+     * 商户钱包入账（充值到账、退款等场景）。
+     * <p>
+     * 采用乐观锁 + 重试机制（最多 3 次）保障并发安全，
+     * 账户不存在时自动创建。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     * @param amount         入账金额，必须大于 0
+     * @param bizType        业务类型
+     * @param bizNo          业务单号
+     * @param remark         备注说明
+     * @throws BusinessException 金额不合法或重试耗尽时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void credit(Long tenantId, Long platformUserId, BigDecimal amount, String bizType, String bizNo, String remark) {
@@ -98,6 +128,20 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
         throw new BusinessException("商户钱包入账失败，请稍后重试");
     }
 
+    /**
+     * 商户钱包扣款（消费场景）。
+     * <p>
+     * 采用乐观锁 + 重试机制（最多 3 次）保障并发安全，
+     * 扣款前校验可用余额是否充足。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     * @param amount         扣减金额，必须大于 0
+     * @param bizType        业务类型
+     * @param bizNo          业务单号
+     * @param remark         备注说明
+     * @throws BusinessException 余额不足、金额不合法或重试耗尽时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void debit(Long tenantId, Long platformUserId, BigDecimal amount, String bizType, String bizNo, String remark) {
@@ -128,6 +172,11 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
         throw new BusinessException("商户钱包扣款失败，请稍后重试");
     }
 
+    /**
+     * 获取或创建指定商户下用户的钱包账户。
+     * <p>
+     * 账户不存在时自动创建初始账户，并发创建时通过 DuplicateKeyException 兜底。
+     */
     private MerchantWalletAccount getOrCreateAccount(Long tenantId, Long platformUserId) {
         MerchantWalletAccount account = accountMapper.selectOne(new LambdaQueryWrapper<MerchantWalletAccount>()
                 .eq(MerchantWalletAccount::getTenantId, tenantId)
@@ -160,6 +209,7 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
         }
     }
 
+    /** 插入商户钱包资金变动流水记录。 */
     private void insertLog(Long tenantId,
                            Long platformUserId,
                            BigDecimal changeAmount,

@@ -19,14 +19,44 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 死信队列消费者
+ * <p>
+ * 监听死信队列 {@code payment.dlx.queue}，处理所有因重试耗尽而进入死信队列的消息。
+ * 主要处理场景：
+ * <ul>
+ *   <li>充值订单超时未支付 —— 自动将订单状态更新为失败</li>
+ *   <li>其他死信消息 —— 持久化到 {@link DeadLetterTask} 表，供后续人工排查或补偿</li>
+ * </ul>
+ * </p>
+ *
+ * @author payment-system
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DeadLetterConsumer {
 
+    /**
+     * 充值订单 Mapper
+     */
     private final RechargeOrderMapper rechargeOrderMapper;
+
+    /**
+     * 死信任务 Mapper，用于持久化未识别的死信消息
+     */
     private final DeadLetterTaskMapper deadLetterTaskMapper;
 
+    /**
+     * 处理死信消息（手动 ACK 模式）
+     * <p>
+     * 根据消息的原始队列判断处理策略：
+     * 来自充值订单延迟队列的消息自动取消超时订单，其余持久化到数据库。
+     * </p>
+     *
+     * @param message RabbitMQ 原始消息对象
+     * @param channel RabbitMQ 通道，用于手动确认消息
+     */
     @RabbitListener(queues = "payment.dlx.queue", ackMode = "MANUAL")
     public void handleDeadLetter(Message message, Channel channel) {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
@@ -50,6 +80,12 @@ public class DeadLetterConsumer {
         }
     }
 
+    /**
+     * 从消息的 x-death header 中解析原始队列名
+     *
+     * @param message RabbitMQ 消息对象
+     * @return 原始队列名称，若无法解析则返回 null
+     */
     private String resolveOriginalQueue(Message message) {
         List<Map<String, ?>> xDeathHeader = message.getMessageProperties().getXDeathHeader();
         if (xDeathHeader != null && !xDeathHeader.isEmpty()) {
@@ -59,6 +95,14 @@ public class DeadLetterConsumer {
         return null;
     }
 
+    /**
+     * 将死信消息持久化到 {@link DeadLetterTask} 表
+     *
+     * @param message        RabbitMQ 消息对象
+     * @param messageBody    消息体字符串
+     * @param originalQueue  原始队列名
+     * @param overrideReason 覆盖的失败原因（为 null 时自动从 header 中解析）
+     */
     private void persistDeadLetter(Message message, String messageBody, String originalQueue, String overrideReason) {
         try {
             DeadLetterTask task = new DeadLetterTask();
@@ -80,6 +124,12 @@ public class DeadLetterConsumer {
         }
     }
 
+    /**
+     * 从消息 header 中解析死因
+     *
+     * @param message RabbitMQ 消息对象
+     * @return 死因描述字符串，若无法解析则返回 null
+     */
     private String resolveDeathReason(Message message) {
         String reason = message.getMessageProperties().getHeader("x-first-death-reason");
         if (reason != null) {
@@ -93,6 +143,12 @@ public class DeadLetterConsumer {
         return null;
     }
 
+    /**
+     * 将消息 header 序列化为 JSON 字符串
+     *
+     * @param message RabbitMQ 消息对象
+     * @return header 的 JSON 字符串表示，序列化失败时返回 null
+     */
     private String serializeHeaders(Message message) {
         try {
             return JsonUtils.toJson(message.getMessageProperties().getHeaders());
@@ -102,6 +158,14 @@ public class DeadLetterConsumer {
         }
     }
 
+    /**
+     * 处理充值订单超时
+     * <p>
+     * 查询订单状态，若仍为待支付（PENDING），则自动标记为失败（FAIL）。
+     * </p>
+     *
+     * @param orderNo 充值订单编号
+     */
     private void handleRechargeOrderExpiration(String orderNo) {
         try {
             LambdaQueryWrapper<RechargeOrder> wrapper = new LambdaQueryWrapper<>();
@@ -124,6 +188,12 @@ public class DeadLetterConsumer {
         }
     }
 
+    /**
+     * 去除字符串两端的引号（RabbitMQ 延迟消息可能携带引号包裹的订单号）
+     *
+     * @param value 原始字符串
+     * @return 去除引号后的字符串
+     */
     private String stripQuotes(String value) {
         if (value == null) {
             return null;
@@ -134,6 +204,12 @@ public class DeadLetterConsumer {
         return value;
     }
 
+    /**
+     * 安全地确认消息（忽略确认过程中的异常）
+     *
+     * @param channel      RabbitMQ 通道
+     * @param deliveryTag  消息投递标签
+     */
     private void safeAck(Channel channel, long deliveryTag) {
         try {
             channel.basicAck(deliveryTag, false);

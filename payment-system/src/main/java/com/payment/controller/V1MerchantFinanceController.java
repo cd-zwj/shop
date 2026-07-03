@@ -34,6 +34,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 商户端财务与积分控制器（Merchant 端）。
+ * <p>提供商户钱包余额查询、积分规则管理、充值规则管理以及收支流水查询等功能。
+ * 流水数据合并自商户钱包（merchant_wallet_log）和统一钱包（unified_wallet_log）两个数据源，
+ * 并通过 bizNo 匹配本商户订单来避免跨商户数据污染。</p>
+ */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}")
 @RequiredArgsConstructor
@@ -47,6 +53,12 @@ public class V1MerchantFinanceController {
     private final PointsRuleMapper pointsRuleMapper;
     private final MerchantRechargeRuleService merchantRechargeRuleService;
 
+    /**
+     * 查询商户钱包余额汇总。
+     *
+     * @param tenantId 租户 ID
+     * @return 钱包余额汇总信息（可用余额、冻结金额、总收入、总提现）
+     */
     @GetMapping("/wallet-summary")
     public Result<V1MerchantBalanceVO> getWalletSummary(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -63,6 +75,12 @@ public class V1MerchantFinanceController {
         return Result.success(vo);
     }
 
+    /**
+     * 查询当前租户的积分规则。
+     *
+     * @param tenantId 租户 ID
+     * @return 积分规则信息（积分比例、是否启用）
+     */
     @GetMapping("/points-rule")
     public Result<V1MerchantPointsRuleDTO> getPointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -75,6 +93,13 @@ public class V1MerchantFinanceController {
         return Result.success(dto);
     }
 
+    /**
+     * 更新积分规则（不存在则新建）。
+     *
+     * @param tenantId 租户 ID
+     * @param dto      积分规则参数（积分比例、是否启用）
+     * @return 操作结果
+     */
     @PutMapping("/points-rule")
     public Result<Void> updatePointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody V1MerchantPointsRuleDTO dto) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -97,6 +122,12 @@ public class V1MerchantFinanceController {
         return Result.success();
     }
 
+    /**
+     * 查询当前租户的所有充值规则。
+     *
+     * @param tenantId 租户 ID
+     * @return 充值规则列表
+     */
     @GetMapping("/recharge-rules")
     public Result<List<MerchantRechargeRuleVO>> listRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
@@ -105,6 +136,13 @@ public class V1MerchantFinanceController {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * 全量替换充值规则列表（先删后插）。
+     *
+     * @param tenantId 租户 ID
+     * @param rules    新的充值规则列表
+     * @return 操作结果
+     */
     @PutMapping("/recharge-rules")
     public Result<Void> replaceRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                              @Valid @RequestBody List<V1MerchantRechargeRuleDTO> rules) {
@@ -165,6 +203,18 @@ public class V1MerchantFinanceController {
 
     /* ---------- private helpers ---------- */
 
+    /**
+     * 查询商户钱包流水记录。
+     * <p>
+     * 从 merchant_wallet_log 表按租户 ID、业务类型和日期范围查询，自动租户隔离。
+     * </p>
+     *
+     * @param tenantId  租户 ID
+     * @param type      业务类型筛选（可选）
+     * @param startDate 开始日期（可选，格式 yyyy-MM-dd）
+     * @param endDate   结束日期（可选，格式 yyyy-MM-dd）
+     * @return 商户钱包交易记录列表
+     */
     private List<MerchantTransactionVO> queryMerchantLogs(Long tenantId, String type, String startDate, String endDate) {
         LambdaQueryWrapper<MerchantWalletLog> w = new LambdaQueryWrapper<MerchantWalletLog>()
                 .eq(MerchantWalletLog::getTenantId, tenantId);
@@ -175,6 +225,20 @@ public class V1MerchantFinanceController {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 查询统一钱包中与本商户订单关联的流水记录。
+     * <p>
+     * 从 unified_wallet_log 表查询属于本租户会员的流水，并通过 inSql 子查询
+     * 限定 bizNo 必须匹配本商户的 sales_order.order_no，避免跨商户数据污染。
+     * </p>
+     *
+     * @param userIds   本租户下的所有 platformUserId 列表
+     * @param tenantId  租户 ID，用于 bizNo 子查询过滤
+     * @param type      业务类型筛选（可选）
+     * @param startDate 开始日期（可选，格式 yyyy-MM-dd）
+     * @param endDate   结束日期（可选，格式 yyyy-MM-dd）
+     * @return 统一钱包交易记录列表
+     */
     private List<MerchantTransactionVO> queryUnifiedLogs(List<Long> userIds, Long tenantId,
                                                           String type, String startDate, String endDate) {
         LambdaQueryWrapper<UnifiedWalletLog> w = new LambdaQueryWrapper<UnifiedWalletLog>()
@@ -191,7 +255,18 @@ public class V1MerchantFinanceController {
 
     /**
      * 通用筛选条件：bizType + 日期范围。
-     * 使用泛型 SFunction 兼容不同实体类型。
+     * <p>
+     * 使用泛型 SFunction 兼容不同实体类型（MerchantWalletLog / UnifiedWalletLog），
+     * 按业务类型精确匹配和创建时间区间过滤。
+     * </p>
+     *
+     * @param <T>           实体类型
+     * @param w             MyBatis-Plus 查询条件包装器
+     * @param type          业务类型（可选，转大写后匹配）
+     * @param startDate     开始日期（可选，格式 yyyy-MM-dd，含当天）
+     * @param endDate       结束日期（可选，格式 yyyy-MM-dd，不含当天）
+     * @param bizTypeCol    业务类型字段引用
+     * @param createTimeCol 创建时间字段引用
      */
     private <T> void applyCommonFilters(LambdaQueryWrapper<T> w,
                                         String type, String startDate, String endDate,
@@ -208,6 +283,12 @@ public class V1MerchantFinanceController {
         }
     }
 
+    /**
+     * 将商户钱包日志转换为交易 VO。
+     *
+     * @param log 商户钱包流水记录实体
+     * @return 交易 VO 对象
+     */
     private MerchantTransactionVO toMerchantVO(MerchantWalletLog log) {
         MerchantTransactionVO vo = new MerchantTransactionVO();
         vo.setId(log.getId());
@@ -221,6 +302,12 @@ public class V1MerchantFinanceController {
         return vo;
     }
 
+    /**
+     * 将统一钱包日志转换为交易 VO。
+     *
+     * @param log 统一钱包流水记录实体
+     * @return 交易 VO 对象
+     */
     private MerchantTransactionVO toUnifiedVO(UnifiedWalletLog log) {
         MerchantTransactionVO vo = new MerchantTransactionVO();
         vo.setId(log.getId());

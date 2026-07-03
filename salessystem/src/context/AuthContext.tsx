@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -34,7 +35,7 @@ import {
   setMerchantSession,
   setPlatformUserProfile,
 } from '../utils/authSession';
-import { clearAllTokens, setToken } from '../utils/token';
+import { clearAllTokens, getToken, setToken } from '../utils/token';
 
 type UserLoginMethod = 'password' | 'sms' | 'third-party';
 
@@ -48,6 +49,8 @@ interface AuthContextValue {
   loginUser: (method: UserLoginMethod, payload: PlatformLoginDTO | SmsLoginDTO) => Promise<PlatformUser>;
   loginMerchant: (payload: PlatformLoginDTO) => Promise<MerchantSession>;
   loginAdmin: (payload: PlatformLoginDTO) => Promise<AdminSession>;
+  refreshAdminSession: () => Promise<AdminSession | null>;
+  refreshMerchantSession: () => Promise<MerchantSession | null>;
   registerUser: (payload: PlatformRegisterDTO) => Promise<PlatformUser>;
   refreshCurrentUser: () => Promise<PlatformUser | null>;
   logout: () => Promise<void>;
@@ -78,10 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [adminSession, setAdminSessionState] = useState<AdminSession | null>(() => getAdminSession());
   const [isReady, setIsReady] = useState(false);
+  const isLoginInProgress = useRef(false);
 
   // 监听 401 事件：http.ts 响应拦截器在收到 401 时分发此事件
   useEffect(() => {
     function handleTokenClear(e: Event) {
+      if (isLoginInProgress.current) return;
       const detail = (e as CustomEvent).detail;
       // 如果事件指定了角色，只处理当前角色的事件
       if (detail?.role && detail.role !== currentRole) return;
@@ -96,24 +101,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    const role = currentRole;
 
     async function hydrate() {
       try {
-        if (currentRole === 'user' && !currentUser) {
+        if (role && !getToken(role)) {
+          resetLocalAuthState(setCurrentRoleState, setCurrentUser, setMerchantSessionState, setAdminSessionState);
+          return;
+        }
+
+        if (role === 'user' && !getPlatformUserProfile()) {
           const profile = await appUserService.getCurrentUser();
           if (!isMounted) return;
           setPlatformUserProfile(profile);
           setCurrentUser(profile);
         }
 
-        if (currentRole === 'merchant' && !merchantSession) {
+        if (role === 'merchant' && !getMerchantSession()) {
           const session = await merchantAuthService.getCurrentSession();
           if (!isMounted) return;
           setMerchantSession(session);
           setMerchantSessionState(session);
         }
 
-        if (currentRole === 'admin' && !adminSession) {
+        if (role === 'admin' && !getAdminSession()) {
           const session = await adminAuthService.getCurrentSession();
           if (!isMounted) return;
           setAdminSession(session);
@@ -134,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
     };
-  }, [adminSession, currentRole, currentUser, merchantSession]);
+  }, [currentRole]);
 
   function resetState(role: AuthRole) {
     if (role === 'user') {
@@ -148,52 +159,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function activateRole(role: AuthRole) {
+  function clearLocalAuthBeforeLogin() {
     clearAllTokens();
     clearAllAuthSessions();
-    setCurrentAuthRole(role);
-    setCurrentRoleState(role);
+    setCurrentRoleState(null);
     setCurrentUser(null);
     setMerchantSessionState(null);
     setAdminSessionState(null);
   }
 
+  function commitRole(role: AuthRole) {
+    setCurrentAuthRole(role);
+    setCurrentRoleState(role);
+  }
+
   async function loginUser(method: UserLoginMethod, payload: PlatformLoginDTO | SmsLoginDTO) {
-    await activateRole('user');
+    isLoginInProgress.current = true;
+    try {
+      clearLocalAuthBeforeLogin();
 
-    let token: string;
-    if (method === 'password') {
-      token = await appAuthService.loginByPassword(payload as PlatformLoginDTO);
-    } else if (method === 'sms') {
-      token = await appAuthService.loginBySms(payload as SmsLoginDTO);
-    } else {
-      token = await appAuthService.loginByThirdParty(payload as PlatformLoginDTO);
+      let token: string;
+      if (method === 'password') {
+        token = await appAuthService.loginByPassword(payload as PlatformLoginDTO);
+      } else if (method === 'sms') {
+        token = await appAuthService.loginBySms(payload as SmsLoginDTO);
+      } else {
+        token = await appAuthService.loginByThirdParty(payload as PlatformLoginDTO);
+      }
+
+      setToken('user', token);
+      const profile = await appUserService.getCurrentUser();
+      setPlatformUserProfile(profile);
+      setCurrentUser(profile);
+      commitRole('user');
+      return profile;
+    } finally {
+      isLoginInProgress.current = false;
     }
-
-    setToken('user', token);
-    const profile = await appUserService.getCurrentUser();
-    setPlatformUserProfile(profile);
-    setCurrentUser(profile);
-    return profile;
   }
 
   async function loginMerchant(payload: PlatformLoginDTO) {
-    await activateRole('merchant');
-    const session = await merchantAuthService.login(payload);
-    setToken('merchant', session.token);
-    setMerchantSession(session);
-    setMerchantSessionState(session);
-    return session;
+    isLoginInProgress.current = true;
+    try {
+      clearLocalAuthBeforeLogin();
+      const session = await merchantAuthService.login(payload);
+      setToken('merchant', session.token);
+      setMerchantSession(session);
+      setMerchantSessionState(session);
+      commitRole('merchant');
+      return session;
+    } finally {
+      isLoginInProgress.current = false;
+    }
   }
 
   async function loginAdmin(payload: PlatformLoginDTO) {
-    await activateRole('admin');
-    const token = await adminAuthService.login(payload);
-    setToken('admin', token);
-    const session = await adminAuthService.getCurrentSession();
-    setAdminSession(session);
-    setAdminSessionState(session);
-    return session;
+    isLoginInProgress.current = true;
+    try {
+      clearLocalAuthBeforeLogin();
+      const token = await adminAuthService.login(payload);
+      setToken('admin', token);
+      const session = await adminAuthService.getCurrentSession();
+      setAdminSession(session);
+      setAdminSessionState(session);
+      commitRole('admin');
+      return session;
+    } finally {
+      isLoginInProgress.current = false;
+    }
   }
 
   function registerUser(payload: PlatformRegisterDTO) {
@@ -201,7 +234,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function refreshCurrentUser() {
-    if (currentRole !== 'user') {
+    const role = currentRole ?? getCurrentAuthRole();
+    if (role !== 'user') {
       return null;
     }
 
@@ -209,6 +243,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPlatformUserProfile(profile);
     setCurrentUser(profile);
     return profile;
+  }
+
+  async function refreshMerchantSession() {
+    const role = currentRole ?? getCurrentAuthRole();
+    if (role !== 'merchant') {
+      return null;
+    }
+
+    const session = await merchantAuthService.getCurrentSession();
+    setMerchantSession(session);
+    setMerchantSessionState(session);
+    return session;
+  }
+
+  async function refreshAdminSession() {
+    const role = currentRole ?? getCurrentAuthRole();
+    if (role !== 'admin') {
+      return null;
+    }
+
+    const session = await adminAuthService.getCurrentSession();
+    setAdminSession(session);
+    setAdminSessionState(session);
+    return session;
   }
 
   async function logout() {
@@ -249,6 +307,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loginUser,
       loginMerchant,
       loginAdmin,
+      refreshAdminSession,
+      refreshMerchantSession,
       registerUser,
       refreshCurrentUser,
       logout,

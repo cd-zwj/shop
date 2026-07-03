@@ -208,7 +208,7 @@ class CouponServiceImplTest {
         when(templateMapper.selectById(201L)).thenReturn(activeTemplate());
         when(userCouponMapper.claimCouponSlot(anyLong(), anyLong())).thenReturn(1);
         when(userCouponMapper.selectCount(any())).thenReturn(0L);
-        when(userCouponMapper.insert(any())).thenAnswer(invocation -> {
+        when(userCouponMapper.insert(any(UserCoupon.class))).thenAnswer(invocation -> {
             UserCoupon coupon = invocation.getArgument(0);
             coupon.setId(501L);
             return 1;
@@ -271,7 +271,7 @@ class CouponServiceImplTest {
                 mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class), outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(receivedCoupon());
-        when(userCouponMapper.updateById(any())).thenReturn(1);
+        when(userCouponMapper.updateById(any(UserCoupon.class))).thenReturn(1);
 
         service.lockCoupon(501L, 9L, 100L, 88L, "SO1001", "SO1001");
 
@@ -312,7 +312,7 @@ class CouponServiceImplTest {
                 releaseRecordMapper, mock(CouponWriteOffRecordMapper.class), outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(lockedCoupon());
-        when(userCouponMapper.updateById(any())).thenReturn(1);
+        when(userCouponMapper.updateById(any(UserCoupon.class))).thenReturn(1);
 
         service.releaseCoupon(501L, 9L, 100L, 88L, "SO1001", "SO1001", "订单取消");
 
@@ -336,7 +336,7 @@ class CouponServiceImplTest {
                 mock(CouponReleaseRecordMapper.class), writeOffRecordMapper, outboxPublisher);
 
         when(userCouponMapper.selectById(501L)).thenReturn(lockedCoupon());
-        when(userCouponMapper.updateById(any())).thenReturn(1);
+        when(userCouponMapper.updateById(any(UserCoupon.class))).thenReturn(1);
 
         service.writeOffCoupon(501L, 9L, 88L, "SO1001", "SO1001", new BigDecimal("8.00"));
 
@@ -467,7 +467,7 @@ class CouponServiceImplTest {
         UserCoupon coupon = receivedCoupon();
         coupon.setExpireTime(LocalDateTime.now().minusMinutes(10));
         when(userCouponMapper.selectList(any())).thenReturn(List.of(coupon));
-        when(userCouponMapper.updateById(any())).thenReturn(1);
+        when(userCouponMapper.updateById(any(UserCoupon.class))).thenReturn(1);
 
         int result = service.expireCoupons(null, LocalDateTime.now(), "COUPON_EXPIRE_SCAN", "到期扫描");
 

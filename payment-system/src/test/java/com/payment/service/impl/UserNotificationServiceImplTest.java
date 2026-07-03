@@ -80,7 +80,7 @@ class UserNotificationServiceImplTest {
 
         UserNotification result = service.markRead(100L, 1L);
 
-        verify(notificationMapper, never()).updateById(any());
+        verify(notificationMapper, never()).updateById(any(com.payment.entity.UserNotification.class));
         assertEquals(1, result.getReadStatus());
     }
 

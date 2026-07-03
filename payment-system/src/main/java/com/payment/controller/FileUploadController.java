@@ -6,6 +6,7 @@ import com.payment.common.BusinessException;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.common.TenantContextHolder;
+import com.payment.config.AuthStpKit;
 import com.payment.service.FileAssetService;
 import com.payment.util.MinioUtil;
 import com.payment.util.PlatformSessionHelper;
@@ -31,7 +32,7 @@ import java.util.Set;
 @RestController
 @RequestMapping("/api/file")
 @Tag(name = "文件上传", description = "文件上传相关接口，支持分片上传")
-@SaCheckLogin
+@SaCheckLogin(type = AuthStpKit.MERCHANT_TYPE)
 public class FileUploadController {
 
     private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
@@ -153,7 +154,7 @@ public class FileUploadController {
         }
     }
 
-    @SaCheckPermission("file:list")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "file:list")
     @GetMapping("/list")
     @Operation(summary = "查询已上传文件列表", description = "按租户分页查询已上传的文件列表，需要登录")
     public Result<PageResult<FileAssetVO>> listFiles(

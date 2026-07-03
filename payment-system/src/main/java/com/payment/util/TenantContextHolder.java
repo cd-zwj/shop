@@ -1,9 +1,10 @@
 package com.payment.util;
 
-import cn.dev33.satoken.stp.StpUtil;
+import cn.dev33.satoken.session.SaSession;
+import com.payment.config.AuthStpKit;
 
 /**
- * 租户上下文 - 适配 Sa-Token
+ * 租户上下文 - 适配 Sa-Token 多账号体系。
  */
 public class TenantContextHolder {
 
@@ -17,27 +18,46 @@ public class TenantContextHolder {
     }
 
     /**
-     * 获取租户ID
-     * 优先从ThreadLocal获取(手动设置优先)，其次从Sa-Token Session获取
+     * 获取租户ID。
+     * 优先从ThreadLocal获取(手动设置优先)，其次从当前 Sa-Token Session 获取。
      */
     public static Long getTenantId() {
         Long tid = tenantIdHolder.get();
         if (tid != null) {
             return tid;
         }
+        SaSession session = currentSession();
+        if (session == null) {
+            return null;
+        }
         try {
-            // 从Session获取
-            return StpUtil.getSession().getLong("tenantId");
+            return session.getLong("tenantId");
         } catch (Exception e) {
             return null;
         }
     }
 
     /**
-     * 清除所有租户信息
+     * 清除所有租户信息。
      */
     public static void clear() {
         tenantIdHolder.remove();
     }
-}
 
+    private static SaSession currentSession() {
+        try {
+            if (AuthStpKit.MERCHANT.isLogin()) {
+                return AuthStpKit.MERCHANT.getSession();
+            }
+            if (AuthStpKit.ADMIN.isLogin()) {
+                return AuthStpKit.ADMIN.getSession();
+            }
+            if (AuthStpKit.PLATFORM.isLogin()) {
+                return AuthStpKit.PLATFORM.getSession();
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+}

@@ -11,12 +11,14 @@ import java.time.LocalDateTime;
 /**
  * 消息消费日志实体。
  * 对应 message_consume_log 表，记录每次消息消费的结果。
+ * 用于消费链路的可观测性追踪，便于排查消费失败、重复消费等问题。
  */
 @Data
 @TableName("message_consume_log")
 public class MessageConsumeLog implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** 主键 ID，自增 */
     @TableId(type = IdType.AUTO)
     private Long id;
 

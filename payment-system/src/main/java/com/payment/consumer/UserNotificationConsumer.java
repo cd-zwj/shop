@@ -12,17 +12,32 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 用户通知事件消费者。
- *
+ * 用户通知事件消费者
+ * <p>
+ * 从 {@link RabbitMQConfig#USER_NOTIFICATION_QUEUE} 队列中消费用户通知事件。
  * 当前通知已先落库，队列消费负责形成可观测、可重试的异步推送入口。
+ * 通过 {@link MessageIdempotentService} 保障消息幂等性。
+ * </p>
+ *
+ * @author payment-system
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class UserNotificationConsumer {
 
+    /** 消息幂等服务，用于防止重复消费 */
     private final MessageIdempotentService messageIdempotentService;
 
+    /**
+     * 处理用户通知事件消息
+     * <p>
+     * 从消息体中解析通知 ID，进行幂等校验后执行事件处理逻辑。
+     * </p>
+     *
+     * @param body 消息体 JSON 字符串，必须包含 notificationId 字段
+     * @throws IllegalArgumentException 当消息体缺少必填字段时抛出
+     */
     @RabbitListener(queues = RabbitMQConfig.USER_NOTIFICATION_QUEUE)
     public void handleNotification(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
@@ -53,11 +68,28 @@ public class UserNotificationConsumer {
         }
     }
 
+    /**
+     * 处理用户通知事件的具体业务逻辑
+     * <p>
+     * 当前版本仅记录日志，后续可扩展为推送通知（WebSocket/SSE/第三方推送平台）等操作。
+     * </p>
+     *
+     * @param payload 解析后的消息体 Map
+     */
     protected void processNotificationEvent(Map<String, Object> payload) {
         log.info("用户通知事件已消费, notificationId={}, platformUserId={}, category={}",
                 payload.get("notificationId"), payload.get("platformUserId"), payload.get("category"));
     }
 
+    /**
+     * 校验消息载荷中的字段非空
+     *
+     * @param payload   消息载荷 Map
+     * @param fieldName 字段名
+     * @param body      原始消息体（用于异常信息输出）
+     * @return 字段值的字符串表示
+     * @throws IllegalArgumentException 当字段不存在或值为空白字符串时抛出
+     */
     private String requireNonBlank(Map<String, Object> payload, String fieldName, String body) {
         Object rawValue = payload == null ? null : payload.get(fieldName);
         if (rawValue == null) {

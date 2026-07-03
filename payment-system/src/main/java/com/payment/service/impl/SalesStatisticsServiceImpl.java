@@ -31,6 +31,12 @@ public class SalesStatisticsServiceImpl implements SalesStatisticsService {
     @Autowired
     private PaymentOrderMapper paymentOrderMapper;
     
+    /**
+     * 获取指定租户的销售数据概览（今日/本月/累计销售额和订单数）
+     *
+     * @param tenantId 租户ID
+     * @return 销售概览数据，包含今日、本月、累计的销售额和订单数
+     */
     @Override
     public SalesOverviewDTO getSalesOverview(Long tenantId) {
         log.info("获取销售数据概览，租户ID: {}", tenantId);
@@ -66,6 +72,13 @@ public class SalesStatisticsServiceImpl implements SalesStatisticsService {
         return overview;
     }
     
+    /**
+     * 获取指定时间范围内的销售趋势数据
+     *
+     * @param tenantId 租户ID
+     * @param query    查询条件，包含起止日期；未指定时默认查询最近30天
+     * @return 每日销售趋势列表（日期、销售额、订单数）
+     */
     @Override
     public List<SalesTrendDTO> getSalesTrend(Long tenantId, SalesQueryDTO query) {
         log.info("获取销售趋势数据，租户ID: {}, 查询条件: {}", tenantId, query);

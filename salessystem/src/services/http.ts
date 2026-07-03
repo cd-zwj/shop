@@ -8,6 +8,10 @@ import { getToken } from '../utils/token';
 // 401 清除 token 事件名称，AuthContext 监听此事件完成本地状态清理
 export const AUTH_TOKEN_CLEAR_EVENT = 'salessystem:auth:clear-tokens';
 
+export function formatAuthToken(token: string): string {
+  return token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+}
+
 declare module 'axios' {
   interface AxiosRequestConfig {
     authRole?: AuthRole | false;
@@ -23,40 +27,44 @@ function resolveAuthRole(config: InternalAxiosRequestConfig): AuthRole | null {
   return config.authRole ?? getCurrentAuthRole();
 }
 
+function dispatchAuthClear(config: InternalAxiosRequestConfig) {
+  const role = resolveAuthRole(config);
+  if (role) {
+    window.dispatchEvent(new CustomEvent(AUTH_TOKEN_CLEAR_EVENT, { detail: { role } }));
+  }
+}
+
 export const http = axios.create({
   baseURL: API_BASE_URL,
   timeout: 15000,
 });
 
-// 请求拦截器：自动注入 Authorization token
+// 请求拦截器：自动注入 Sa-Token token。
 http.interceptors.request.use((config) => {
   const nextConfig = config;
   const role = resolveAuthRole(nextConfig);
   const token = role ? getToken(role) : null;
 
   if (token) {
-    nextConfig.headers.set('Authorization', token);
+    const authToken = formatAuthToken(token);
+    nextConfig.headers.set('Authorization', authToken);
+    nextConfig.headers.set('satoken', authToken);
   }
 
   return nextConfig;
 });
 
-// 响应拦截器：统一错误处理，401 自动跳转登录
+// 响应拦截器：统一错误处理，401 通知 AuthContext 清理认证状态
 http.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiResponse<unknown>>) => {
     if (error.response) {
       const { status, data } = error.response;
 
-     // 401：token 失效，清除本地认证状态并跳转登录页
-     if (status === 401) {
-       const role = resolveAuthRole(error.config as InternalAxiosRequestConfig);
-       window.dispatchEvent(new CustomEvent(AUTH_TOKEN_CLEAR_EVENT, { detail: { role } }));
-        // 按角色跳转到登录页，避免商户/管理员 401 时将用户也踢到用户登录页
-        const loginPath = role ? `/login?role=${role}` : '/login';
-        window.location.href = loginPath;
-       return Promise.reject(new ApiError('登录已过期，请重新登录', 401, 401, data));
-     }
+      if (status === 401) {
+        dispatchAuthClear(error.config as InternalAxiosRequestConfig);
+        return Promise.reject(new ApiError('登录已过期，请重新登录', 401, 401, data));
+      }
 
       const message =
         data?.message || (status === 403 ? '当前账号没有访问权限' : '请求失败，请稍后重试');

@@ -31,7 +31,12 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 充值服务实现
+ * 充值服务实现（旧版）。
+ * <p>
+ * 处理商户级充值规则管理、充值订单创建、支付回调、用户余额管理等业务。
+ * 与 {@link WalletRechargeServiceImpl} 的区别在于：本实现操作的是旧版余额体系（user_balance 表），
+ * 而 WalletRechargeServiceImpl 操作的是新版双钱包体系（unified_wallet / merchant_wallet）。
+ * 充值订单超时通过 RabbitMQ 延迟队列自动取消。
  */
 @Slf4j
 @Service
@@ -55,6 +60,12 @@ public class RechargeServiceImpl implements RechargeService {
     @Autowired
     private PaymentConfig paymentConfig;
     
+    /**
+     * 获取指定商户的可用充值规则列表（按排序权重升序）。
+     *
+     * @param tenantId 租户 ID
+     * @return 启用状态的充值规则列表
+     */
     @Override
     public List<RechargeRule> getRechargeRules(Long tenantId) {
         LambdaQueryWrapper<RechargeRule> wrapper = new LambdaQueryWrapper<>();
@@ -64,6 +75,13 @@ public class RechargeServiceImpl implements RechargeService {
         return rechargeRuleMapper.selectList(wrapper);
     }
     
+    /**
+     * 批量替换当前商户的充值规则。
+     * <p>
+     * 先删除旧规则（物理删除），再按顺序插入新规则。
+     *
+     * @param rules 充值规则 DTO 列表
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setRechargeRules(List<RechargeRuleDTO> rules) {
@@ -90,6 +108,16 @@ public class RechargeServiceImpl implements RechargeService {
         log.info("商家 {} 设置充值规则成功，共 {} 条", tenantId, rules.size());
     }
     
+    /**
+     * 创建充值订单。
+     * <p>
+     * 校验充值规则合法性和所属租户后创建订单，并通过 RabbitMQ 延迟队列设置超时自动取消。
+     *
+     * @param userId  用户 ID
+     * @param ruleId  充值规则 ID
+     * @return 新创建的充值订单
+     * @throws BusinessException 规则不存在、已禁用或不属于当前租户时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RechargeOrder createRechargeOrder(Long userId, Long ruleId) {
@@ -141,6 +169,15 @@ public class RechargeServiceImpl implements RechargeService {
         return order;
     }
     
+    /**
+     * 处理充值支付成功回调。
+     * <p>
+     * 采用 CAS 原子更新保证幂等：只有 pay_status 从 PENDING 更新为 SUCCESS 时才执行入账，
+     * 重复回调自动忽略。入账金额 = 充值金额 + 赠送金额。
+     *
+     * @param orderNo 充值订单号
+     * @throws BusinessException 订单不存在时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleRechargeCallback(String orderNo) {
@@ -168,6 +205,13 @@ public class RechargeServiceImpl implements RechargeService {
         log.info("充值订单 {} 支付成功，用户 {} 余额增加 {}", orderNo, order.getUserId(), totalAmount);
     }
     
+    /**
+     * 查询用户在指定商户下的余额。
+     *
+     * @param userId   用户 ID
+     * @param tenantId 租户 ID
+     * @return 余额金额，账户不存在时返回 0
+     */
     @Override
     public BigDecimal getUserBalance(Long userId, Long tenantId) {
         LambdaQueryWrapper<UserBalance> wrapper = new LambdaQueryWrapper<>();
@@ -179,6 +223,18 @@ public class RechargeServiceImpl implements RechargeService {
         return userBalance != null ? userBalance.getBalance() : BigDecimal.ZERO;
     }
     
+    /**
+     * 使用余额支付订单。
+     * <p>
+     * 采用乐观锁 + 重试机制（最多 3 次）保障并发安全，
+     * 成功后记录余额变动流水。
+     *
+     * @param userId   用户 ID
+     * @param tenantId 租户 ID
+     * @param orderNo  订单号
+     * @param amount   支付金额，必须大于 0
+     * @throws BusinessException 余额不足、金额不合法或重试耗尽时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void payWithBalance(Long userId, Long tenantId, String orderNo, BigDecimal amount) {
@@ -228,6 +284,15 @@ public class RechargeServiceImpl implements RechargeService {
         RechargeServiceImpl.log.info("用户 {} 使用余额支付 {}，订单号 {}", userId, amount, orderNo);
     }
     
+    /**
+     * 分页查询用户余额变动流水。
+     *
+     * @param userId     用户 ID
+     * @param tenantId   租户 ID
+     * @param pageNum    页码
+     * @param pageSize   每页数量
+     * @return 分页余额变动记录
+     */
     @Override
     public Page<BalanceLog> listBalanceLogs(Long userId, Long tenantId, Integer pageNum, Integer pageSize) {
         Page<BalanceLog> page = new Page<>(pageNum, pageSize);
@@ -239,7 +304,30 @@ public class RechargeServiceImpl implements RechargeService {
     }
     
     /**
-     * 增加用户余额
+     * 增加用户余额。
+     * <p>
+     * 若用户余额账户不存在则自动创建，否则累加余额和累计充值金额。
+     * 同时记录一条余额变动流水。
+     *
+     * @param userId   用户 ID
+     * @param tenantId 租户 ID
+     * @param amount   入账金额
+     * @param type     变动类型（如 RECHARGE）
+     * @param reason   变动原因说明
+     * @param orderNo  关联订单号
+     */
+    /**
+     * 增加用户余额。
+     * <p>
+     * 若用户余额账户不存在则自动创建，否则累加余额和累计充值金额。
+     * 同时记录一条余额变动流水。
+     *
+     * @param userId   用户 ID
+     * @param tenantId 租户 ID
+     * @param amount   入账金额
+     * @param type     变动类型（如 RECHARGE）
+     * @param reason   变动原因说明
+     * @param orderNo  关联订单号
      */
     private void addUserBalance(Long userId, Long tenantId, BigDecimal amount, String type, String reason, String orderNo) {
         // 查询用户余额

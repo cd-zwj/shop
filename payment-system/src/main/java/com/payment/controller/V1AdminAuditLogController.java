@@ -24,7 +24,7 @@ public class V1AdminAuditLogController {
 
     private final SysAuditLogMapper auditLogMapper;
 
-    @SaCheckPermission("admin:auditlog:list")
+    @SaCheckPermission(type = "admin", value = "admin:auditlog:list")
     @GetMapping
     public Result<PageResult<AuditLogVO>> listAuditLogs(
             @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,

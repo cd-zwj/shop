@@ -25,15 +25,27 @@ import java.util.List;
 
 /**
  * 会员运营服务实现。
+ * <p>
+ * 负责商户维度的会员体系管理，核心职责包括：
+ * <ul>
+ *     <li><b>会员等级管理</b>：创建/查询会员等级，每个租户维护独立的等级体系（含累计消费门槛与折扣系数）；</li>
+ *     <li><b>会员标签管理</b>：创建标签并将标签绑定到具体会员，支持手动打标与移除标签；</li>
+ *     <li><b>自动升降级</b>：根据会员历史已支付订单总金额，自动匹配最高等级并完成升级（仅升不降）；</li>
+ *     <li><b>会员信息维护</b>：手动调整指定会员的等级。</li>
+ * </ul>
+ * 所有操作均基于租户隔离，通过 {@code tenantId} 确保数据安全。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MemberServiceImpl implements MemberService {
 
+    /** 状态常量：启用 */
     private static final int ENABLED = 1;
 
+    /** 会员等级 Mapper */
     private final MemberLevelMapper levelMapper;
+    /** 会员标签 Mapper */
     private final MemberTagMapper tagMapper;
     private final MemberAccountTagMapper accountTagMapper;
     private final TenantMemberMapper memberMapper;

@@ -28,12 +28,12 @@ class UnifiedWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"));
-        when(accountMapper.updateById(any()))
+        when(accountMapper.updateById(any(UnifiedWalletAccount.class)))
                 .thenReturn(0)
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.credit(1L, new BigDecimal("10.00"), "TEST", "BIZ-1", "retry"));
-        verify(accountMapper, times(2)).updateById(any());
+        verify(accountMapper, times(2)).updateById(any(UnifiedWalletAccount.class));
         verify(logMapper, times(1)).insert(any(UnifiedWalletLog.class));
     }
 
@@ -46,11 +46,11 @@ class UnifiedWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"))
                 .thenReturn(buildUnifiedAccount(1L, "10.00"));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(UnifiedWalletAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.debit(1L, new BigDecimal("80.00"), "TEST", "BIZ-2", "debit"));
-        verify(accountMapper, times(1)).updateById(any());
+        verify(accountMapper, times(1)).updateById(any(UnifiedWalletAccount.class));
     }
 
     private UnifiedWalletAccount buildUnifiedAccount(Long platformUserId, String balance) {

@@ -30,7 +30,20 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * v1 用户端钱包与积分接口。
+ * C端用户钱包与积分控制器。
+ * <p>
+ * 提供双钱包系统（统一钱包+商户钱包）的余额查询、交易记录、充值，以及
+ * 积分账户查询、积分变动记录、积分兑换商品等功能。
+ * <p>
+ * 双钱包体系：
+ * <ul>
+ *   <li>统一钱包（unified）：全局通用钱包，跨商户使用</li>
+ *   <li>商户钱包（merchant）：特定商户专属钱包，用于该商户消费</li>
+ * </ul>
+ * <p>
+ * 路径前缀：/v1/app，需要platform用户登录。
+ *
+ * @author payment-system
  */
 @RestController
 @RequestMapping("/v1/app")
@@ -44,13 +57,29 @@ public class V1AppWalletController {
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsService pointsService;
 
-    @SaCheckLogin
+    /**
+     * 查询统一钱包余额。
+     * <p>
+     * 获取当前用户的统一钱包账户信息，包括余额、冻结金额等。
+     *
+     * @return 统一钱包账户信息
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/wallets/unified")
     public Result<WalletAccountVO> getUnifiedWallet() {
         return Result.success(unifiedWalletService.getWallet(PlatformSessionHelper.getPlatformUserId()));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询统一钱包交易记录。
+     * <p>
+     * 分页查询统一钱包的充值、消费、退款等交易流水记录。
+     *
+     * @param current 页码，默认1，必须大于0
+     * @param size    每页条数，默认10，必须大于0
+     * @return 钱包交易记录分页结果
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/wallets/unified/logs")
     public Result<PageResult<WalletLogVO>> getUnifiedWalletLogs(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                                  @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
@@ -58,7 +87,14 @@ public class V1AppWalletController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询统一钱包充值规则。
+     * <p>
+     * 获取所有可用的统一钱包充值优惠规则，如充100送10等。
+     *
+     * @return 充值规则列表
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/wallets/unified/recharge-rules")
     public Result<List<RechargeRuleVO>> listUnifiedRechargeRules() {
         return Result.success(merchantRechargeRuleService.listAllActiveRules().stream()
@@ -66,20 +102,47 @@ public class V1AppWalletController {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * 创建统一钱包充值订单。
+     * <p>
+     * 用户选择充值金额和充值规则后创建充值订单，返回支付信息。
+     * 同一IP每分钟最多发起5次充值请求。
+     *
+     * @param dto 充值请求DTO，包含充值金额、充值规则ID等
+     * @return 充值支付信息（支付链接等）
+     */
     @RateLimit(prefix = "app:wallet:recharge:unified", window = 60, maxRequests = 5, includeIp = true, message = "统一钱包充值过于频繁，请稍后再试")
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PostMapping("/wallets/unified/recharges")
     public Result<RechargePaymentVO> createUnifiedRecharge(@Valid @RequestBody CreateUnifiedWalletRechargeDTO dto) {
         return Result.success(walletRechargeService.createUnifiedRecharge(PlatformSessionHelper.getPlatformUserId(), dto));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询商户钱包余额。
+     * <p>
+     * 获取当前用户在指定商户下的商户钱包账户信息，包括余额、冻结金额等。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @return 商户钱包账户信息
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/wallet")
     public Result<WalletAccountVO> getMerchantWallet(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(merchantWalletService.getWallet(tenantId, PlatformSessionHelper.getPlatformUserId()));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询商户钱包交易记录。
+     * <p>
+     * 分页查询当前用户在指定商户下的钱包交易流水记录。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @param current  页码，默认1，必须大于0
+     * @param size     每页条数，默认10，必须大于0
+     * @return 商户钱包交易记录分页结果
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/wallet/logs")
     public Result<PageResult<WalletLogVO>> getMerchantWalletLogs(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                   @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -88,7 +151,15 @@ public class V1AppWalletController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询商户钱包充值规则。
+     * <p>
+     * 获取指定商户下所有可用的充值优惠规则。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @return 该商户的充值规则列表
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/recharge-rules")
     public Result<List<RechargeRuleVO>> listRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(merchantRechargeRuleService.listActiveRules(tenantId).stream()
@@ -96,15 +167,34 @@ public class V1AppWalletController {
                 .collect(Collectors.toList()));
     }
 
+    /**
+     * 创建商户钱包充值订单。
+     * <p>
+     * 用户选择充值金额后为指定商户的钱包创建充值订单，返回支付信息。
+     * 同一商户每分钟最多发起5次充值请求。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @param dto      充值请求DTO，包含充值金额、充值规则ID等
+     * @return 充值支付信息（支付链接等）
+     */
     @RateLimit(prefix = "app:wallet:recharge:merchant", key = "#tenantId", window = 60, maxRequests = 5, includeIp = true, message = "商户钱包充值过于频繁，请稍后再试")
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PostMapping("/tenants/{tenantId}/wallet/recharges")
     public Result<RechargePaymentVO> createMerchantRecharge(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                             @Valid @RequestBody CreateMerchantWalletRechargeDTO dto) {
         return Result.success(walletRechargeService.createMerchantRecharge(tenantId, PlatformSessionHelper.getPlatformUserId(), dto));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询积分账户信息。
+     * <p>
+     * 获取当前用户在指定商户下的积分账户概览，包括当前积分总额、
+     * 30天内即将过期的积分数量等。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @return 积分账户信息
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/points")
     public Result<PointsAccountVO> getPointsAccount(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
@@ -114,7 +204,17 @@ public class V1AppWalletController {
                 memberPointsAccountService.getExpiringPoints(tenantId, platformUserId, now, now.plusDays(30))));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询积分变动记录。
+     * <p>
+     * 分页查询当前用户在指定商户下的积分获取、消费、过期等变动日志。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @param current  页码，默认1，必须大于0
+     * @param size     每页条数，默认10，必须大于0
+     * @return 积分变动记录分页结果
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/points/logs")
     public Result<PageResult<PointsLogVO>> listPointsLogs(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
@@ -123,7 +223,15 @@ public class V1AppWalletController {
         return Result.success(PageResult.from(page, PointsLogVO::from));
     }
 
-    @SaCheckLogin
+    /**
+     * 查询可兑换商品列表。
+     * <p>
+     * 获取指定商户下所有可用积分兑换的商品列表。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @return 可兑换商品列表
+     */
+    @SaCheckLogin(type = "platform")
     @GetMapping("/tenants/{tenantId}/points/exchange/products")
     public Result<List<ExchangeProductVO>> listExchangeProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
         return Result.success(pointsService.listExchangeProducts(tenantId).stream()
@@ -131,7 +239,16 @@ public class V1AppWalletController {
                 .collect(Collectors.toList()));
     }
 
-    @SaCheckLogin
+    /**
+     * 积分兑换商品。
+     * <p>
+     * 使用积分兑换指定商品，兑换成功后生成兑换订单，扣除相应积分。
+     *
+     * @param tenantId          商户ID，必须大于0
+     * @param exchangeProductId 兑换商品ID，必须大于0
+     * @return 兑换结果，包含兑换订单号
+     */
+    @SaCheckLogin(type = "platform")
     @PostMapping("/tenants/{tenantId}/points/exchange/{exchangeProductId}")
     public Result<Map<String, String>> exchangeProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long exchangeProductId) {

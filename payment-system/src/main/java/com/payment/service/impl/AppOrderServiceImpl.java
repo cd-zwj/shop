@@ -45,6 +45,7 @@ import com.payment.service.UnifiedWalletService;
 import com.payment.service.UserBehaviorLogService;
 import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
+import com.payment.util.TenantContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -62,7 +63,20 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 用户端订单服务实现类，用于实现用户端订单相关业务逻辑。
+ * C 端用户订单服务实现类，处理用户端订单全生命周期。
+ * <p>
+ * 核心职责包括：
+ * <ul>
+ *   <li><b>下单</b>：校验商品、计算定价（活动/优惠券/积分/钱包）、生成订单与支付账单</li>
+ *   <li><b>支付回调</b>：处理外部支付成功后的订单状态流转与商户结算</li>
+ *   <li><b>结算</b>：纯钱包支付或支付回调成功后，确认优惠券核销、积分消耗、商户入账、触发交付</li>
+ *   <li><b>重新支付</b>：对待支付订单重新发起外部支付</li>
+ *   <li><b>取消</b>：回退钱包扣减、释放优惠券与积分、关闭支付账单</li>
+ *   <li><b>查询</b>：用户端和商家端的订单列表与详情查询</li>
+ * </ul>
+ * <p>
+ * 支持 6 种钱包支付策略（NO_WALLET / UNIFIED_ONLY / MERCHANT_ONLY / MERCHANT_THEN_UNIFIED /
+ * UNIFIED_THEN_MERCHANT / CUSTOM_SPLIT），钱包金额在下单时直接扣减，取消时按原路径回补。
  */
 @Slf4j
 @Service
@@ -88,11 +102,38 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService;
 
     /**
-     * 创建订单。
+     * 创建订单并发起支付。
+     * <p>
+     * 流程：
+     * <ol>
+     *   <li>校验商品合法性（存在性、上下架、价格、归属商户）</li>
+     *   <li>确保用户已成为该商户会员（自动注册）</li>
+     *   <li>调用定价引擎计算活动折扣、优惠券抵扣、积分抵扣</li>
+     *   <li>按钱包策略拆分支付金额（钱包 / 外部支付）</li>
+     *   <li>持久化订单、订单项、优惠快照，锁定优惠券、预占积分</li>
+     *   <li>扣减钱包余额，发起外部支付或直接标记支付成功并结算</li>
+     * </ol>
+     *
+     * @param platformUserId 平台用户 ID
+     * @param dto            创建订单请求参数
+     * @return 订单支付信息，包含支付链接（若有外部支付）
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderPaymentVO createOrder(Long platformUserId, AppCreateOrderDTO dto) {
+        Long previousTenantId = TenantContextHolder.getTenantId();
+        try {
+            TenantContextHolder.setTenantId(dto.getTenantId());
+            return createOrderInTenantContext(platformUserId, dto);
+        } finally {
+            TenantContextHolder.clear();
+            if (previousTenantId != null) {
+                TenantContextHolder.setTenantId(previousTenantId);
+            }
+        }
+    }
+
+    private OrderPaymentVO createOrderInTenantContext(Long platformUserId, AppCreateOrderDTO dto) {
         List<OrderLine> orderLines = buildOrderLines(dto);
         ensureTenantMember(dto.getTenantId(), platformUserId);
 
@@ -172,7 +213,12 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 查询订单。
+     * 分页查询用户订单列表，按创建时间降序。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param current        当前页码
+     * @param size           每页条数
+     * @return 订单分页结果
      */
     @Override
     public Page<SalesOrder> listOrders(Long platformUserId, Integer current, Integer size) {
@@ -183,7 +229,12 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 获取订单No。
+     * 根据订单号获取订单实体，校验归属用户。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param orderNo        订单号
+     * @return 订单实体
+     * @throws BusinessException 订单不存在时抛出
      */
     @Override
     public SalesOrder getByOrderNo(Long platformUserId, String orderNo) {
@@ -198,7 +249,11 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 获取订单Detail。
+     * 获取用户端订单详情，包含订单项与支付账单信息。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param orderNo        订单号
+     * @return 订单详情 VO
      */
     @Override
     public SalesOrderDetailVO getOrderDetail(Long platformUserId, String orderNo) {
@@ -207,7 +262,15 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 获取商家端订单Detail。
+     * 获取商家端订单详情。
+     * <p>
+     * 先校验当前用户是否为该商户的在职员工，再返回订单详情。
+     *
+     * @param tenantId       商户 ID
+     * @param platformUserId 当前操作用户 ID
+     * @param orderNo        订单号
+     * @return 订单详情 VO
+     * @throws BusinessException 用户无权或订单不存在时抛出
      */
     @Override
     public SalesOrderDetailVO getMerchantOrderDetail(Long tenantId, Long platformUserId, String orderNo) {
@@ -231,7 +294,15 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 查询商家端订单。
+     * 分页查询商家端订单列表，支持按订单状态、支付状态和关键词筛选。
+     *
+     * @param tenantId    商户 ID
+     * @param current     当前页码
+     * @param size        每页条数
+     * @param orderStatus 订单状态筛选，可为 null
+     * @param payStatus   支付状态筛选，可为 null
+     * @param keyword     搜索关键词（匹配订单号或商品标题），可为 null
+     * @return 订单分页结果
      */
     @Override
     public Page<SalesOrder> listMerchantOrders(Long tenantId, Integer current, Integer size, String orderStatus, String payStatus, String keyword) {
@@ -247,7 +318,11 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 查询订单Item。
+     * 查询指定订单的订单项列表。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param orderNo        订单号
+     * @return 订单项列表
      */
     @Override
     public List<SalesOrderItem> listOrderItems(Long platformUserId, String orderNo) {
@@ -256,7 +331,16 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 处理repay订单。
+     * 重新发起订单支付（补单）。
+     * <p>
+     * 仅允许对已创建但未支付的订单操作。优先复用未过期的已有支付账单，
+     * 否则创建新的支付账单并调用第三方支付。
+     *
+     * @param platformUserId    平台用户 ID
+     * @param orderNo           订单号
+     * @param paymentChannelCode 支付渠道编码，可为 null（默认支付宝网页支付）
+     * @return 订单支付信息，包含支付链接
+     * @throws BusinessException 订单状态不允许或已支付时抛出
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -306,7 +390,18 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 判断是否可以cel订单。
+     * 取消订单。
+     * <p>
+     * 仅允许取消未支付的订单。操作包括：
+     * <ul>
+     *   <li>回退已扣减的钱包余额（统一钱包 + 商户钱包）</li>
+     *   <li>释放已锁定的优惠券和预占的积分</li>
+     *   <li>关闭关联的支付账单</li>
+     * </ul>
+     *
+     * @param platformUserId 平台用户 ID
+     * @param orderNo        订单号
+     * @throws BusinessException 已支付订单不允许取消时抛出
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -350,7 +445,13 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 构建订单Line。
+     * 校验并构建订单行列表。
+     * <p>
+     * 合并相同商品的数量，校验商品存在性、上下架状态、归属商户和价格合法性。
+     *
+     * @param dto 创建订单请求
+     * @return 订单行列表（商品 + 数量 + 小计）
+     * @throws BusinessException 商品校验不通过时抛出
      */
     private List<OrderLine> buildOrderLines(AppCreateOrderDTO dto) {
         if (dto.getItems() == null || dto.getItems().isEmpty()) {
@@ -402,7 +503,10 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 处理calculateTotalAmount。
+     * 计算订单总金额（所有订单行小计之和）。
+     *
+     * @param orderLines 订单行列表
+     * @return 总金额
      */
     private BigDecimal calculateTotalAmount(List<OrderLine> orderLines) {
         return orderLines.stream()
@@ -410,6 +514,15 @@ public class AppOrderServiceImpl implements AppOrderService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    /**
+     * 构建定价引擎请求参数。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param dto            创建订单请求
+     * @param orderLines     订单行列表
+     * @param orderNo        订单号
+     * @return 定价请求 DTO
+     */
     private OrderPricingRequestDTO buildPricingRequest(Long platformUserId,
                                                        AppCreateOrderDTO dto,
                                                        List<OrderLine> orderLines,
@@ -434,6 +547,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         return request;
     }
 
+    /**
+     * 将订单行转换为定价项 DTO。
+     *
+     * @param orderLine 订单行
+     * @return 定价项 DTO
+     */
     private OrderPricingItemDTO toPricingItem(OrderLine orderLine) {
         OrderPricingItemDTO item = new OrderPricingItemDTO();
         item.setProductId(orderLine.product().getId());
@@ -443,6 +562,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         return item;
     }
 
+    /**
+     * 持久化优惠快照列表，记录订单享受的折扣来源与规则。
+     *
+     * @param salesOrder 订单实体
+     * @param snapshots  优惠快照列表
+     */
     private void insertDiscountSnapshots(SalesOrder salesOrder, List<DiscountSnapshotPlanVO> snapshots) {
         if (snapshots == null || snapshots.isEmpty()) {
             return;
@@ -464,6 +589,13 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
     }
 
+    /**
+     * 若订单使用了优惠券，则锁定该优惠券。
+     *
+     * @param dto            创建订单请求
+     * @param salesOrder     订单实体
+     * @param pricingResult  定价结果
+     */
     private void lockCouponIfNeeded(AppCreateOrderDTO dto, SalesOrder salesOrder, OrderPricingResultVO pricingResult) {
         if (dto.getSelectedUserCouponId() == null || pricingResult.getCouponDiscountAmount().compareTo(BigDecimal.ZERO) <= 0) {
             return;
@@ -478,6 +610,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         );
     }
 
+    /**
+     * 若订单使用了积分抵扣，则预占积分。
+     *
+     * @param salesOrder    订单实体
+     * @param pricingResult 定价结果
+     */
     private void holdPointsIfNeeded(SalesOrder salesOrder, OrderPricingResultVO pricingResult) {
         if (pricingResult.getPointsPlan() == null || !Boolean.TRUE.equals(pricingResult.getPointsPlan().getNeedHold())) {
             return;
@@ -493,7 +631,12 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 新增订单Item。
+     * 插入订单商品明细。
+     * <p>
+     * 冗余商品类型与初始交付状态，避免后续商品改类型影响历史订单的交付路由。
+     *
+     * @param salesOrder 订单实体
+     * @param orderLines 订单行列表
      */
     private void insertOrderItems(SalesOrder salesOrder, List<OrderLine> orderLines) {
         List<SalesOrderItem> items = orderLines.stream().map(orderLine -> {
@@ -520,7 +663,10 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 处理ensure租户会员。
+     * 确保用户已成为该商户的会员，不存在则自动注册。
+     *
+     * @param tenantId       商户 ID
+     * @param platformUserId 平台用户 ID
      */
     private void ensureTenantMember(Long tenantId, Long platformUserId) {
         TenantMember tenantMember = tenantMemberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
@@ -540,7 +686,11 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 解析Subject。
+     * 解析订单标题，未指定时自动根据首个商品名称生成。
+     *
+     * @param subject    用户指定的标题，可为 null
+     * @param orderLines 订单行列表
+     * @return 订单标题
      */
     private String resolveSubject(String subject, List<OrderLine> orderLines) {
         if (StringUtils.hasText(subject)) {
@@ -554,6 +704,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         return firstLine.product().getName() + "等" + orderLines.size() + "件商品";
     }
 
+    /**
+     * 解析门店 ID，取订单行中第一个非空的 storeId。
+     *
+     * @param orderLines 订单行列表
+     * @return 门店 ID，无门店时返回 null
+     */
     private Long resolveStoreId(List<OrderLine> orderLines) {
         return orderLines.stream()
                 .map(orderLine -> orderLine.product().getStoreId())
@@ -563,7 +719,15 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 处理calculate钱包Split。
+     * 根据钱包支付策略计算钱包与外部支付的金额拆分。
+     * <p>
+     * 支持 6 种策略：NO_WALLET、UNIFIED_ONLY、MERCHANT_ONLY、MERCHANT_THEN_UNIFIED、
+     * UNIFIED_THEN_MERCHANT、CUSTOM_SPLIT。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param dto            创建订单请求（含钱包策略）
+     * @param totalAmount    应付总金额
+     * @return 钱包拆分结果（统一钱包 + 商户钱包 + 外部支付）
      */
     private WalletSplit calculateWalletSplit(Long platformUserId, AppCreateOrderDTO dto, BigDecimal totalAmount) {
         BigDecimal unifiedBalance = unifiedWalletService.getWallet(platformUserId).getAvailableAmount();
@@ -581,7 +745,13 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
-     * 处理calculateSingle钱包。
+     * 单钱包策略：仅从一个钱包扣减，余额不足时可选降级为外部支付。
+     *
+     * @param totalAmount  应付总金额
+     * @param balance      可用钱包余额
+     * @param allowFallback 余额不足时是否允许降级到外部支付
+     * @param unifiedFirst true 表示从统一钱包扣减，false 表示从商户钱包扣减
+     * @return 钱包拆分结果
      */
     private WalletSplit calculateSingleWallet(BigDecimal totalAmount,
                                               BigDecimal balance,
@@ -594,7 +764,7 @@ public class AppOrderServiceImpl implements AppOrderService {
 
         BigDecimal external = totalAmount.subtract(used);
         /**
-         * 处理钱包Split。
+         * 处理钱包拆分（单钱包场景返回结果）。
          */
         return unifiedFirst
                 ? new WalletSplit(used, BigDecimal.ZERO, external)
@@ -604,6 +774,16 @@ public class AppOrderServiceImpl implements AppOrderService {
      */
     }
 
+    /**
+     * 链式钱包策略：先扣第一个钱包，余额不足时再扣第二个钱包。
+     *
+     * @param totalAmount   应付总金额
+     * @param firstBalance  第一个钱包余额
+     * @param secondBalance 第二个钱包余额
+     * @param allowFallback 余额不足时是否允许降级到外部支付
+     * @param unifiedFirst  true 表示统一钱包优先，false 表示商户钱包优先
+     * @return 钱包拆分结果
+     */
     private WalletSplit calculateChainedWallet(BigDecimal totalAmount,
                                                BigDecimal firstBalance,
                                                BigDecimal secondBalance,
@@ -622,6 +802,16 @@ public class AppOrderServiceImpl implements AppOrderService {
                 : new WalletSplit(secondUsed, firstUsed, external);
     }
 
+    /**
+     * 自定义拆分策略：由用户指定统一钱包和商户钱包的各自扣减金额。
+     *
+     * @param totalAmount    应付总金额
+     * @param dto            创建订单请求（含自定义金额）
+     * @param unifiedBalance 统一钱包可用余额
+     * @param merchantBalance 商户钱包可用余额
+     * @param allowFallback  余额不足时是否允许降级到外部支付
+     * @return 钱包拆分结果
+     */
     private WalletSplit calculateCustomSplit(BigDecimal totalAmount,
                                              AppCreateOrderDTO dto,
                                              BigDecimal unifiedBalance,
@@ -647,10 +837,18 @@ public class AppOrderServiceImpl implements AppOrderService {
         return new WalletSplit(unifiedAmount, merchantAmount, external);
     }
 
+    /** 返回非空金额，null 时返回 0。 */
     private BigDecimal defaultAmount(BigDecimal amount) {
         return amount == null ? BigDecimal.ZERO : amount;
     }
 
+    /**
+     * 校验外部支付渠道不为空。
+     *
+     * @param channelCode 支付渠道编码
+     * @return 校验通过的渠道编码
+     * @throws BusinessException 渠道为空时抛出
+     */
     private PaymentChannelCodeEnum resolveExternalChannel(PaymentChannelCodeEnum channelCode) {
         if (channelCode == null) {
             throw new BusinessException("存在外部支付金额时必须指定 paymentChannelCode");
@@ -659,7 +857,12 @@ public class AppOrderServiceImpl implements AppOrderService {
     }
 
     /**
+     * 支付成功后执行结算流程。
+     * <p>
+     * 包括：确认优惠券核销与积分消耗、商户入账、按积分规则赠送积分、触发订单交付。
      * 纯钱包支付没有外部回调，直接在本地事务里完成结算。
+     *
+     * @param salesOrder 已支付的订单
      */
     private void settlePaidOrder(SalesOrder salesOrder) {
         confirmDiscountAssets(salesOrder);
@@ -688,6 +891,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         orderDeliveryService.enqueueDelivery(salesOrder.getOrderNo());
     }
 
+    /**
+     * 构建订单支付信息 VO。
+     *
+     * @param salesOrder 订单实体
+     * @return 订单支付信息 VO
+     */
     private OrderPaymentVO buildOrderPaymentVO(SalesOrder salesOrder) {
         OrderPaymentVO vo = new OrderPaymentVO();
         vo.setOrderNo(salesOrder.getOrderNo());
@@ -703,6 +912,11 @@ public class AppOrderServiceImpl implements AppOrderService {
         return vo;
     }
 
+    /**
+     * 确认订单关联的优惠资产（优惠券核销、积分消耗确认）。
+     *
+     * @param salesOrder 已支付的订单
+     */
     private void confirmDiscountAssets(SalesOrder salesOrder) {
         List<OrderDiscountSnapshot> snapshots = listDiscountSnapshots(salesOrder.getOrderNo());
         for (OrderDiscountSnapshot snapshot : snapshots) {
@@ -727,6 +941,12 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
     }
 
+    /**
+     * 释放订单关联的优惠资产（优惠券回退、积分预占释放）。
+     *
+     * @param salesOrder    待取消的订单
+     * @param releaseReason 释放原因
+     */
     private void releaseDiscountAssets(SalesOrder salesOrder, String releaseReason) {
         List<OrderDiscountSnapshot> snapshots = listDiscountSnapshots(salesOrder.getOrderNo());
         for (OrderDiscountSnapshot snapshot : snapshots) {
@@ -753,11 +973,24 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
     }
 
+    /**
+     * 根据订单号查询优惠快照列表。
+     *
+     * @param orderNo 订单号
+     * @return 优惠快照列表
+     */
     private List<OrderDiscountSnapshot> listDiscountSnapshots(String orderNo) {
         return orderDiscountSnapshotMapper.selectList(new LambdaQueryWrapper<OrderDiscountSnapshot>()
                 .eq(OrderDiscountSnapshot::getOrderNo, orderNo));
     }
 
+    /**
+     * 查找可复用的未过期支付账单，优先用于重新支付。
+     *
+     * @param paymentBills 该订单关联的支付账单列表
+     * @param salesOrder   订单实体
+     * @return 可复用的支付账单，无可用时返回 null
+     */
     private PaymentBill resolveReusablePaymentBill(List<PaymentBill> paymentBills, SalesOrder salesOrder) {
         if (paymentBills == null || paymentBills.isEmpty()) {
             return null;
@@ -817,6 +1050,15 @@ public class AppOrderServiceImpl implements AppOrderService {
                              BigDecimal subtotal) {
     }
 
+    /**
+     * 处理外部支付回调。
+     * <p>
+     * 同步支付账单状态，若支付成功则更新订单状态为已支付并执行结算。
+     * 幂等处理：已支付订单直接返回。
+     *
+     * @param paymentBillNo 支付账单号
+     * @throws BusinessException 账单或订单不存在、支付未完成时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handlePaymentCallback(String paymentBillNo) {

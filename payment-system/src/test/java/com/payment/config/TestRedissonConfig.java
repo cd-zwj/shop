@@ -5,10 +5,12 @@ import org.mockito.Mockito;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.mail.javamail.JavaMailSender;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -41,17 +43,25 @@ public class TestRedissonConfig {
     }
 
     @Bean
-    public RabbitTemplate rabbitTemplate() {
+    @Primary
+    public ConnectionFactory testConnectionFactory() {
+        return Mockito.mock(ConnectionFactory.class);
+    }
+    @Bean
+    @Primary
+    public RabbitTemplate testRabbitTemplate() {
         return Mockito.mock(RabbitTemplate.class);
     }
 
     @Bean
-    public JavaMailSender javaMailSender() {
+    @Primary
+    public JavaMailSender testJavaMailSender() {
         return Mockito.mock(JavaMailSender.class);
     }
 
     @Bean
-    public MailProperties mailProperties() {
+    @Primary
+    public MailProperties testMailProperties() {
         return new MailProperties();
     }
 }

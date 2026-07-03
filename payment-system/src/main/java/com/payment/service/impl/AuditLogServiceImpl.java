@@ -22,6 +22,9 @@ public class AuditLogServiceImpl
         extends ServiceImpl<SysAuditLogMapper, SysAuditLog>
         implements AuditLogService {
 
+    /**
+     * 记录一条审计日志，包含操作人、模块、动作、目标对象和详情等信息。
+     */
     @Override
     public void log(Long tenantId, Long operatorId, String operatorType, String operatorName,
                     String module, String action, String targetType, Long targetId,

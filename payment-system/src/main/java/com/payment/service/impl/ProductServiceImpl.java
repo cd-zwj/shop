@@ -26,7 +26,16 @@ import java.time.Duration;
 import java.util.List;
 
 /**
- * 商品服务实现类
+ * 商品服务实现类。
+ * <p>
+ * 提供商品的完整生命周期管理，包括创建、更新、删除、查询等 CRUD 操作。
+ * 集成 Redis 缓存（带互斥锁防击穿与随机 TTL 防雪崩）、MinIO 图片上传/删除、
+ * Elasticsearch 索引发布（通过 Outbox 模式保证最终一致性）以及条码扫码处理。
+ * 所有操作均受多租户行级隔离保护。
+ * </p>
+ *
+ * @see ProductService
+ * @see ProductIndexMessagePublisher
  */
 @Slf4j
 @Service
@@ -52,14 +61,34 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     @Autowired(required = false)
     private ProductIndexMessagePublisher productIndexMessagePublisher;
 
+    /**
+     * 根据商品 ID 生成 Redis 缓存键。
+     *
+     * @param tenantId  租户 ID
+     * @param productId 商品 ID
+     * @return 格式为 {@code product:{tenantId}:{productId}} 的缓存键
+     */
     private String generateProductCacheKey(Long tenantId, Long productId) {
         return PRODUCT_CACHE_PREFIX + tenantId + ":" + productId;
     }
 
+    /**
+     * 根据商品编码生成 Redis 缓存键。
+     *
+     * @param tenantId    租户 ID
+     * @param productCode 商品编码
+     * @return 格式为 {@code product:code:{tenantId}:{productCode}} 的缓存键
+     */
     private String generateProductCodeCacheKey(Long tenantId, String productCode) {
         return PRODUCT_CODE_CACHE_PREFIX + tenantId + ":" + productCode;
     }
 
+    /**
+     * 将商品信息写入 Redis 缓存，同时以 ID 和编码两条索引存储，
+     * 使用随机 TTL 防止缓存雪崩。
+     *
+     * @param product 要缓存的商品实体
+     */
     private void setProductToCache(Product product) {
         try {
             redisUtils.setJsonWithRandomTtl(
@@ -80,6 +109,11 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         }
     }
 
+    /**
+     * 删除商品在 Redis 中的所有缓存键（按 ID 和编码两条索引）。
+     *
+     * @param product 要清除缓存的商品实体
+     */
     private void deleteProductCache(Product product) {
         try {
             redisUtils.delete(generateProductCacheKey(product.getTenantId(), product.getId()));
@@ -92,6 +126,18 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         }
     }
 
+    /**
+     * 带缓存的商品查询（按 ID），使用互斥锁防止缓存击穿。
+     * <p>
+     * 查询流程：Redis 缓存命中则直接返回；未命中时通过分布式互斥锁保护，
+     * 仅一个线程回源数据库查询并写入缓存，其余线程等待后重试读取缓存。
+     * 自动过滤已删除商品和非当前租户的商品。
+     * </p>
+     *
+     * @param productId 商品 ID
+     * @return 商品实体，不存在或已删除时返回 {@code null}
+     * @throws BusinessException 当前租户信息不存在时抛出
+     */
     public Product getProductByIdWithCache(Long productId) {
         Long tenantId = TenantContextHolder.getTenantId();
         if (tenantId == null) {
@@ -114,6 +160,17 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         );
     }
 
+    /**
+     * 创建商品。
+     * <p>
+     * 业务流程：校验租户信息 → 校验商品编码唯一性 → 上传图片至 MinIO（如有）→
+     * 保存商品记录 → 初始化库存为 0 → 写入 Redis 缓存 → 通过 Outbox 发布 ES 索引消息。
+     * </p>
+     *
+     * @param dto 商品传输对象，包含名称、编码、价格、分类、图片等信息
+     * @return 创建成功的商品实体（含自增主键）
+     * @throws BusinessException 租户信息不存在或商品编码已存在时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Product createProduct(ProductDTO dto) {

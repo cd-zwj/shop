@@ -33,6 +33,22 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * 提现服务实现类，管理商户提现与余额的完整生命周期。
+ * <p>
+ * 核心职责：
+ * <ul>
+ *   <li><b>提现申请</b>：商户发起提现，冻结对应余额（乐观锁重试）</li>
+ *   <li><b>提现审核</b>：平台管理员审批通过或拒绝，通过时将冻结余额转为已提现，拒绝时解冻</li>
+ *   <li><b>余额管理</b>：增加/扣减商户余额，支持乐观锁并发安全</li>
+ *   <li><b>查询</b>：商户端提现列表、管理员端提现列表（含商户名称和审核人信息）</li>
+ * </ul>
+ * <p>
+ * 余额操作采用乐观锁 + 3 次重试机制，防止并发冲突。
+ * 提现审核通过后向商户管理员发送通知。
+ *
+ * @see com.payment.service.WithdrawalService
+ */
 @Slf4j
 @Service
 public class WithdrawalServiceImpl implements WithdrawalService {
@@ -55,6 +71,17 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     @Autowired
     private UserNotificationService notificationService;
 
+    /**
+     * 创建提现申请。
+     * <p>
+     * 校验余额充足后，将对应金额从可用余额冻结到冻结余额（乐观锁 3 次重试），
+     * 创建提现记录，初始状态为待审核（status=0）。
+     *
+     * @param tenantId 商户 ID
+     * @param dto      提现申请参数（含金额等）
+     * @return 已创建的提现记录
+     * @throws BusinessException 余额不足或乐观锁冲突时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Withdrawal createWithdrawal(Long tenantId, WithdrawalApplyDTO dto) {
@@ -94,6 +121,12 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         return withdrawal;
     }
 
+    /**
+     * 分页查询商户提现记录列表。
+     *
+     * @param query 查询条件（含租户 ID、状态、分页参数）
+     * @return 提现记录分页结果，按申请时间降序
+     */
     @Override
     public Page<Withdrawal> listWithdrawals(WithdrawalQueryDTO query) {
         Page<Withdrawal> page = new Page<>(query.getPageNum(), query.getPageSize());
@@ -105,6 +138,16 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         return withdrawalMapper.selectPage(page, wrapper);
     }
 
+    /**
+     * 审核提现申请（带审核人信息）。
+     * <p>
+     * 通过时将冻结余额转为已提现总额；拒绝时解冻冻结余额。使用 CAS 抢占式更新状态，
+     * 防止重复审核。
+     *
+     * @param approverId 审核人 ID
+     * @param dto        审核参数（含提现 ID、是否通过、拒绝原因）
+     * @throws BusinessException 提现不存在、已审核或余额不足时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approveWithdrawal(Long approverId, WithdrawalApproveDTO dto) {
@@ -132,6 +175,12 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 dto.getWithdrawalId(), withdrawal.getTenantId(), dto.getRejectReason());
     }
 
+    /**
+     * 查询商户余额信息。
+     *
+     * @param tenantId 商户 ID
+     * @return 商户余额实体，不存在时返回 null
+     */
     @Override
     public MerchantBalance getMerchantBalance(Long tenantId) {
         return merchantBalanceMapper.selectOne(new LambdaQueryWrapper<MerchantBalance>()
@@ -139,6 +188,16 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 .eq(MerchantBalance::getDeleted, 0));
     }
 
+    /**
+     * 增加商户余额。
+     * <p>
+     * 用于订单支付成功后的商户入账。若商户余额记录不存在则自动创建，
+     * 存在则乐观锁累加余额和总收入。处理并发创建的 DuplicateKeyException。
+     *
+     * @param tenantId 商户 ID
+     * @param amount   入账金额，必须大于 0
+     * @param orderNo  关联订单号（用于日志追踪）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addMerchantBalance(Long tenantId, BigDecimal amount, String orderNo) {
@@ -193,6 +252,15 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 tenantId, amount, balance.getBalance(), orderNo);
     }
 
+    /**
+     * 扣减商户余额。
+     * <p>
+     * 用于退款等场景下的余额扣减，乐观锁 3 次重试。
+     *
+     * @param tenantId 商户 ID
+     * @param amount   扣减金额，必须大于 0
+     * @throws BusinessException 余额不足或乐观锁冲突时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deductMerchantBalance(Long tenantId, BigDecimal amount) {
@@ -224,6 +292,20 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 tenantId, amount, balance.getBalance());
     }
 
+    /**
+     * 管理员端分页查询提现列表。
+     * <p>
+     * 支持按商户名称模糊搜索、状态筛选、日期范围筛选。
+     * 自动关联商户名称和审核人名称。
+     *
+     * @param current      当前页码
+     * @param size         每页条数
+     * @param merchantName 商户名称模糊搜索，可为 null
+     * @param status       提现状态筛选，可为 null
+     * @param startDate    开始日期，可为 null
+     * @param endDate      结束日期，可为 null
+     * @return 包含商户名称和审核人名称的提现 VO 分页结果
+     */
     @Override
     public Page<WithdrawalVO> listWithdrawalsForAdmin(Integer current, Integer size,
                                                       String merchantName, Integer status, String startDate, String endDate) {
@@ -285,6 +367,14 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         return voPage;
     }
 
+    /**
+     * 通过提现申请（简化版，无审核人信息）。
+     * <p>
+     * CAS 抢占式更新状态为已通过，将冻结余额转为已提现总额，并通知商户。
+     *
+     * @param withdrawalId 提现申请 ID
+     * @throws BusinessException 提现不存在、已审核或余额不足时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void approveWithdrawal(Long withdrawalId) {
@@ -300,6 +390,15 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 "您的提现申请 ¥" + withdrawal.getAmount() + " 已审批通过，资金将尽快到账", "PAYMENT");
     }
 
+    /**
+     * 拒绝提现申请。
+     * <p>
+     * CAS 抢占式更新状态为已拒绝，解冻冻结余额恢复到可用余额，并通知商户。
+     *
+     * @param withdrawalId 提现申请 ID
+     * @param reason       拒绝原因，不能为空
+     * @throws BusinessException 拒绝原因为空、提现不存在或已审核时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void rejectWithdrawal(Long withdrawalId, String reason) {
@@ -319,6 +418,13 @@ public class WithdrawalServiceImpl implements WithdrawalService {
                 "您的提现申请 ¥" + withdrawal.getAmount() + " 被拒绝，原因：" + reason, "PAYMENT");
     }
 
+    /**
+     * 获取待审核状态的提现申请。
+     *
+     * @param withdrawalId 提现申请 ID
+     * @return 提现申请实体
+     * @throws BusinessException 提现不存在或已审核时抛出
+     */
     private Withdrawal getPendingWithdrawal(Long withdrawalId) {
         Withdrawal withdrawal = withdrawalMapper.selectOne(new LambdaQueryWrapper<Withdrawal>()
                 .eq(Withdrawal::getId, withdrawalId)
@@ -332,6 +438,17 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         return withdrawal;
     }
 
+    /**
+     * CAS 抢占式更新提现状态。
+     * <p>
+     * 仅当当前状态为待审核（status=0）时才能更新成功，防止并发重复审核。
+     *
+     * @param withdrawal   提现申请
+     * @param status       目标状态（1=通过，2=拒绝）
+     * @param approverId   审核人 ID，可为 null
+     * @param rejectReason 拒绝原因，通过时为 null
+     * @throws BusinessException 已审核时抛出
+     */
     private void claimWithdrawalStatus(Withdrawal withdrawal, Integer status, Long approverId, String rejectReason) {
         com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Withdrawal> wrapper =
                 new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Withdrawal>()
@@ -347,6 +464,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         }
     }
 
+    /**
+     * 将冻结余额转为已提现总额（审核通过时调用）。
+     *
+     * @param withdrawal 已通过的提现申请
+     */
     private void moveFrozenBalanceToWithdrawal(Withdrawal withdrawal) {
         MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法通过提现申请");
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -361,6 +483,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         throw new BusinessException("操作冲突，请重试");
     }
 
+    /**
+     * 解冻冻结余额，恢复到可用余额（审核拒绝时调用）。
+     *
+     * @param withdrawal 已拒绝的提现申请
+     */
     private void unfreezeWithdrawalBalance(Withdrawal withdrawal) {
         MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法拒绝提现申请");
         for (int attempt = 0; attempt < 3; attempt++) {
@@ -375,6 +502,14 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         throw new BusinessException("拒绝提现解冻余额失败，请重试");
     }
 
+    /**
+     * 校验冻结余额是否满足提现金额。
+     *
+     * @param withdrawal 提现申请
+     * @param message    余额不足时的错误信息
+     * @return 商户余额实体
+     * @throws BusinessException 余额不足时抛出
+     */
     private MerchantBalance requireFrozenBalance(Withdrawal withdrawal, String message) {
         MerchantBalance balance = getMerchantBalance(withdrawal.getTenantId());
         if (balance == null || balance.getFrozenBalance().compareTo(withdrawal.getAmount()) < 0) {

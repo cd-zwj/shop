@@ -23,6 +23,13 @@ public class TenantConfigServiceImpl
         extends ServiceImpl<TenantConfigMapper, TenantConfig>
         implements TenantConfigService {
 
+    /**
+     * 根据配置键获取租户配置值，首次查询时自动创建默认空值配置。
+     *
+     * @param tenantId 租户ID
+     * @param key      配置键
+     * @return 配置项视图对象
+     */
     @Override
     public TenantConfigVO getByKey(Long tenantId, String key) {
         if (tenantId == null || key == null || key.isBlank()) {
@@ -40,6 +47,14 @@ public class TenantConfigServiceImpl
         return TenantConfigVO.from(config);
     }
 
+    /**
+     * 新增或更新指定租户的配置项，键不存在时自动创建。
+     *
+     * @param tenantId 租户ID
+     * @param key      配置键
+     * @param value    配置值
+     * @return 更新后的配置项视图对象
+     */
     @Override
     public TenantConfigVO put(Long tenantId, String key, String value) {
         if (tenantId == null || key == null || key.isBlank()) {

@@ -34,7 +34,7 @@ class MemberPointsAccountServiceImplTest {
         MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any())).thenReturn(1);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
 
         MemberPointsLog result = service.holdPoints(9L, 100L, 300, "ORDER_DEDUCT", "SO1001", "订单积分预占");
 
@@ -91,7 +91,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
-        when(accountMapper.updateById(any())).thenReturn(1);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
 
         service.releasePointsHold(9L, 100L, "ORDER_DEDUCT", "SO1001", "订单取消");
 
@@ -117,7 +117,7 @@ class MemberPointsAccountServiceImplTest {
         LocalDateTime expireTime = LocalDateTime.of(2026, 7, 1, 0, 0);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
-        when(accountMapper.updateById(any())).thenReturn(1);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
 
         service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分", expireTime);
 
@@ -138,7 +138,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any())).thenReturn(1);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
         when(logMapper.update(any(), any())).thenReturn(1);
 
         int expiredPoints = service.expirePoints(now, 100);
@@ -176,7 +176,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 120, 0));
-        when(accountMapper.updateById(any())).thenReturn(1);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
         when(logMapper.update(any(), any())).thenReturn(1);
 
         int expiredPoints = service.expirePoints(LocalDateTime.now(), 100);
@@ -227,7 +227,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 0));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分"));
@@ -246,7 +246,7 @@ class MemberPointsAccountServiceImplTest {
         when(logMapper.update(any(), any())).thenReturn(1);
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.expirePoints(LocalDateTime.of(2026, 7, 2, 2, 0), 100));
@@ -263,7 +263,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.holdPoints(9L, 100L, 100, "ORDER_DEDUCT", "SO1003", "订单积分预占"));
@@ -281,7 +281,7 @@ class MemberPointsAccountServiceImplTest {
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 300));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.releasePointsHold(9L, 100L, "ORDER_DEDUCT", "SO1001", "订单取消"));

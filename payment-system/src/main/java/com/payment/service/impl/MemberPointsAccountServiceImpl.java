@@ -25,15 +25,29 @@ import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
 
 /**
- * 会员积分账户服务实现类，用于实现会员积分账户相关业务逻辑。
+ * 会员积分账户服务实现类。
+ *
+ * <p>负责会员积分账户的全生命周期管理，核心功能包括：</p>
+ * <ul>
+ *   <li><b>账户管理</b>：按租户+用户维度维护积分账户，支持自动创建（懒初始化）</li>
+ *   <li><b>积分发放</b>：为用户增加积分，记录流水并支持过期时间设置</li>
+ *   <li><b>积分预占/释放/确认</b>：下单时预占积分，支付成功后确认，取消时释放</li>
+ *   <li><b>积分过期</b>：批量扫描到期积分并自动扣减，生成过期流水</li>
+ *   <li><b>补偿机制</b>：乐观锁并发重试 + 失败时创建补偿任务，保障资金安全</li>
+ *   <li><b>事件发布</b>：所有积分变动通过 Outbox 模式发布到消息队列</li>
+ * </ul>
  */
 @Service
 @RequiredArgsConstructor
 public class MemberPointsAccountServiceImpl implements MemberPointsAccountService {
 
+    /** 积分过期业务类型标识 */
     private static final String POINTS_EXPIRE_BIZ_TYPE = "POINTS_EXPIRE";
+    /** 积分发放补偿业务类型标识 */
     private static final String POINTS_GRANT_COMPENSATION_BIZ_TYPE = "POINTS_GRANT";
+    /** 积分预占补偿业务类型标识 */
     private static final String POINTS_HOLD_COMPENSATION_BIZ_TYPE = "POINTS_HOLD";
+    /** 积分释放补偿业务类型标识 */
     private static final String POINTS_RELEASE_COMPENSATION_BIZ_TYPE = "POINTS_RELEASE";
 
     private final MemberPointsAccountMapper accountMapper;
@@ -42,7 +56,13 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     private final OutboxPublisher outboxPublisher;
 
     /**
-     * 获取账号。
+     * 获取指定租户下用户的积分账户，若不存在则自动创建。
+     *
+     * <p>采用懒初始化策略：首次查询时自动创建初始账户（积分为0、版本号为0、状态为启用）。</p>
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @return 积分账户实体
      */
     @Override
     public MemberPointsAccount getAccount(Long tenantId, Long platformUserId) {
@@ -66,7 +86,13 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     }
 
     /**
-     * 查询流水。
+     * 分页查询用户积分变动流水记录。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param current        当前页码
+     * @param size           每页条数
+     * @return 分页后的积分流水列表，按创建时间倒序排列
      */
     @Override
     public Page<MemberPointsLog> listLogs(Long tenantId, Long platformUserId, Integer current, Integer size) {
@@ -77,7 +103,17 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     }
 
     /**
-     * 处理grant积分。
+     * 发放积分（不指定过期时间）。
+     *
+     * <p>委托{@link #grantPoints(Long, Long, Integer, String, String, String, LocalDateTime)}执行，
+     * 过期时间为null表示积分永不过期。</p>
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param points         发放积分数量，必须大于0
+     * @param bizType        业务类型（如签到、活动奖励等）
+     * @param bizNo          业务单号，用于幂等
+     * @param remark         备注说明
      */
     @Override
     @Transactional(rollbackFor = Exception.class)

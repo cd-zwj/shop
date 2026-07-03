@@ -72,7 +72,7 @@ class UserShippingAddressServiceImplTest {
         when(addressMapper.selectById(9L)).thenReturn(buildAddress(9L, 200L, 0));
 
         assertThrows(BusinessException.class, () -> service.update(100L, 9L, buildDto(false, "新地址")));
-        verify(addressMapper, never()).updateById(any());
+        verify(addressMapper, never()).updateById(any(com.payment.entity.UserShippingAddress.class));
     }
 
     /**
@@ -107,7 +107,7 @@ class UserShippingAddressServiceImplTest {
         when(addressMapper.selectCount(any())).thenReturn(1L);
 
         assertThrows(BusinessException.class, () -> service.update(100L, 9L, buildDto(false, "科技园 2 号")));
-        verify(addressMapper, never()).updateById(any());
+        verify(addressMapper, never()).updateById(any(com.payment.entity.UserShippingAddress.class));
     }
 
     /**

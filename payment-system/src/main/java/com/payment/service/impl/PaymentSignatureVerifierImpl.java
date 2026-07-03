@@ -24,6 +24,17 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
+/**
+ * 支付回调签名验证器实现。
+ * <p>
+ * 支持三种支付渠道的验签：
+ * <ul>
+ *   <li>微信支付：SHA256withRSA，验证 wechatpay-signature 头部签名</li>
+ *   <li>支付宝（含网页支付）：RSA2 公钥验签，校验 app_id、total_amount、seller_id</li>
+ *   <li>第三方扩展渠道：HMAC-SHA256 签名验证</li>
+ * </ul>
+ * 被标记为 {@code @Primary}，作为 {@link PaymentSignatureVerifier} 的默认实现。
+ */
 @Slf4j
 @Primary
 @Service
@@ -39,6 +50,14 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         this.paymentBillMapper = paymentBillMapper;
     }
 
+    /**
+     * 根据支付渠道编码分发验签逻辑。
+     *
+     * @param channelCode 支付渠道编码（WECHAT / ALIPAY / ALIPAY_PAGE / EXT_PROVIDER）
+     * @param dto         回调数据，包含原始请求体
+     * @param headers     请求头信息，微信和第三方渠道用于提取签名
+     * @return 验签通过返回 {@code true}
+     */
     @Override
     public boolean verify(String channelCode, PaymentCallbackDTO dto, Map<String, String> headers) {
         if (channelCode == null) {
@@ -57,6 +76,14 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         };
     }
 
+    /**
+     * 验证支付宝表单回调的合法性（用于传统 form POST 回调场景）。
+     * <p>
+     * 依次校验：RSA2 签名 → out_trade_no 存在性 → total_amount 一致性 → seller_id 一致性。
+     *
+     * @param params 支付宝回调参数（键值对）
+     * @return 所有校验通过返回 {@code true}
+     */
     @Override
     public boolean verifyAlipayCallback(Map<String, String> params) {
         try {
@@ -140,6 +167,9 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         }
     }
 
+    /**
+     * 判断支付宝交易状态是否为成功（TRADE_SUCCESS 或 TRADE_FINISHED）。
+     */
     public boolean verifyTradeSuccess(Map<String, String> params) {
         if (params == null) {
             return false;
@@ -148,6 +178,9 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         return "TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus);
     }
 
+    /**
+     * 验证支付宝 JSON 格式回调（异步通知）的签名。
+     */
     private boolean verifyAlipayJsonCallback(PaymentCallbackDTO dto, Map<String, String> headers) {
         try {
             if (dto == null) {
@@ -186,6 +219,11 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         }
     }
 
+    /**
+     * 验证微信支付 V3 回调签名。
+     * <p>
+     * 使用微信平台证书的公钥验证 timestamp + nonce + body 组合的 SHA256withRSA 签名。
+     */
     private boolean verifyWechat(PaymentCallbackDTO dto, Map<String, String> headers) {
         if (dto == null || dto.getRawBody() == null || dto.getRawBody().isBlank()) {
             log.warn("微信验签失败: 缺少原始报文");
@@ -220,6 +258,9 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         }
     }
 
+    /**
+     * 验证第三方扩展支付渠道的 HMAC-SHA256 签名。
+     */
     private boolean verifyExtProvider(PaymentCallbackDTO dto, Map<String, String> headers) {
         if (dto == null || dto.getRawBody() == null || dto.getRawBody().isBlank()) {
             log.warn("第三方验签失败: 缺少原始报文");
@@ -255,6 +296,9 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         }
     }
 
+    /**
+     * 从文件系统加载微信支付 X.509 证书。
+     */
     private java.security.cert.X509Certificate loadWechatCertificate(String serial) throws Exception {
         String certPath = config.getWechat().getKeyPath();
         if (certPath == null || certPath.isBlank()) {
@@ -266,6 +310,9 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         }
     }
 
+    /**
+     * 将参数 Map 拼接为 key1=value1&key2=value2 格式的待签名字符串。
+     */
     private String buildSignContent(Map<String, String> params) {
         StringBuilder sb = new StringBuilder();
         boolean first = true;
@@ -282,6 +329,7 @@ public class PaymentSignatureVerifierImpl implements PaymentSignatureVerifier {
         return sb.toString();
     }
 
+    /** 计算 HMAC-SHA256 签名。 */
     private byte[] hmacSha256(byte[] data, byte[] key) {
         try {
             Mac mac = Mac.getInstance(HMAC_SHA256);

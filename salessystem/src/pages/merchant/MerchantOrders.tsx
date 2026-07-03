@@ -154,14 +154,12 @@ export default function MerchantOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 4 }) : orders).map((order, index) => {
-                const isData = typeof order === 'object';
-                const orderLabel = isData ? `${order.orderStatus}/${order.payStatus}` : '加载中';
+              {(isLoading ? Array.from<MerchantOrder | undefined>({ length: 4 }) : orders).map((order, index) => {                const orderLabel = order ? `${order.orderStatus}/${order.payStatus}` : '加载中';
                 return (
                   <tr
-                    key={isData ? order.orderNo : index}
+                    key={order ? order.orderNo : index}
                     className="group cursor-pointer transition-colors hover:bg-slate-50/50"
-                    onClick={() => isData && navigate(`/merchant/order/${order.orderNo}`)}
+                    onClick={() => order && navigate(`/merchant/order/${order.orderNo}`)}
                   >
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-5">
@@ -170,10 +168,10 @@ export default function MerchantOrders() {
                         </div>
                         <div className="flex flex-col">
                           <span className="font-mono text-xs font-black tracking-tight text-primary">
-                            {isData ? order.orderNo : '--'}
+                            {order ? order.orderNo : '--'}
                           </span>
                           <span className="mt-1 text-xs font-bold uppercase text-slate-400">
-                            {isData ? order.subject || `tenant ${order.tenantId}` : '加载中'}
+                            {order ? order.subject || `tenant ${order.tenantId}` : '加载中'}
                           </span>
                         </div>
                       </div>
@@ -181,40 +179,40 @@ export default function MerchantOrders() {
                     <td className="px-8 py-6">
                       <div className="flex flex-col">
                         <span className="text-sm font-black text-slate-900">
-                          {isData ? `平台用户 ${order.platformUserId}` : '--'}
+                          {order ? `平台用户 ${order.platformUserId}` : '--'}
                         </span>
                         <span className="mt-0.5 text-[10px] font-bold text-slate-400">
-                          {isData ? order.createTime || '--' : '--'}
+                          {order ? order.createTime || '--' : '--'}
                         </span>
                       </div>
                     </td>
                     <td className="px-8 py-6 text-base font-black tracking-tight text-slate-900">
-                      {isData ? formatCurrency(order.totalAmount) : '...'}
+                      {order ? formatCurrency(order.totalAmount) : '...'}
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex justify-center">
                         <span
                           className={cn(
                             'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm',
-                            isData && order.orderStatus === 'CREATED'
+                            order && order.orderStatus === 'CREATED'
                               ? 'border-orange-100 bg-orange-50 text-orange-600'
-                              : isData && order.payStatus === 'SUCCESS'
+                              : order && order.payStatus === 'SUCCESS'
                                 ? 'border-blue-100 bg-blue-50 text-blue-600'
-                                : isData && order.orderStatus === 'CLOSED'
+                                : order && order.orderStatus === 'CLOSED'
                                   ? 'border-green-100 bg-green-50 text-green-600'
                                   : 'border-slate-200 bg-slate-100 text-slate-400',
                           )}
                         >
-                          {isData && order.orderStatus === 'CREATED' && <Clock size={10} />}
-                          {isData && order.payStatus === 'SUCCESS' && <Truck size={10} />}
-                          {isData && order.orderStatus === 'CLOSED' && <CheckCircle2 size={10} />}
-                          {isData && order.orderStatus === 'CANCELLED' && <XCircle size={10} />}
+                          {order && order.orderStatus === 'CREATED' && <Clock size={10} />}
+                          {order && order.payStatus === 'SUCCESS' && <Truck size={10} />}
+                          {order && order.orderStatus === 'CLOSED' && <CheckCircle2 size={10} />}
+                          {order && order.orderStatus === 'CANCELLED' && <XCircle size={10} />}
                           {orderLabel}
                         </span>
                       </div>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {isData && (
+                      {order && (
                         <div className="flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             onClick={(event) => {

@@ -15,6 +15,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Outbox消息重试调度器。定期扫描message_outbox表中发送失败或待发送的记录，
+ * 尝试重新投递到RabbitMQ，采用指数退避策略，超过最大重试次数后标记为DEAD。
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,6 +35,10 @@ public class MessageOutboxRetryScheduler {
     private final MessageOutboxMapper messageOutboxMapper;
     private final RabbitTemplate rabbitTemplate;
 
+    /**
+     * 定时批量扫描待重试的Outbox消息，逐条尝试重新投递。
+     * 查询状态为PENDING或FAILED且到达下次重试时间的记录，按创建时间升序取前BATCH_SIZE条。
+     */
     @Scheduled(fixedDelayString = "${payment.mq.outbox.retry.fixed-delay-ms:5000}")
     public void retryPendingOutbox() {
         List<MessageOutbox> records = messageOutboxMapper.selectList(new LambdaQueryWrapper<MessageOutbox>()

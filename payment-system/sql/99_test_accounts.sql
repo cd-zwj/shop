@@ -9,40 +9,75 @@ USE `payment_db`;
 
 -- 管理员用户
 INSERT INTO `platform_user` (`user_no`, `username`, `phone`, `email`, `password_hash`, `status`, `deleted`) VALUES
-('PU202606070001', 'admin', '13800000001', 'admin@test.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iwK8pJw2', 1, 0);
+('PU202606070001', 'admin', '13800000001', 'admin@test.com', '$2a$10$RM41BiXeQbfAcRJbjh2g2O6Z9lHJEO/Or6b40U8p.BXHmbSwfs5Ky', 1, 0);
 
 -- 商户用户
 INSERT INTO `platform_user` (`user_no`, `username`, `phone`, `email`, `password_hash`, `status`, `deleted`) VALUES
-('PU202606070002', 'merchant', '13800000002', 'merchant@test.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iwK8pJw2', 1, 0);
+('PU202606070002', 'merchant', '13800000002', 'merchant@test.com', '$2a$10$RM41BiXeQbfAcRJbjh2g2O6Z9lHJEO/Or6b40U8p.BXHmbSwfs5Ky', 1, 0);
 
 -- 普通用户
 INSERT INTO `platform_user` (`user_no`, `username`, `phone`, `email`, `password_hash`, `status`, `deleted`) VALUES
-('PU202606070003', 'user', '13800000003', 'user@test.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iwK8pJw2', 1, 0);
+('PU202606070003', 'user', '13800000003', 'user@test.com', '$2a$10$RM41BiXeQbfAcRJbjh2g2O6Z9lHJEO/Or6b40U8p.BXHmbSwfs5Ky', 1, 0);
 
 -- 第二个普通用户（用于测试越权）
 INSERT INTO `platform_user` (`user_no`, `username`, `phone`, `email`, `password_hash`, `status`, `deleted`) VALUES
-('PU202606070004', 'user2', '13800000004', 'user2@test.com', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iwK8pJw2', 1, 0);
+('PU202606070004', 'user2', '13800000004', 'user2@test.com', '$2a$10$RM41BiXeQbfAcRJbjh2g2O6Z9lHJEO/Or6b40U8p.BXHmbSwfs5Ky', 1, 0);
 
 -- ========== 商户员工关系 ==========
 
 -- merchant 用户作为 tenant 1 的员工
-INSERT INTO `tenant_employee` (`tenant_id`, `platform_user_id`, `employee_no`, `employee_role`, `status`, `deleted`) VALUES
-(1, 2, 'EMP001', 'OWNER', 1, 0);
+INSERT INTO `tenant_employee` (`tenant_id`, `platform_user_id`, `employee_no`, `employee_role`, `status`)
+SELECT t.`id`, pu.`id`, 'EMP001', 'OWNER', 1
+FROM `tenant` t
+JOIN `platform_user` pu ON pu.`username` = 'merchant'
+WHERE t.`tenant_code` = 'TENANT_001'
+ON DUPLICATE KEY UPDATE
+  `employee_role` = VALUES(`employee_role`),
+  `status` = 1;
 
 -- ========== 商户会员关系 ==========
 
 -- user 和 user2 作为 tenant 1 的会员
-INSERT INTO `tenant_member` (`tenant_id`, `platform_user_id`, `member_no`, `member_status`, `register_source`, `deleted`) VALUES
-(1, 3, 'MEM001', 'ACTIVE', 'APP', 0),
-(1, 4, 'MEM002', 'ACTIVE', 'APP', 0);
+INSERT INTO `tenant_member` (`tenant_id`, `platform_user_id`, `member_no`, `member_status`, `register_source`)
+SELECT t.`id`, pu.`id`, 'MEM001', 1, 'APP'
+FROM `tenant` t
+JOIN `platform_user` pu ON pu.`username` = 'user'
+WHERE t.`tenant_code` = 'TENANT_001'
+ON DUPLICATE KEY UPDATE
+  `member_status` = VALUES(`member_status`);
+
+INSERT INTO `tenant_member` (`tenant_id`, `platform_user_id`, `member_no`, `member_status`, `register_source`)
+SELECT t.`id`, pu.`id`, 'MEM002', 1, 'APP'
+FROM `tenant` t
+JOIN `platform_user` pu ON pu.`username` = 'user2'
+WHERE t.`tenant_code` = 'TENANT_001'
+ON DUPLICATE KEY UPDATE
+  `member_status` = VALUES(`member_status`);
 
 -- ========== RBAC 角色分配 ==========
 
--- 给 platform_user 分配角色（如果 RBAC 用 platform_user_id）
--- admin -> 角色 3 (admin)
-INSERT INTO `sys_user_role` (`user_id`, `role_id`) VALUES
-(1, 3)
-ON DUPLICATE KEY UPDATE `role_id` = 3;
+-- 给 platform_user 分配角色。Sa-Token loginId 使用 platform:<platform_user.id>，
+-- StpInterface 会按 principal_type + platform_user.id 到 sys_user_role 查询权限。
+INSERT INTO `sys_user_role` (`principal_type`, `user_id`, `role_id`)
+SELECT 'admin', pu.`id`, r.`id`
+FROM `platform_user` pu
+JOIN `sys_role` r ON r.`role_code` = 'admin'
+WHERE pu.`username` = 'admin'
+ON DUPLICATE KEY UPDATE `role_id` = VALUES(`role_id`);
+
+INSERT INTO `sys_user_role` (`principal_type`, `user_id`, `role_id`)
+SELECT 'merchant', pu.`id`, r.`id`
+FROM `platform_user` pu
+JOIN `sys_role` r ON r.`role_code` = 'merchant'
+WHERE pu.`username` = 'merchant'
+ON DUPLICATE KEY UPDATE `role_id` = VALUES(`role_id`);
+
+INSERT INTO `sys_user_role` (`principal_type`, `user_id`, `role_id`)
+SELECT 'platform', pu.`id`, r.`id`
+FROM `platform_user` pu
+JOIN `sys_role` r ON r.`role_code` = 'user'
+WHERE pu.`username` IN ('user', 'user2')
+ON DUPLICATE KEY UPDATE `role_id` = VALUES(`role_id`);
 
 -- ========== 测试商品 ==========
 

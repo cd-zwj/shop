@@ -1,8 +1,12 @@
 package com.payment.service.impl;
 
+import cn.dev33.satoken.context.mock.SaTokenContextMockUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.config.AuthStpKit;
+import com.payment.config.RbacPrincipalType;
 import com.payment.dto.AdminDashboardOverviewVO;
 import com.payment.dto.AdminPlatformUserVO;
+import com.payment.dto.V1AdminSessionVO;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PlatformUser;
 import com.payment.entity.RechargeOrderV1;
@@ -23,6 +27,7 @@ import com.payment.service.MerchantService;
 import com.payment.service.UserPermissionService;
 import com.payment.service.UserService;
 import com.payment.service.WithdrawalService;
+import com.payment.util.AuthLoginIdHelper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -30,11 +35,72 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class V1AdminServiceImplTest {
 
+    @Test
+    void adminSessionUsesPlatformUserIdAsRbacPrincipal() {
+        UserService userService = mock(UserService.class);
+        MerchantService merchantService = mock(MerchantService.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        UserPermissionService userPermissionService = mock(UserPermissionService.class);
+        PermissionMapper permissionMapper = mock(PermissionMapper.class);
+        RoleMapper roleMapper = mock(RoleMapper.class);
+        PlatformUserMapper platformUserMapper = mock(PlatformUserMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        UnifiedWalletAccountMapper unifiedWalletAccountMapper = mock(UnifiedWalletAccountMapper.class);
+        MerchantWalletAccountMapper merchantWalletAccountMapper = mock(MerchantWalletAccountMapper.class);
+        MemberPointsAccountMapper memberPointsAccountMapper = mock(MemberPointsAccountMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        PaymentBillMapper paymentBillMapper = mock(PaymentBillMapper.class);
+        RechargeOrderV1Mapper rechargeOrderV1Mapper = mock(RechargeOrderV1Mapper.class);
+        AppOrderService appOrderService = mock(AppOrderService.class);
+
+        V1AdminServiceImpl service = new V1AdminServiceImpl(
+                userService,
+                merchantService,
+                withdrawalService,
+                userPermissionService,
+                permissionMapper,
+                roleMapper,
+                platformUserMapper,
+                tenantMemberMapper,
+                tenantEmployeeMapper,
+                unifiedWalletAccountMapper,
+                merchantWalletAccountMapper,
+                memberPointsAccountMapper,
+                salesOrderMapper,
+                paymentBillMapper,
+                rechargeOrderV1Mapper,
+                appOrderService
+        );
+
+        PlatformUser admin = new PlatformUser();
+        admin.setId(99L);
+        admin.setUsername("admin");
+        admin.setStatus(1);
+        admin.setDeleted(0);
+
+        when(platformUserMapper.selectById(99L)).thenReturn(admin);
+        when(roleMapper.selectRoleCodesByPrincipal(eq(99L), eq(RbacPrincipalType.ADMIN))).thenReturn(List.of("admin"));
+        when(permissionMapper.selectPermissionCodesByPrincipal(eq(99L), eq(RbacPrincipalType.ADMIN))).thenReturn(List.of("admin:dashboard"));
+
+        SaTokenContextMockUtil.setMockContext(() -> {
+            AuthStpKit.ADMIN.login(AuthLoginIdHelper.admin(99L));
+            V1AdminSessionVO session = service.getAdminSession();
+
+            assertEquals(99L, session.getUserId());
+            assertEquals("admin", session.getUsername());
+            assertEquals(Integer.valueOf(2), session.getUserType());
+            assertEquals(List.of("admin"), session.getRoles());
+            assertEquals(List.of("admin:dashboard"), session.getPermissions());
+            AuthStpKit.ADMIN.logout();
+        });
+    }
     @Test
     void dashboardOverviewShouldAggregateV1TradeData() {
         UserService userService = mock(UserService.class);

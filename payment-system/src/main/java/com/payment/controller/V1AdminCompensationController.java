@@ -28,7 +28,7 @@ public class V1AdminCompensationController {
 
     /* ---------- CompensationTask ---------- */
 
-    @SaCheckPermission(value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/compensation-tasks")
     public Result<Page<CompensationTask>> listCompensationTasks(
             @RequestParam(required = false) String status,
@@ -38,14 +38,14 @@ public class V1AdminCompensationController {
         return Result.success(compensationTaskService.list(status, bizType, current, size));
     }
 
-    @SaCheckPermission("admin:compensation:operate")
+    @SaCheckPermission(type = "admin", value = "admin:compensation:operate")
     @PostMapping("/compensation-tasks/{id}/retry")
     public Result<Void> retryCompensationTask(@PathVariable Long id) {
         compensationTaskService.retry(id);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:compensation:operate")
+    @SaCheckPermission(type = "admin", value = "admin:compensation:operate")
     @PostMapping("/compensation-tasks/{id}/cancel")
     public Result<Void> cancelCompensationTask(@PathVariable Long id) {
         compensationTaskService.cancel(id);
@@ -54,7 +54,7 @@ public class V1AdminCompensationController {
 
     /* ---------- RetryTask ---------- */
 
-    @SaCheckPermission(value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/retry-tasks")
     public Result<Page<RetryTask>> listRetryTasks(
             @RequestParam(required = false) String status,
@@ -64,14 +64,14 @@ public class V1AdminCompensationController {
         return Result.success(retryTaskService.list(status, taskType, current, size));
     }
 
-    @SaCheckPermission("admin:compensation:operate")
+    @SaCheckPermission(type = "admin", value = "admin:compensation:operate")
     @PostMapping("/retry-tasks/{id}/retry")
     public Result<Void> retryRetryTask(@PathVariable Long id) {
         retryTaskService.retry(id);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:compensation:operate")
+    @SaCheckPermission(type = "admin", value = "admin:compensation:operate")
     @PostMapping("/retry-tasks/{id}/cancel")
     public Result<Void> cancelRetryTask(@PathVariable Long id) {
         retryTaskService.cancel(id);

@@ -51,6 +51,11 @@ public class RetryTaskScheduler {
     private final SmsCodeService smsCodeService;
     private final CouponService couponService;
 
+    /**
+     * 定时轮询 retry_task 表中待处理的重试任务，批量执行并处理成功/失败逻辑。
+     * 查询条件：taskStatus = PENDING 且 (nextRetryTime IS NULL OR nextRetryTime <= now)，
+     * 按创建时间升序取前 {@link #BATCH_SIZE} 条，逐条分发执行。
+     */
     @Scheduled(fixedDelayString = "${payment.retry-task.fixed-delay-ms:60000}")
     public void processRetryTasks() {
         LocalDateTime now = LocalDateTime.now();

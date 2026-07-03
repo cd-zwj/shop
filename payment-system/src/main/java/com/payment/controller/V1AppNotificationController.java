@@ -24,7 +24,7 @@ public class V1AppNotificationController {
 
     private final UserNotificationService notificationService;
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping
     public Result<PageResult<NotificationVO>> listNotifications(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                                 @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
@@ -32,21 +32,21 @@ public class V1AppNotificationController {
         return Result.success(PageResult.from(page, NotificationVO::from));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping("/unread-count")
     public Result<Map<String, Long>> getUnreadCount() {
         long count = notificationService.countUnread(PlatformSessionHelper.getPlatformUserId());
         return Result.success(Map.of("count", count));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PutMapping("/{id}/read")
     public Result<NotificationVO> markRead(@PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
         UserNotification notification = notificationService.markRead(PlatformSessionHelper.getPlatformUserId(), id);
         return Result.success(NotificationVO.from(notification));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PutMapping("/read-all")
     public Result<Void> markAllRead() {
         notificationService.markAllRead(PlatformSessionHelper.getPlatformUserId());

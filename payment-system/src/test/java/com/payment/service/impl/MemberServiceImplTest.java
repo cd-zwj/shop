@@ -59,7 +59,7 @@ class MemberServiceImplTest {
         when(levelMapper.selectOne(any())).thenReturn(null);
 
         assertThrows(BusinessException.class, () -> service.updateMemberLevel(9L, 100L, 3));
-        verify(memberMapper, never()).updateById(any());
+        verify(memberMapper, never()).updateById(any(TenantMember.class));
     }
 
     @Test
@@ -111,7 +111,7 @@ class MemberServiceImplTest {
 
         service.assignTag(9L, 100L, 18L);
 
-        verify(accountTagMapper, never()).insert(any());
+        verify(accountTagMapper, never()).insert(any(MemberAccountTag.class));
     }
 
     @Test
@@ -125,7 +125,7 @@ class MemberServiceImplTest {
         when(tagMapper.selectById(18L)).thenReturn(tag(18L, 10L, "其他商户标签"));
 
         assertThrows(BusinessException.class, () -> service.assignTag(9L, 100L, 18L));
-        verify(accountTagMapper, never()).insert(any());
+        verify(accountTagMapper, never()).insert(any(MemberAccountTag.class));
     }
 
     @Test
@@ -225,7 +225,7 @@ class MemberServiceImplTest {
         service.checkAndAutoUpgrade(9L, 200L);
 
         // Assert: 没有任何升级操作
-        verify(memberMapper, never()).updateById(any());
+        verify(memberMapper, never()).updateById(any(TenantMember.class));
     }
 
     @Test
@@ -287,7 +287,7 @@ class MemberServiceImplTest {
         service.checkAndAutoUpgrade(9L, 999L);
 
         // Assert: 无任何数据库操作
-        verify(memberMapper, never()).updateById(any());
+        verify(memberMapper, never()).updateById(any(TenantMember.class));
         verify(salesOrderMapper, never()).selectObjs(any());
     }
 

@@ -28,12 +28,12 @@ class MerchantWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildMerchantAccount(1L, 2L, "50.00"))
                 .thenReturn(buildMerchantAccount(1L, 2L, "50.00"));
-        when(accountMapper.updateById(any()))
+        when(accountMapper.updateById(any(MerchantWalletAccount.class)))
                 .thenReturn(0)
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.credit(1L, 2L, new BigDecimal("20.00"), "TEST", "BIZ-3", "retry"));
-        verify(accountMapper, times(2)).updateById(any());
+        verify(accountMapper, times(2)).updateById(any(MerchantWalletAccount.class));
         verify(logMapper, times(1)).insert(any(MerchantWalletLog.class));
     }
 
@@ -46,11 +46,11 @@ class MerchantWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildMerchantAccount(1L, 2L, "60.00"))
                 .thenReturn(buildMerchantAccount(1L, 2L, "5.00"));
-        when(accountMapper.updateById(any())).thenReturn(0);
+        when(accountMapper.updateById(any(MerchantWalletAccount.class))).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.debit(1L, 2L, new BigDecimal("20.00"), "TEST", "BIZ-4", "debit"));
-        verify(accountMapper, times(1)).updateById(any());
+        verify(accountMapper, times(1)).updateById(any(MerchantWalletAccount.class));
     }
 
     private MerchantWalletAccount buildMerchantAccount(Long tenantId, Long platformUserId, String balance) {

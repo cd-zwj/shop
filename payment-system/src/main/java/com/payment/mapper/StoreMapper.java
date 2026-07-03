@@ -5,7 +5,7 @@ import com.payment.entity.Store;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 门店数据访问接口，用于执行门店区域、位置和服务标签查询。
+ * 门店数据访问接口，提供门店表（store）的 CRUD 操作，支持门店区域、位置和服务标签查询。
  */
 @Mapper
 public interface StoreMapper extends BaseMapper<Store> {

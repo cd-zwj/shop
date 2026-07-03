@@ -142,53 +142,51 @@ export default function AdminTransactions() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 5 }) : orders).map((order, index) => {
-                const isData = typeof order === 'object';
-                return (
+              {(isLoading ? Array.from<AdminOrderListItem | undefined>({ length: 5 }) : orders).map((order, index) => {                return (
                   <tr
-                    key={isData ? order.orderNo : index}
+                    key={order ? order.orderNo : index}
                     className="cursor-pointer transition-colors hover:bg-slate-50/50"
-                    onClick={() => isData && navigate(`/admin/order/${order.orderNo}`)}
+                    onClick={() => order && navigate(`/admin/order/${order.orderNo}`)}
                   >
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-slate-900">
-                        {isData ? order.orderNo : '加载中...'}
+                        {order ? order.orderNo : '加载中...'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        {isData ? order.subject || '--' : '--'}
+                        {order ? order.subject || '--' : '--'}
                       </p>
                       <p className="mt-1 text-[11px] font-medium text-slate-400">
-                        {isData ? formatDateTime(order.createTime) : '--'}
+                        {order ? formatDateTime(order.createTime) : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-medium text-slate-700">
-                        tenantId: {isData ? order.tenantId : '--'}
+                        tenantId: {order ? order.tenantId : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        userId: {isData ? order.platformUserId : '--'}
+                        userId: {order ? order.platformUserId : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-slate-900">
-                        {isData ? formatCurrency(order.totalAmount) : '--'}
+                        {order ? formatCurrency(order.totalAmount) : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        外部支付 {isData ? formatCurrency(order.externalPayAmount || 0) : '--'}
+                        外部支付 {order ? formatCurrency(order.externalPayAmount || 0) : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex flex-col gap-2">
                         <span className="w-fit rounded-lg bg-slate-100 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-slate-700">
-                          {isData ? order.orderStatus : '--'}
+                          {order ? order.orderStatus : '--'}
                         </span>
                         <span className="w-fit rounded-lg bg-primary/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
-                          {isData ? order.payStatus : '--'}
+                          {order ? order.payStatus : '--'}
                         </span>
                       </div>
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {isData && (
+                      {order && (
                         <button
                           onClick={(event) => {
                             event.stopPropagation();

@@ -7,7 +7,9 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
 /**
- * 用户优惠券数据访问接口。
+ * 用户优惠券表数据访问接口，提供用户持有优惠券的增删改查操作。
+ * <p>对应实体表：{@link com.payment.entity.UserCoupon}</p>
+ * <p>包含原子抢占优惠券库存的自定义方法，用于高并发领券场景。</p>
  */
 @Mapper
 public interface UserCouponMapper extends BaseMapper<UserCoupon> {

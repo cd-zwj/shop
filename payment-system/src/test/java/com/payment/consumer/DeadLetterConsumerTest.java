@@ -69,7 +69,7 @@ class DeadLetterConsumerTest {
         consumer.handleDeadLetter(message, channel);
 
         verify(rechargeOrderMapper).selectOne(any());
-        verify(deadLetterTaskMapper, never()).insert(any());
+        verify(deadLetterTaskMapper, never()).insert(any(DeadLetterTask.class));
         verify(channel).basicAck(22L, false);
     }
 }

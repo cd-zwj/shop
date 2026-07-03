@@ -165,48 +165,46 @@ export default function MerchantProducts() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 3 }) : products).map((product, index) => {
-                const isData = typeof product === 'object';
-                return (
+              {(isLoading ? Array.from<MerchantProduct | undefined>({ length: 3 }) : products).map((product, index) => {                return (
                   <motion.tr
-                    key={isData ? product.id : index}
+                    key={product ? product.id : index}
                     whileHover={{ backgroundColor: '#fcfdfe' }}
                     className="group cursor-pointer transition-colors"
-                    onClick={() => isData && navigate(`/merchant/product/${product.id}`)}
+                    onClick={() => product && navigate(`/merchant/product/${product.id}`)}
                   >
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
-                          {isData ? (
+                          {product ? (
                             <img src={getImageUrl(product.imageUrl)} alt={product.name} className="h-full w-full object-cover" />
                           ) : null}
                         </div>
                         <div className="flex flex-col">
                           <span className="text-[15px] font-black tracking-tight text-slate-900 transition-colors group-hover:text-primary">
-                            {isData ? product.name : '加载中...'}
+                            {product ? product.name : '加载中...'}
                           </span>
                           <span className="font-mono text-[11px] font-bold uppercase text-slate-400">
-                            SKU: {isData ? product.productCode : '--'}
+                            SKU: {product ? product.productCode : '--'}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6 font-black tracking-tight text-slate-900">
-                      {isData ? formatCurrency(product.price) : '...'}
+                      {product ? formatCurrency(product.price) : '...'}
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex justify-center">
                         <span
                           className={cn(
                             'rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest',
-                            isData && product.status === 'active'
+                            product && product.status === 'active'
                               ? 'border-green-100 bg-green-50 text-green-600'
-                              : isData && product.status === 'inactive'
+                              : product && product.status === 'inactive'
                                 ? 'border-slate-200 bg-slate-100 text-slate-500'
                                 : 'border-red-100 bg-red-50 text-red-600',
                           )}
                         >
-                          {isData ? product.status : '...'}
+                          {product ? product.status : '...'}
                         </span>
                       </div>
                     </td>
@@ -214,14 +212,14 @@ export default function MerchantProducts() {
                       <span
                         className={cn(
                           'text-sm font-bold',
-                          isData && Number(product.stock) === 0 ? 'text-red-500' : 'text-slate-500',
+                          product && Number(product.stock) === 0 ? 'text-red-500' : 'text-slate-500',
                         )}
                       >
-                        {isData ? product.stock : '--'}
+                        {product ? product.stock : '--'}
                       </span>
                     </td>
                     <td className="px-8 py-6">
-                      {isData && (
+                      {product && (
                         <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
                           <button
                             onClick={(event) => {

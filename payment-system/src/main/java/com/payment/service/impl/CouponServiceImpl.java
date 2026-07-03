@@ -58,7 +58,23 @@ import java.util.stream.Collectors;
 import com.payment.util.BizNoGenerator;
 
 /**
- * 优惠券服务实现类。
+ * 优惠券服务实现类，覆盖优惠券完整生命周期管理。
+ * <p>
+ * 职责包括：
+ * <ul>
+ *   <li><b>模板管理</b>：创建优惠券模板、配置适用范围（商品/分类/商户/用户）、激活与禁用模板</li>
+ *   <li><b>模板查询</b>：商户模板列表、平台模板列表、C端可用模板列表（含库存与领取状态）</li>
+ *   <li><b>领取</b>：校验领取窗口、库存扣减（乐观锁）、生成用户优惠券并记录领取流水</li>
+ *   <li><b>锁定</b>：下单时将优惠券从"已领取"锁定为"已锁定"，绑定订单号，防止重复使用</li>
+ *   <li><b>释放</b>：订单取消/超时后将优惠券回退为"已领取"状态，恢复可用</li>
+ *   <li><b>核销</b>：支付成功后将优惠券标记为"已使用"，记录实际抵扣金额</li>
+ *   <li><b>过期</b>：批量处理过期优惠券，状态置为"已过期"</li>
+ *   <li><b>定价候选</b>：订单计价时解析优惠券折扣候选，计算适用商品金额与优惠规则快照</li>
+ * </ul>
+ * <p>
+ * 所有状态变更操作均通过 Outbox 模式发布事件到 RabbitMQ，保障消息最终一致性。
+ *
+ * @see com.payment.service.CouponService
  */
 @Slf4j
 @Service
@@ -84,6 +100,13 @@ public class CouponServiceImpl implements CouponService {
     private final UserBehaviorLogService userBehaviorLogService;
     private final OutboxPublisher outboxPublisher;
 
+    /**
+     * 查询指定商户的优惠券模板列表。
+     *
+     * @param tenantId 商户ID，不能为空
+     * @param status   模板状态筛选条件（DRAFT/ACTIVE/DISABLED），可为 null 表示不筛选
+     * @return 该商户下归属类型为 TENANT 的优惠券模板列表，按创建时间降序
+     */
     @Override
     public List<CouponTemplate> listTemplates(Long tenantId, String status) {
         if (tenantId == null || tenantId <= 0) {
@@ -97,6 +120,12 @@ public class CouponServiceImpl implements CouponService {
                 .orderByDesc(CouponTemplate::getCreateTime));
     }
 
+    /**
+     * 查询平台级别的优惠券模板列表。
+     *
+     * @param status 模板状态筛选条件（DRAFT/ACTIVE/DISABLED），可为 null 表示不筛选
+     * @return 平台归属类型为 PLATFORM 的优惠券模板列表，按创建时间降序
+     */
     @Override
     public List<CouponTemplate> listPlatformTemplates(String status) {
         return couponTemplateMapper.selectList(new LambdaQueryWrapper<CouponTemplate>()
@@ -106,6 +135,14 @@ public class CouponServiceImpl implements CouponService {
                 .orderByDesc(CouponTemplate::getCreateTime));
     }
 
+    /**
+     * 查询指定商户优惠券模板的适用范围列表。
+     *
+     * @param couponTemplateId 优惠券模板 ID
+     * @param tenantId         商户 ID，用于校验模板归属
+     * @return 适用范围列表
+     * @throws BusinessException 模板不存在或不属于当前商户时抛出
+     */
     @Override
     public List<CouponScope> listScopes(Long couponTemplateId, Long tenantId) {
         CouponTemplate template = requireTemplate(couponTemplateId);
@@ -117,6 +154,13 @@ public class CouponServiceImpl implements CouponService {
                 .eq(CouponScope::getDeleted, 0));
     }
 
+    /**
+     * 查询平台优惠券模板的适用范围列表。
+     *
+     * @param couponTemplateId 优惠券模板 ID
+     * @return 适用范围列表
+     * @throws BusinessException 模板不存在或不是平台券时抛出
+     */
     @Override
     public List<CouponScope> listPlatformScopes(Long couponTemplateId) {
         CouponTemplate template = requireTemplate(couponTemplateId);
@@ -128,6 +172,14 @@ public class CouponServiceImpl implements CouponService {
                 .eq(CouponScope::getDeleted, 0));
     }
 
+    /**
+     * 创建优惠券模板。
+     * <p>
+     * 校验参数合法性后创建草稿状态的模板，平台券不需要绑定商户。
+     *
+     * @param dto 模板创建参数
+     * @return 新创建的优惠券模板实体（状态为 DRAFT）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CouponTemplate createTemplate(CouponTemplateCreateDTO dto) {
@@ -167,6 +219,12 @@ public class CouponServiceImpl implements CouponService {
         return template;
     }
 
+    /**
+     * 为优惠券模板添加适用范围规则。
+     *
+     * @param dto 适用范围创建参数
+     * @return 新创建的适用范围实体
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public CouponScope addScope(CouponScopeCreateDTO dto) {
@@ -188,6 +246,11 @@ public class CouponServiceImpl implements CouponService {
         return scope;
     }
 
+    /**
+     * 激活优惠券模板，将状态从 DRAFT 变更为 ACTIVE。
+     *
+     * @param couponTemplateId 优惠券模板 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void activateTemplate(Long couponTemplateId) {
@@ -198,6 +261,11 @@ public class CouponServiceImpl implements CouponService {
         couponTemplateMapper.updateById(template);
     }
 
+    /**
+     * 禁用优惠券模板，将状态变更为 DISABLED。
+     *
+     * @param couponTemplateId 优惠券模板 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableTemplate(Long couponTemplateId) {
@@ -207,6 +275,16 @@ public class CouponServiceImpl implements CouponService {
         couponTemplateMapper.updateById(template);
     }
 
+    /**
+     * 查询 C 端用户可见的可用优惠券模板列表。
+     * <p>
+     * 包含平台券和当前商户券，在领取时间窗口内、库存充足的模板。
+     * 批量预加载 scope 消除 N+1 查询。
+     *
+     * @param tenantId       商户 ID
+     * @param platformUserId 平台用户 ID
+     * @return 可领取的优惠券模板 VO 列表（含库存和领取状态）
+     */
     @Override
     public List<AppCouponTemplateVO> listAvailableTemplates(Long tenantId, Long platformUserId) {
         LocalDateTime now = LocalDateTime.now();
@@ -246,6 +324,17 @@ public class CouponServiceImpl implements CouponService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * 查询用户的优惠券列表，支持按状态筛选。
+     * <p>
+     * 包含当前商户的优惠券和平台级优惠券，平台券通过 scope 校验可见性。
+     * 批量加载模板信息避免 N+1 查询。
+     *
+     * @param tenantId       商户 ID
+     * @param platformUserId 平台用户 ID
+     * @param status         优惠券状态筛选（RECEIVED/LOCKED/USED/EXPIRED），可为 null
+     * @return 用户优惠券 VO 列表
+     */
     @Override
     public List<AppUserCouponVO> listUserCoupons(Long tenantId, Long platformUserId, String status) {
         List<UserCoupon> coupons = userCouponMapper.selectList(new LambdaQueryWrapper<UserCoupon>()
@@ -330,6 +419,14 @@ public class CouponServiceImpl implements CouponService {
         return coupon;
     }
 
+    /**
+     * C 端用户领取优惠券（带返回 VO 和行为日志记录）。
+     *
+     * @param couponTemplateId 优惠券模板 ID
+     * @param tenantId         商户 ID
+     * @param platformUserId   平台用户 ID
+     * @return 领取结果 VO，包含用户优惠券信息
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public AppCouponReceiveVO receiveCouponForApp(Long couponTemplateId, Long tenantId, Long platformUserId) {
@@ -355,6 +452,17 @@ public class CouponServiceImpl implements CouponService {
         return result;
     }
 
+    /**
+     * 解析优惠券折扣候选，供订单定价引擎使用。
+     * <p>
+     * 校验优惠券归属、状态、过期时间和适用范围后，计算适用商品金额并构建折扣候选 DTO。
+     *
+     * @param userCouponId   用户优惠券 ID，为 null 时返回 null
+     * @param tenantId       商户 ID
+     * @param platformUserId 平台用户 ID
+     * @param items          订单商品列表
+     * @return 优惠券折扣候选 DTO，优惠券不可用时返回 null
+     */
     @Override
     public CouponDiscountCandidateDTO resolveCouponCandidate(Long userCouponId,
                                                              Long tenantId,
@@ -525,6 +633,15 @@ public class CouponServiceImpl implements CouponService {
         publishCouponEvent("USED", coupon, bizNo, orderNo);
     }
 
+    /**
+     * 批量处理过期优惠券，将过期状态置为 EXPIRED。
+     *
+     * @param tenantId      商户 ID，为 null 时处理所有商户的过期券
+     * @param expireBefore  过期截止时间，为 null 时取当前时间
+     * @param bizNo         业务单号，用于事件追踪
+     * @param expireReason  过期原因
+     * @return 成功标记为过期的优惠券数量
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int expireCoupons(Long tenantId, LocalDateTime expireBefore, String bizNo, String expireReason) {
@@ -564,6 +681,14 @@ public class CouponServiceImpl implements CouponService {
         return expiredCount;
     }
 
+    /**
+     * 发布优惠券状态变更事件到 Outbox。
+     *
+     * @param eventType 事件类型（RECEIVED/LOCKED/RELEASED/USED/EXPIRED）
+     * @param coupon    用户优惠券实体
+     * @param bizNo     业务单号
+     * @param orderNo   订单号，可为 null
+     */
     private void publishCouponEvent(String eventType, UserCoupon coupon, String bizNo, String orderNo) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("bizType", COUPON_EVENT_BIZ_TYPE);
@@ -586,6 +711,7 @@ public class CouponServiceImpl implements CouponService {
                 .build());
     }
 
+    /** 解析优惠券事件的业务单号，优先使用入参 bizNo，否则使用优惠券编号。 */
     private String resolveCouponEventBizNo(String eventType, UserCoupon coupon, String bizNo) {
         if (bizNo != null && !bizNo.isBlank()) {
             return bizNo;
@@ -596,6 +722,7 @@ public class CouponServiceImpl implements CouponService {
         return "COUPON_" + eventType + "_" + coupon.getId();
     }
 
+    /** 校验优惠券模板创建参数合法性。 */
     private void validateTemplateCreate(CouponTemplateCreateDTO dto) {
         if (dto == null) {
             throw new BusinessException("优惠券模板不能为空");
@@ -625,6 +752,7 @@ public class CouponServiceImpl implements CouponService {
         validateCouponRule(couponType, dto);
     }
 
+    /** 校验优惠券模板是否满足激活条件（复用创建校验逻辑）。 */
     private void validateTemplateForActivation(CouponTemplate template) {
         CouponTemplateCreateDTO dto = new CouponTemplateCreateDTO();
         dto.setTenantId(template.getTenantId());
@@ -645,6 +773,7 @@ public class CouponServiceImpl implements CouponService {
         validateTemplateCreate(dto);
     }
 
+    /** 校验优惠券规则参数（满减/无门槛/折扣各自的约束条件）。 */
     private void validateCouponRule(CouponTypeEnum couponType, CouponTemplateCreateDTO dto) {
         BigDecimal thresholdAmount = defaultAmount(dto.getThresholdAmount());
         BigDecimal discountAmount = defaultAmount(dto.getDiscountAmount());
@@ -748,6 +877,7 @@ public class CouponServiceImpl implements CouponService {
         return coupon;
     }
 
+    /** 解析过期事件的业务单号，优先使用入参，否则生成 COUPON_EXPIRE_{id}。 */
     private String resolveExpireBizNo(String bizNo, UserCoupon coupon) {
         if (bizNo != null && !bizNo.isBlank()) {
             return bizNo;

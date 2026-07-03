@@ -1,17 +1,21 @@
 package com.payment.service.impl;
 
-import cn.dev33.satoken.stp.SaLoginModel;
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
+import com.payment.config.AuthStpKit;
+import com.payment.config.RbacPrincipalType;
 import com.payment.dto.LoginDTO;
 import com.payment.dto.MiniProgramUserVO;
 import com.payment.dto.WechatLoginDTO;
+import com.payment.entity.PlatformUser;
 import com.payment.entity.User;
+import com.payment.mapper.PlatformUserMapper;
+import com.payment.mapper.RoleMapper;
 import com.payment.mapper.UserMapper;
 import com.payment.mapper.UserRoleMapper;
 import com.payment.service.UserService;
+import com.payment.util.AuthLoginIdHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +23,8 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
+import java.util.List;
 
 /**
  * 用户服务实现类
@@ -29,6 +35,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Autowired
     private UserRoleMapper userRoleMapper;
+
+    @Autowired
+    private UserMapper userMapper;
+
+    @Autowired
+    private PlatformUserMapper platformUserMapper;
+
+    @Autowired
+    private RoleMapper roleMapper;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -47,48 +62,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             throw new BusinessException("用户名或密码错误");
         }
 
-        // Sa-Token 登录
-        StpUtil.login(user.getId());
-
-        // 存储用户信息到Session
-        StpUtil.getSession().set("user", user);
-        StpUtil.getSession().set("tenantId", user.getTenantId());
-        StpUtil.getSession().set("userType", user.getUserType());
-
-        // 返回Token
-        return StpUtil.getTokenValue();
+        AuthStpKit.PLATFORM.login(AuthLoginIdHelper.platform(user.getId()));
+        AuthStpKit.PLATFORM.getSession().set("user", user);
+        AuthStpKit.PLATFORM.getSession().set("tenantId", user.getTenantId());
+        AuthStpKit.PLATFORM.getSession().set("userType", user.getUserType());
+        AuthStpKit.PLATFORM.getSession().set("username", user.getUsername());
+        AuthStpKit.PLATFORM.getSession().set("platformUserId", user.getId());
+        AuthStpKit.PLATFORM.getSession().set("platformUsername", user.getUsername());
+        return AuthStpKit.PLATFORM.getTokenValue();
     }
 
     @Override
     public String loginadmin(LoginDTO dto){
-        User user = getByUsername(dto.getUsername());
-        if (user == null) {
+        PlatformUser admin = platformUserMapper.selectOne(new LambdaQueryWrapper<PlatformUser>()
+                .eq(PlatformUser::getUsername, dto.getUsername())
+                .eq(PlatformUser::getDeleted, 0));
+        if (admin == null) {
             throw new BusinessException("用户名或密码错误");
         }
-        if (user.getStatus() == 0) {
+        if (admin.getStatus() == null || admin.getStatus() == 0) {
             throw new BusinessException("用户已被禁用");
         }
-        if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(dto.getPassword(), admin.getPasswordHash())) {
             throw new BusinessException("用户名或密码错误");
         }
-        if (!user.getUserType().equals(2)){
+        List<String> roles = roleMapper.selectRoleCodesByPrincipal(admin.getId(), RbacPrincipalType.ADMIN);
+        if (roles == null || !roles.contains("admin")) {
             throw new BusinessException("用户权限不足,该用户不是管理员");
         }
 
-        // Sa-Token 登录
-        StpUtil.login(user.getId());
-
-        // 存储用户信息到Session
-        StpUtil.getSession().set("user", user);
-        StpUtil.getSession().set("tenantId", user.getTenantId());
-        StpUtil.getSession().set("userType", user.getUserType());
-
-        return StpUtil.getTokenValue();
+        AuthStpKit.ADMIN.login(AuthLoginIdHelper.admin(admin.getId()));
+        AuthStpKit.ADMIN.getSession().set("platformUser", admin);
+        AuthStpKit.ADMIN.getSession().set("userType", 2);
+        AuthStpKit.ADMIN.getSession().set("username", admin.getUsername());
+        AuthStpKit.ADMIN.getSession().set("userId", admin.getId());
+        AuthStpKit.ADMIN.getSession().set("platformUserId", admin.getId());
+        AuthStpKit.ADMIN.getSession().set("platformUsername", admin.getUsername());
+        return AuthStpKit.ADMIN.getTokenValue();
     }
 
     @Override
     public User getByUsername(String username) {
-        // 多租户环境下，需要同时匹配用户名和租户ID
         Long tenantId = com.payment.util.TenantContextHolder.getTenantId();
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, username)
@@ -98,57 +112,47 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         return getOne(wrapper);
     }
-    
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public User register(User user) {
-        // 检查用户名是否已存在
         User existUser = getByUsername(user.getUsername());
         if (existUser != null) {
             throw new BusinessException("用户名已存在");
         }
 
-        // 加密密码
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        user.setUserType(1); // 普通用户
-        user.setStatus(1); // 启用
+        user.setUserType(1);
+        user.setStatus(1);
 
         save(user);
 
-        // 分配默认角色: user (role_id = 1)
-        userRoleMapper.insertUserRole(user.getId(), 1L);
+        userRoleMapper.insertUserRole(com.payment.config.RbacPrincipalType.PLATFORM, user.getId(), 1L);
         log.info("用户注册成功，已分配默认角色: userId={}, roleId=1", user.getId());
 
         return user;
     }
-    
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public MiniProgramUserVO wechatLogin(WechatLoginDTO dto) {
-        // TODO: 实际项目中需要调用微信API验证code并获取openid
-        // 这里简化处理，使用code作为唯一标识
         String openid = "wx_" + dto.getCode();
-        
-        // 查询用户是否已存在
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, openid)
                 .eq(User::getDeleted, 0);
         User user = getOne(wrapper);
-        
-        // 如果用户不存在，自动注册
+
         if (user == null) {
             user = new User();
             user.setUsername(openid);
-            user.setPassword(passwordEncoder.encode(openid)); // 使用openid作为密码
+            user.setPassword(passwordEncoder.encode(openid));
             user.setNickname(StringUtils.hasText(dto.getNickname()) ? dto.getNickname() : "微信用户");
             user.setAvatar(dto.getAvatar());
             user.setPhone(dto.getPhone());
-            user.setUserType(1); // 普通用户
-            user.setStatus(1); // 启用
-            // 注意：小程序用户可能没有租户ID，或者根据业务逻辑设置默认租户
+            user.setUserType(1);
+            user.setStatus(1);
             save(user);
         } else {
-            // 更新用户信息
             if (StringUtils.hasText(dto.getNickname())) {
                 user.setNickname(dto.getNickname());
             }
@@ -161,23 +165,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             updateById(user);
         }
 
-        // Sa-Token 登录
-        StpUtil.login(user.getId());
+        AuthStpKit.PLATFORM.login(AuthLoginIdHelper.platform(user.getId()));
+        AuthStpKit.PLATFORM.getSession().set("user", user);
+        AuthStpKit.PLATFORM.getSession().set("tenantId", user.getTenantId());
+        AuthStpKit.PLATFORM.getSession().set("userType", user.getUserType());
+        AuthStpKit.PLATFORM.getSession().set("username", user.getUsername());
+        AuthStpKit.PLATFORM.getSession().set("platformUserId", user.getId());
+        AuthStpKit.PLATFORM.getSession().set("platformUsername", user.getUsername());
 
-        // 存储用户信息到Session
-        StpUtil.getSession().set("user", user);
-        StpUtil.getSession().set("tenantId", user.getTenantId());
-        StpUtil.getSession().set("userType", user.getUserType());
-
-        // 获取Token
-        String token = StpUtil.getTokenValue();
-
-        // 构造返回对象
         MiniProgramUserVO userVO = new MiniProgramUserVO();
         BeanUtils.copyProperties(user, userVO);
-        userVO.setToken(token);
+        userVO.setToken(AuthStpKit.PLATFORM.getTokenValue());
 
         return userVO;
     }
 }
-

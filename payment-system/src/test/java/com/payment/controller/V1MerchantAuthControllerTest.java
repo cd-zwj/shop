@@ -45,7 +45,7 @@ class V1MerchantAuthControllerTest {
         tenantVO.setTenantName("测试商户");
         tenantVO.setEmployeeRole("OWNER");
 
-        when(platformIdentityService.login(any())).thenReturn("merchant-token-123");
+        when(platformIdentityService.authenticate(any())).thenReturn(user);
         when(platformIdentityService.getCurrentUser()).thenReturn(user);
         when(merchantSupportService.listActiveEmployees(100L)).thenReturn(List.of(employee));
         when(merchantSupportService.listAccessibleTenants(100L)).thenReturn(List.of(tenantVO));
@@ -70,7 +70,7 @@ class V1MerchantAuthControllerTest {
 
         verify(authCaptchaService).validateCaptcha("captcha-key", "ABCD");
         ArgumentCaptor<PlatformLoginRequest> captor = ArgumentCaptor.forClass(PlatformLoginRequest.class);
-        verify(platformIdentityService).login(captor.capture());
+        verify(platformIdentityService).authenticate(captor.capture());
         assertEquals("merchant_user", captor.getValue().principal());
         assertEquals("password123", captor.getValue().credential());
     }

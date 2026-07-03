@@ -10,8 +10,8 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 订单交付记录。
- *
+ * 订单交付记录，对应数据库表 order_delivery_record。
+ * <p>
  * 所有商品类型共用一张表，{@code payload} 按 {@code productType} 解读：
  * <ul>
  *   <li>VIRTUAL：{"contentUrl":"...","accountInfo":"..."}</li>
@@ -26,13 +26,26 @@ import java.time.LocalDateTime;
 public class OrderDeliveryRecord implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** 主键 ID，自增 */
     @TableId(type = IdType.AUTO)
     private Long id;
+
+    /** 租户 ID，多租户行级隔离字段 */
     private Long tenantId;
+
+    /** 所属订单 ID，关联 sales_order.id */
     private Long orderId;
+
+    /** 所属订单编号，冗余字段便于查询 */
     private String orderNo;
+
+    /** 所属订单明细项 ID，关联 sales_order_item.id */
     private Long orderItemId;
+
+    /** 交付目标用户 ID，关联 platform_user 表 */
     private Long platformUserId;
+
+    /** 商品 ID，关联 product 表 */
     private Long productId;
 
     /** 商品类型，决定 payload 的解读方式 */
@@ -44,16 +57,31 @@ public class OrderDeliveryRecord implements Serializable {
     /** JSON 交付内容，按 productType 解读 */
     private String payload;
 
+    /** 交付失败原因，交付状态为 FAILED 时记录具体失败信息 */
     private String failReason;
+
+    /** 交付重试次数，每次重试递增 */
     private Integer retryCount;
+
+    /** 交付完成时间，状态变为 DELIVERED 时记录 */
     private LocalDateTime deliveredTime;
+
+    /** 用户确认收货时间，状态变为 CONFIRMED 时记录 */
     private LocalDateTime confirmedTime;
+
+    /** 交付内容过期时间，适用于虚拟商品、卡密等有时效性的商品 */
     private LocalDateTime expireTime;
+
+    /** 交付撤销时间，状态变为 REVOKED 时记录（如退款后回收权益） */
     private LocalDateTime revokedTime;
 
+    /** 逻辑删除标记，0-未删除，1-已删除 */
     @TableLogic
     private Integer deleted;
 
+    /** 记录创建时间 */
     private LocalDateTime createTime;
+
+    /** 记录最后更新时间 */
     private LocalDateTime updateTime;
 }

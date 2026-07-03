@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
+import com.payment.config.AuthStpKit;
 import com.payment.dto.AnalysisRequestDTO;
 import com.payment.entity.DataAnalysisResult;
 import com.payment.service.DataAnalysisService;
@@ -24,7 +25,7 @@ import java.util.List;
 @Profile({"dev", "test"})
 @RestController
 @RequestMapping("/analysis")
-@SaCheckLogin  // 整个Controller都需要认证
+@SaCheckLogin(type = AuthStpKit.MERCHANT_TYPE)
 public class DataAnalysisController {
     
     @Autowired

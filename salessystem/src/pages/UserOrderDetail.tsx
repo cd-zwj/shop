@@ -16,7 +16,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { appOrderService } from '../services/modules/appOrder';
 import { ApiError } from '../types/api';
-import type { SalesOrderDetail } from '../types/order';
+import type { SalesOrderDetail, SalesOrderItem } from '../types/order';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
@@ -224,22 +224,20 @@ export default function UserOrderDetail() {
             <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
               <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-slate-400">商品清单</h3>
               <div className="flex flex-col gap-6">
-                {(isLoading ? Array.from({ length: 2 }) : detail?.items || []).map((item, index) => {
-                  const isData = typeof item === 'object';
-                  return (
-                    <div key={isData ? item.id : index} className="group flex gap-4">
+                {(isLoading ? Array.from<SalesOrderItem | undefined>({ length: 2 }) : detail?.items || []).map((item, index) => {                  return (
+                    <div key={item ? item.id : index} className="group flex gap-4">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                         <Package className="h-8 w-8 text-slate-300" />
                       </div>
                       <div className="flex flex-1 flex-col justify-center">
                         <h4 className="font-black leading-tight text-slate-900">
-                          {isData ? item.productName : '加载商品中...'}
+                          {item ? item.productName : '加载商品中...'}
                         </h4>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-sm font-black text-primary">
-                            {isData ? formatCurrency(item.subtotal) : '...'}
+                            {item ? formatCurrency(item.subtotal) : '...'}
                           </span>
-                          <span className="text-xs font-bold text-slate-400">x {isData ? item.quantity : '--'}</span>
+                          <span className="text-xs font-bold text-slate-400">x {item ? item.quantity : '--'}</span>
                         </div>
                       </div>
                     </div>

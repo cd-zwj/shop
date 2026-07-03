@@ -8,6 +8,7 @@ import com.payment.mapper.TenantMapper;
 import com.payment.service.AppCatalogService;
 import com.payment.service.ProductSearchService;
 import com.payment.service.UserBehaviorLogService;
+import com.payment.util.TenantContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,25 +47,22 @@ public class AppCatalogServiceImpl implements AppCatalogService {
 
     @Override
     public List<Product> listTenantProducts(Long tenantId) {
-        return productMapper.selectList(new LambdaQueryWrapper<Product>()
+        return withTenantContext(tenantId, () -> productMapper.selectList(new LambdaQueryWrapper<Product>()
                 .eq(Product::getTenantId, tenantId)
                 .eq(Product::getDeleted, 0)
                 .eq(Product::getStatus, 1)
-                .orderByDesc(Product::getCreateTime));
+                .orderByDesc(Product::getCreateTime)));
     }
 
     @Override
     public List<Product> searchTenantProducts(String keyword, Long tenantId) {
-        return productSearchService.searchProducts(keyword, tenantId);
+        return withTenantContext(tenantId, () -> productSearchService.searchProducts(keyword, tenantId));
     }
 
     @Override
     public Product getProductAndRecordView(Long productId) {
         // C 端详情仅返回上架且未删除的商品；下架/删除商品返回 null，避免按 ID 绕过列表过滤
-        Product product = productMapper.selectOne(new LambdaQueryWrapper<Product>()
-                .eq(Product::getId, productId)
-                .eq(Product::getStatus, 1)
-                .eq(Product::getDeleted, 0));
+        Product product = productMapper.selectVisibleAppProductById(productId);
         // 记录商品浏览行为（埋点失败不影响主流程）
         try {
             if (product != null) {
@@ -76,5 +74,18 @@ public class AppCatalogServiceImpl implements AppCatalogService {
             log.warn("记录 VIEW 行为日志失败, productId={}", productId, e);
         }
         return product;
+    }
+
+    private <T> T withTenantContext(Long tenantId, java.util.function.Supplier<T> supplier) {
+        Long previousTenantId = TenantContextHolder.getTenantId();
+        try {
+            TenantContextHolder.setTenantId(tenantId);
+            return supplier.get();
+        } finally {
+            TenantContextHolder.clear();
+            if (previousTenantId != null) {
+                TenantContextHolder.setTenantId(previousTenantId);
+            }
+        }
     }
 }

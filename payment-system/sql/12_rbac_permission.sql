@@ -28,11 +28,12 @@ CREATE TABLE IF NOT EXISTS sys_permission (
 -- 用户-角色关联表
 CREATE TABLE IF NOT EXISTS sys_user_role (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    principal_type VARCHAR(32) NOT NULL DEFAULT 'platform' COMMENT '账号体系: admin, merchant, platform',
     user_id BIGINT NOT NULL COMMENT '用户ID',
     role_id BIGINT NOT NULL COMMENT '角色ID',
     create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_role (user_id, role_id),
-    KEY idx_user_id (user_id),
+    UNIQUE KEY uk_user_role (principal_type, user_id, role_id),
+    KEY idx_user_id (principal_type, user_id),
     KEY idx_role_id (role_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户角色关联表';
 
@@ -191,16 +192,15 @@ SELECT 3, id FROM sys_permission WHERE permission_code IN
 -- userType: 1=普通用户, 2=管理员, 3=商家
 -- =============================================
 -- 给现有普通用户分配用户角色
-INSERT INTO sys_user_role (user_id, role_id)
-SELECT id, 1 FROM sys_user WHERE user_type = 1 AND deleted = 0;
+INSERT INTO sys_user_role (principal_type, user_id, role_id)
+SELECT 'platform', id, 1 FROM sys_user WHERE user_type = 1 AND deleted = 0;
 
--- 给现有管理员分配管理员角色
-INSERT INTO sys_user_role (user_id, role_id)
-SELECT id, 3 FROM sys_user WHERE user_type = 2 AND deleted = 0;
+-- 管理端管理员角色由后续 platform_user 初始化脚本授予。
+-- Admin Sa-Token loginId 使用 admin:<platform_user.id>，不再使用 sys_user.id。
 
 -- 如果有商家用户 (假设 userType=3 是商家)
--- INSERT INTO sys_user_role (user_id, role_id)
--- SELECT id, 2 FROM sys_user WHERE user_type = 3 AND deleted = 0;
+-- INSERT INTO sys_user_role (principal_type, user_id, role_id)
+-- SELECT 'merchant', id, 2 FROM sys_user WHERE user_type = 3 AND deleted = 0;
 
 -- =============================================
 -- v1 绠＄悊绔渶灏忛棴鐜ˉ鍏呮潈闄?

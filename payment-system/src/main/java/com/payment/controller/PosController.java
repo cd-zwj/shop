@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
+import com.payment.config.AuthStpKit;
 import com.payment.entity.PaymentOrder;
 import com.payment.service.ScanService;
 import com.payment.util.TenantContextHolder;
@@ -36,7 +37,7 @@ public class PosController {
     /**
      * 添加商品到购物车
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @PostMapping("/cart/{sessionId}/add")
     public Result<Void> addToCart(
             @PathVariable String sessionId,
@@ -61,7 +62,7 @@ public class PosController {
     /**
      * 移除购物车中的商品
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @DeleteMapping("/cart/{sessionId}/remove/{productId}")
     public Result<Void> removeFromCart(
             @PathVariable String sessionId,
@@ -78,7 +79,7 @@ public class PosController {
     /**
      * 更新购物车商品数量
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @PutMapping("/cart/{sessionId}/update")
     public Result<Void> updateCartQuantity(
             @PathVariable String sessionId,
@@ -98,7 +99,7 @@ public class PosController {
     /**
      * 查询购物车
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @GetMapping("/cart/{sessionId}")
     public Result<List<Map<String, Object>>> getCart(@PathVariable String sessionId) {
         try {
@@ -113,7 +114,7 @@ public class PosController {
     /**
      * 清空购物车
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @DeleteMapping("/cart/{sessionId}")
     public Result<Void> clearCart(@PathVariable String sessionId) {
         try {
@@ -128,7 +129,7 @@ public class PosController {
     /**
      * 结账（创建订单）
      */
-    @SaCheckPermission("pos:checkout")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "pos:checkout")
     @PostMapping("/checkout/{sessionId}")
     public Result<PaymentOrder> checkout(@PathVariable String sessionId) {
         try {

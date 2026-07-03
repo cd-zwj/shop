@@ -24,16 +24,40 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 卡密池管理服务实现类。
+ * <p>
+ * 负责虚拟商品（游戏卡密、礼品卡等）的卡密库存全生命周期管理，包括：
+ * <ul>
+ *   <li>商户批量上传卡密到库存池</li>
+ *   <li>分页查询卡密列表及状态汇总</li>
+ *   <li>订单交付时以 CAS 乐观方式锁定卡密，保障并发安全</li>
+ *   <li>退款或取消时归还已使用的卡密</li>
+ * </ul>
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CardKeyPoolServiceImpl implements CardKeyPoolService {
 
+    /** 锁定卡密时的最大重试次数，用于处理 CAS 并发冲突 */
     private static final int MAX_LOCK_RETRY = 3;
 
     private final CardKeyPoolMapper cardKeyPoolMapper;
     private final ProductMapper productMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
 
+    /**
+     * 分页查询商户某商品下的卡密列表。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 当前操作用户ID，用于校验商户员工身份
+     * @param productId      商品ID，必须为卡密类型商品
+     * @param current        当前页码
+     * @param size           每页条数
+     * @param status         可选状态筛选（AVAILABLE / USED / RETURNED / DISABLED）
+     * @return 分页后的卡密视图对象
+     */
     @Override
     public Page<V1MerchantCardKeyVO> listMerchantCardKeys(Long tenantId, Long platformUserId, Long productId,
                                                           Integer current, Integer size, String status) {

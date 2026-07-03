@@ -22,10 +22,15 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 会员成长值服务实现类。
+ * 会员成长值服务实现类，负责会员成长值的增减、等级升降级及有效期管理。
  * <p>
- * 成长值总额通过 member_growth_log 聚合计算，暂不引入额外汇总表。
- * 等级信息存储在 tenant_member.member_level 字段（若已有），member_level 表存储等级定义。
+ * 核心职责：
+ * <ul>
+ *     <li>成长值增加/扣减，每次变动写入成长值流水日志</li>
+ *     <li>成长值总额通过 member_growth_log 聚合计算（SUM），暂不引入额外汇总表</li>
+ *     <li>成长值变动后自动触发等级升降级检查，支持等级有效期保护</li>
+ *     <li>等级信息存储在 tenant_member.member_level 字段，member_level 表存储等级定义</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -38,6 +43,20 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
     private final MemberLevelMapper memberLevelMapper;
     private final TenantMemberMapper tenantMemberMapper;
 
+    /**
+     * 增加会员成长值。
+     * <p>
+     * 流程：校验增长量 > 0 → 计算变动前后的成长值总额 → 写入成长值日志（EARN 类型）→ 自动检查是否满足升级条件。
+     * 在同一事务中完成，保证日志写入与升级检查的原子性。
+     *
+     * @param platformUserId 全局平台用户ID
+     * @param tenantId       租户ID
+     * @param growthAmount   增加的成长值数量，必须大于0
+     * @param sourceType     来源业务类型（如 ORDER、SIGN_IN 等）
+     * @param sourceBizNo    来源业务单号
+     * @param description    变动说明/备注
+     * @throws BusinessException 当增长量不大于0时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addGrowth(Long platformUserId, Long tenantId, int growthAmount,
@@ -69,6 +88,20 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
         checkAndUpgradeLevel(platformUserId, tenantId);
     }
 
+    /**
+     * 扣减会员成长值。
+     * <p>
+     * 流程：校验扣减量 > 0 → 校验成长值余额充足 → 计算变动前后总额 → 写入成长值日志（DEDUCT 类型）→ 自动检查是否需要降级。
+     * 扣减后触发等级调整检查，确保等级与当前成长值匹配。
+     *
+     * @param platformUserId 全局平台用户ID
+     * @param tenantId       租户ID
+     * @param growthAmount   扣减的成长值数量，必须大于0且不超过当前总额
+     * @param sourceType     来源业务类型（如 REFUND 等）
+     * @param sourceBizNo    来源业务单号
+     * @param description    变动说明/备注
+     * @throws BusinessException 当扣减量不大于0或成长值余额不足时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deductGrowth(Long platformUserId, Long tenantId, int growthAmount,
@@ -102,6 +135,16 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
         checkAndAdjustLevel(platformUserId, tenantId);
     }
 
+    /**
+     * 查询指定用户在指定租户下的成长值总额。
+     * <p>
+     * 通过 SQL SUM 聚合 member_growth_log 表计算，避免将全量记录拉取到内存。
+     * 若无记录则返回 0。
+     *
+     * @param platformUserId 全局平台用户ID
+     * @param tenantId       租户ID
+     * @return 成长值总额（所有增加 - 所有扣减）
+     */
     @Override
     public int getTotalGrowth(Long platformUserId, Long tenantId) {
         // SQL SUM 聚合，避免全量拉取记录到内存

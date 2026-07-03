@@ -385,7 +385,7 @@ class RefundApplicationServiceImplTest {
 
         service.completeRefund(TENANT_ID, 1L);
 
-        verify(refundMapper, never()).updateById(any());
+        verify(refundMapper, never()).updateById(any(RefundApplication.class));
         verify(pointsService, never()).refundPoints(anyLong(), anyLong(), any(), any(), any());
         verify(deliveryService, never()).revokeByOrderNo(any());
     }

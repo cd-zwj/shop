@@ -32,6 +32,20 @@ import java.util.stream.Collectors;
 
 /**
  * 营销活动服务实现类。
+ * <p>
+ * 负责营销活动（PromotionActivity）及其规则（ActivityRule）的全生命周期管理，
+ * 包括活动的创建、查询、激活、停用，以及规则的添加与校验。
+ * 同时提供订单级别的促销匹配能力，根据活动规则计算满减、折扣等优惠候选，
+ * 供计价引擎选择最优优惠方案。
+ * </p>
+ * <p>
+ * 业务约束：活动规则类型必须与活动类型一致；满减规则门槛和优惠金额必须为正数；
+ * 折扣比例必须在 (0, 1) 区间内。激活活动前必须至少存在一条有效规则。
+ * </p>
+ *
+ * @see PromotionService
+ * @see PromotionActivity
+ * @see ActivityRule
  */
 @Service
 @RequiredArgsConstructor
@@ -44,6 +58,13 @@ public class PromotionServiceImpl implements PromotionService {
     private final PromotionActivityMapper promotionActivityMapper;
     private final ActivityRuleMapper activityRuleMapper;
 
+    /**
+     * 查询指定商户的营销活动列表。
+     *
+     * @param tenantId 商户ID，不能为空且必须大于0
+     * @param status   活动状态过滤条件，为 null 时不过滤
+     * @return 商户活动列表，按创建时间倒序排列；无数据时返回空列表
+     */
     @Override
     public List<PromotionActivity> listActivities(Long tenantId, String status) {
         if (tenantId == null || tenantId <= 0) {
@@ -58,6 +79,12 @@ public class PromotionServiceImpl implements PromotionService {
         return activities == null ? Collections.emptyList() : activities;
     }
 
+    /**
+     * 查询平台级别的营销活动列表。
+     *
+     * @param status 活动状态过滤条件，为 null 时不过滤
+     * @return 平台活动列表，按创建时间倒序排列；无数据时返回空列表
+     */
     @Override
     public List<PromotionActivity> listPlatformActivities(String status) {
         List<PromotionActivity> activities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
@@ -68,6 +95,14 @@ public class PromotionServiceImpl implements PromotionService {
         return activities == null ? Collections.emptyList() : activities;
     }
 
+    /**
+     * 查询指定商户活动下的规则列表。
+     *
+     * @param activityId 活动ID
+     * @param tenantId   商户ID，用于校验活动归属
+     * @return 规则列表，按优先级倒序排列；无数据时返回空列表
+     * @throws BusinessException 活动不存在或不属于当前商户时抛出
+     */
     @Override
     public List<ActivityRule> listRules(Long activityId, Long tenantId) {
         PromotionActivity activity = requireActivity(activityId);
@@ -81,6 +116,13 @@ public class PromotionServiceImpl implements PromotionService {
         return rules == null ? Collections.emptyList() : rules;
     }
 
+    /**
+     * 查询平台级别活动的规则列表。
+     *
+     * @param activityId 活动 ID
+     * @return 规则列表，按优先级倒序排列；无数据时返回空列表
+     * @throws BusinessException 活动不存在或不是平台活动时抛出
+     */
     @Override
     public List<ActivityRule> listPlatformRules(Long activityId) {
         PromotionActivity activity = requireActivity(activityId);
@@ -94,6 +136,15 @@ public class PromotionServiceImpl implements PromotionService {
         return rules == null ? Collections.emptyList() : rules;
     }
 
+    /**
+     * 创建营销活动。
+     * <p>
+     * 校验活动参数合法性后创建草稿状态的活动记录。平台活动不需要绑定商户。
+     *
+     * @param dto 活动创建 DTO，包含活动名称、类型、时间窗口、归属类型等
+     * @return 新创建的活动实体（状态为 DRAFT）
+     * @throws BusinessException 参数校验失败时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public PromotionActivity createActivity(PromotionActivityCreateDTO dto) {
@@ -116,6 +167,16 @@ public class PromotionServiceImpl implements PromotionService {
         return activity;
     }
 
+    /**
+     * 为营销活动添加规则。
+     * <p>
+     * 校验活动存在性和归属后，校验规则类型与活动类型一致性，
+     * 然后校验规则参数合法性（满减需正数门槛和金额，折扣比例在 0~1 之间）。
+     *
+     * @param dto 规则创建 DTO，包含活动 ID、规则类型、门槛金额、折扣金额/比例等
+     * @return 新创建的活动规则实体
+     * @throws BusinessException 规则类型不匹配或参数不合法时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ActivityRule addRule(ActivityRuleCreateDTO dto) {
@@ -144,6 +205,14 @@ public class PromotionServiceImpl implements PromotionService {
         return rule;
     }
 
+    /**
+     * 激活营销活动。
+     * <p>
+     * 校验活动时间窗口和至少存在一条有效规则后，将状态从 DRAFT 变更为 ACTIVE。
+     *
+     * @param activityId 活动 ID
+     * @throws BusinessException 活动时间无效或无规则时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void activateActivity(Long activityId) {
@@ -161,6 +230,11 @@ public class PromotionServiceImpl implements PromotionService {
         promotionActivityMapper.updateById(activity);
     }
 
+    /**
+     * 停用营销活动，将状态变更为 DISABLED。
+     *
+     * @param activityId 活动 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void disableActivity(Long activityId) {
@@ -170,6 +244,16 @@ public class PromotionServiceImpl implements PromotionService {
         promotionActivityMapper.updateById(activity);
     }
 
+    /**
+     * 匹配订单适用的促销活动优惠候选列表。
+     * <p>
+     * 查询当前生效的活动（平台级 + 当前商户级），批量加载规则消除 N+1 查询，
+     * 逐活动按规则优先级匹配订单商品，返回满足门槛的优惠候选列表供计价引擎选择最优方案。
+     *
+     * @param tenantId 租户 ID
+     * @param items    订单商品列表
+     * @return 可用的促销优惠候选列表，无匹配时返回空列表
+     */
     @Override
     public List<PromotionDiscountCandidateDTO> matchPromotions(Long tenantId, List<OrderPricingItemDTO> items) {
         List<PromotionActivity> activities = listActiveActivities(tenantId);
@@ -189,6 +273,7 @@ public class PromotionServiceImpl implements PromotionService {
                 .collect(Collectors.toList());
     }
 
+    /** 校验营销活动创建参数合法性。 */
     private void validateActivityCreate(PromotionActivityCreateDTO dto) {
         if (dto == null) {
             throw new BusinessException("营销活动不能为空");
@@ -204,6 +289,7 @@ public class PromotionServiceImpl implements PromotionService {
         validateActivityWindow(dto.getStartTime(), dto.getEndTime());
     }
 
+    /** 校验活动时间窗口合法性。 */
     private void validateActivityWindow(LocalDateTime startTime, LocalDateTime endTime) {
         if (startTime == null || endTime == null) {
             throw new BusinessException("营销活动时间不能为空");
@@ -213,6 +299,7 @@ public class PromotionServiceImpl implements PromotionService {
         }
     }
 
+    /** 校验活动规则参数（满减门槛/金额或折扣比例）。 */
     private void validateRule(ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
         if (ruleType == ActivityTypeEnum.FULL_REDUCTION) {
             if (safe(dto.getThresholdAmount()).compareTo(BigDecimal.ZERO) <= 0
@@ -231,6 +318,13 @@ public class PromotionServiceImpl implements PromotionService {
         throw new BusinessException("当前活动规则暂不支持自动计算");
     }
 
+    /**
+     * 根据活动 ID 查询活动实体。
+     *
+     * @param activityId 活动 ID
+     * @return 活动实体
+     * @throws BusinessException 活动不存在或 ID 非法时抛出
+     */
     private PromotionActivity requireActivity(Long activityId) {
         if (activityId == null || activityId <= 0) {
             throw new BusinessException("营销活动ID不能为空");
@@ -253,6 +347,12 @@ public class PromotionServiceImpl implements PromotionService {
         }
     }
 
+    /**
+     * 查询当前生效的活动列表（平台级 + 当前商户级）。
+     *
+     * @param tenantId 租户 ID
+     * @return 在有效时间窗口内的 ACTIVE 状态活动列表
+     */
     private List<PromotionActivity> listActiveActivities(Long tenantId) {
         LocalDateTime now = LocalDateTime.now();
         List<PromotionActivity> activities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
@@ -269,6 +369,13 @@ public class PromotionServiceImpl implements PromotionService {
         return activities == null ? Collections.emptyList() : activities;
     }
 
+    /**
+     * 匹配单个活动的最优规则（按优先级排序，取第一个满足门槛的）。
+     *
+     * @param activity 活动实体
+     * @param items    订单商品列表
+     * @return 最优优惠候选，无匹配时返回 null
+     */
     private PromotionDiscountCandidateDTO matchActivity(PromotionActivity activity, List<OrderPricingItemDTO> items) {
         List<ActivityRule> rules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
                 .eq(ActivityRule::getActivityId, activity.getId())
@@ -277,6 +384,14 @@ public class PromotionServiceImpl implements PromotionService {
         return matchActivityWithRules(activity, rules == null ? Collections.emptyList() : rules, items);
     }
 
+    /**
+     * 使用预加载的规则列表匹配活动的最优优惠候选。
+     *
+     * @param activity 活动实体
+     * @param rules    活动规则列表（按优先级降序）
+     * @param items    订单商品列表
+     * @return 最优优惠候选，无匹配时返回 null
+     */
     private PromotionDiscountCandidateDTO matchActivityWithRules(PromotionActivity activity,
                                                                   List<ActivityRule> rules,
                                                                   List<OrderPricingItemDTO> items) {

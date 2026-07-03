@@ -121,38 +121,36 @@ export default function AdminRecharges() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 5 }) : orders).map((order, index) => {
-                const isData = typeof order === 'object';
-                return (
-                  <tr key={isData ? order.rechargeNo : index} className="transition-colors hover:bg-slate-50/50">
+              {(isLoading ? Array.from<AdminRechargeOrder | undefined>({ length: 5 }) : orders).map((order, index) => {                return (
+                  <tr key={order ? order.rechargeNo : index} className="transition-colors hover:bg-slate-50/50">
                     <td className="px-8 py-6">
-                      <p className="text-sm font-black text-slate-900">{isData ? order.rechargeNo : '加载中...'}</p>
+                      <p className="text-sm font-black text-slate-900">{order ? order.rechargeNo : '加载中...'}</p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        {isData ? formatDateTime(order.createTime) : '--'}
+                        {order ? formatDateTime(order.createTime) : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-medium text-slate-700">
-                        walletType {isData ? order.walletType || '--' : '--'}
+                        walletType {order ? order.walletType || '--' : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        tenantId {isData ? order.tenantId ?? '--' : '--'} · userId {isData ? order.platformUserId ?? '--' : '--'}
+                        tenantId {order ? order.tenantId ?? '--' : '--'} · userId {order ? order.platformUserId ?? '--' : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-slate-900">
-                        充值 {isData ? formatCurrency(order.rechargeAmount) : '--'}
+                        充值 {order ? formatCurrency(order.rechargeAmount) : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        送余额 {isData ? formatCurrency(order.giftAmount) : '--'} · 送积分 {isData ? order.giftPoints : '--'}
+                        送余额 {order ? formatCurrency(order.giftAmount) : '--'} · 送积分 {order ? order.giftPoints : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-black text-primary">
-                        {isData ? formatCurrency(order.actualCreditAmount) : '--'}
+                        {order ? formatCurrency(order.actualCreditAmount) : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        状态 {isData ? order.bizStatus || '--' : '--'}
+                        状态 {order ? order.bizStatus || '--' : '--'}
                       </p>
                     </td>
                   </tr>

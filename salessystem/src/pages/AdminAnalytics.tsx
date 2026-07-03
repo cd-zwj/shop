@@ -359,7 +359,7 @@ export default function AdminAnalytics() {
           : metrics.map((item, i) => (
               <motion.div
                 key={i}
-                whileHover={{ y: -4, shadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)' }}
+                whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)' }}
                 className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm flex items-center gap-6 group cursor-pointer"
               >
                 <div className={cn('w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center transition-all group-hover:scale-110 shadow-inner', item.color)}>

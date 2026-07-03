@@ -1,6 +1,5 @@
 package com.payment.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
@@ -56,14 +55,13 @@ class V1AppCatalogIntegrationTest {
     private Product product1;
     private Product product2;
     private Product product3;
+    private String token;
 
     @BeforeEach
     void setUp() {
         // 模拟登录态（浏览接口需要登录）
-        try {
-            StpUtil.login(1L);
-        } catch (Exception ignored) {
-        }
+        token = SaTokenTestSupport.loginPlatformUser(1L);
+
 
         tenantA = buildTenant(1L, "T001", "测试商户A", 1, 0);
         tenantB = buildTenant(2L, "T002", "测试商户B", 1, 0);
@@ -89,7 +87,7 @@ class V1AppCatalogIntegrationTest {
                     .thenReturn(List.of(tenantA, tenantB));
 
             mockMvc.perform(get("/v1/app/tenants")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.message").value("操作成功"))
@@ -109,7 +107,7 @@ class V1AppCatalogIntegrationTest {
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/v1/app/tenants")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data", hasSize(0)));
@@ -118,10 +116,7 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("未登录访问商户列表应返回401")
         void listTenants_未登录_返回401() throws Exception {
-            try {
-                StpUtil.logout();
-            } catch (Exception ignored) {
-            }
+            SaTokenTestSupport.logoutPlatformUser();
 
             mockMvc.perform(get("/v1/app/tenants"))
                     .andExpect(status().isOk())
@@ -142,7 +137,7 @@ class V1AppCatalogIntegrationTest {
             when(tenantMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(tenantA);
 
             mockMvc.perform(get("/v1/app/tenants/1")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -159,7 +154,7 @@ class V1AppCatalogIntegrationTest {
             when(tenantMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
             mockMvc.perform(get("/v1/app/tenants/999")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data").doesNotExist());
@@ -179,7 +174,7 @@ class V1AppCatalogIntegrationTest {
                     .thenReturn(List.of(product1, product2));
 
             mockMvc.perform(get("/v1/app/tenants/1/products")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data", hasSize(2)))
@@ -196,7 +191,7 @@ class V1AppCatalogIntegrationTest {
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/v1/app/tenants/1/products")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data", hasSize(0)));
@@ -216,7 +211,7 @@ class V1AppCatalogIntegrationTest {
             when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(product1);
 
             mockMvc.perform(get("/v1/app/products/1")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data.id").value(1))
@@ -234,7 +229,7 @@ class V1AppCatalogIntegrationTest {
             when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
 
             mockMvc.perform(get("/v1/app/products/999")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.data").doesNotExist());

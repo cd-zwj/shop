@@ -237,7 +237,7 @@ function MetricCard({
 }) {
   return (
     <motion.div
-      whileHover={{ y: -4, shadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)' }}
+      whileHover={{ y: -4, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.05)' }}
       className="flex flex-1 items-center justify-between rounded-3xl border border-slate-100 bg-white p-6 shadow-lg shadow-slate-200/40"
     >
       <div>

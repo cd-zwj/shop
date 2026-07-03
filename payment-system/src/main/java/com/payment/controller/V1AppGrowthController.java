@@ -14,7 +14,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * v1 用户端成长值接口。
+ * C端用户成长值控制器。
+ * <p>
+ * 提供会员成长值概览查询和成长值变动日志查询接口。
+ * 成长值是用户在指定商户下的会员等级提升依据，消费、签到等行为可获得成长值。
+ * <p>
+ * 路径前缀：/v1/app/tenants/{tenantId}/growth，需要platform用户登录。
+ *
+ * @author payment-system
  */
 @RestController
 @RequestMapping("/v1/app/tenants/{tenantId}/growth")
@@ -24,9 +31,15 @@ public class V1AppGrowthController {
     private final MemberGrowthService memberGrowthService;
 
     /**
-     * 查询当前成长值概览（总额 + 等级 + 下一级阈值）。
+     * 查询当前用户成长值概览。
+     * <p>
+     * 获取当前用户在指定商户下的成长值总额、当前会员等级、
+     * 升级到下一等级所需的成长值阈值等信息。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @return 成长值账户概览信息
      */
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping
     public Result<MemberGrowthAccountVO> getGrowthAccount(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
@@ -35,9 +48,17 @@ public class V1AppGrowthController {
     }
 
     /**
-     * 分页查询成长值变动日志。
+     * 查询成长值变动日志。
+     * <p>
+     * 分页查询当前用户在指定商户下的成长值变动记录，
+     * 包括消费获得、签到获得、等级调整等变动类型。
+     *
+     * @param tenantId 商户ID，必须大于0
+     * @param current  页码，默认1，必须大于0
+     * @param size     每页条数，默认10，必须大于0
+     * @return 成长值变动日志分页结果
      */
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping("/logs")
     public Result<PageResult<MemberGrowthLogVO>> listGrowthLogs(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,

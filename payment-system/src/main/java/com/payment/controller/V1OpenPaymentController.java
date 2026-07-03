@@ -15,7 +15,9 @@ import org.springframework.web.util.HtmlUtils;
 import java.util.Map;
 
 /**
- * v1 开放支付回调接口（无需登录，需验签）。
+ * 开放支付回调控制器（Open 接口）。
+ * <p>接收第三方支付渠道（微信支付、支付宝、扩展渠道等）的异步回调通知。
+ * 所有回调接口无需登录，但必须通过签名验证以确保请求来源合法。</p>
  */
 @Slf4j
 @RestController

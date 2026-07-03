@@ -1,0 +1,4 @@
+payment:
+  alipay:
+    app-id: test-placeholder-app-id
+    seller-id: test-placeholder-seller-id

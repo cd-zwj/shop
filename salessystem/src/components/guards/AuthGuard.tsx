@@ -1,23 +1,47 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { adminAuthService } from '../../services/modules/adminAuth';
-import { merchantAuthService } from '../../services/modules/merchantAuth';
+import {
+  getAdminSession,
+  getCurrentAuthRole,
+  getMerchantSession,
+  getPlatformUserProfile,
+} from '../../utils/authSession';
 import { getToken } from '../../utils/token';
 
 export default function AuthGuard({ children }: { children: ReactNode }) {
-  const { isReady, currentRole, currentUser, merchantSession, adminSession, refreshCurrentUser, logout } = useAuth();
+  const {
+    isReady,
+    currentRole,
+    currentUser,
+    merchantSession,
+    adminSession,
+    refreshCurrentUser,
+    refreshMerchantSession,
+    refreshAdminSession,
+    logout,
+  } = useAuth();
   const location = useLocation();
   const [isRecovering, setIsRecovering] = useState(false);
   const verificationDone = useRef(false);
 
-  const tokenExists = currentRole ? !!getToken(currentRole) : false;
+  const effectiveRole = currentRole ?? getCurrentAuthRole();
+  const tokenExists = effectiveRole ? !!getToken(effectiveRole) : false;
+  const storedSession =
+    effectiveRole === 'user'
+      ? getPlatformUserProfile()
+      : effectiveRole === 'merchant'
+        ? getMerchantSession()
+        : effectiveRole === 'admin'
+          ? getAdminSession()
+          : null;
 
   // Determine whether the server-confirmed session is present for the active role.
   const hasSession =
-    (currentRole === 'user' && !!currentUser) ||
-    (currentRole === 'merchant' && !!merchantSession) ||
-    (currentRole === 'admin' && !!adminSession) ||
+    (effectiveRole === 'user' && !!currentUser) ||
+    (effectiveRole === 'merchant' && !!merchantSession) ||
+    (effectiveRole === 'admin' && !!adminSession) ||
+    !!storedSession ||
     false;
 
   useEffect(() => {
@@ -31,14 +55,15 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     async function verifySession() {
       setIsRecovering(true);
       try {
-        if (currentRole === 'user') {
+        if (effectiveRole === 'user') {
           await refreshCurrentUser();
-        } else if (currentRole === 'merchant') {
-          await merchantAuthService.getCurrentSession();
-        } else if (currentRole === 'admin') {
-          await adminAuthService.getCurrentSession();
+        } else if (effectiveRole === 'merchant') {
+          await refreshMerchantSession();
+        } else if (effectiveRole === 'admin') {
+          await refreshAdminSession();
         }
       } catch {
+        verificationDone.current = false;
         await logout();
       } finally {
         setIsRecovering(false);
@@ -46,7 +71,16 @@ export default function AuthGuard({ children }: { children: ReactNode }) {
     }
 
     void verifySession();
-  }, [tokenExists, hasSession, isRecovering, currentRole, refreshCurrentUser, logout]);
+  }, [
+    tokenExists,
+    hasSession,
+    isRecovering,
+    effectiveRole,
+    refreshCurrentUser,
+    refreshMerchantSession,
+    refreshAdminSession,
+    logout,
+  ]);
 
   if (!isReady || isRecovering) {
     return (

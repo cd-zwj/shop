@@ -171,43 +171,41 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          {(isLoading ? Array.from({ length: 4 }) : featuredProducts).map((product, index) => {
-            const isData = typeof product === 'object';
-            return (
+          {(isLoading ? Array.from<ProductWithTenant | undefined>({ length: 4 }) : featuredProducts).map((product, index) => {            return (
               <motion.div
-                key={isData ? product.id : index}
+                key={product ? product.id : index}
                 whileHover={{ y: -4 }}
-                onClick={() => isData && navigate(`/product/${product.id}?tenantId=${product.tenantId}`)}
+                onClick={() => product && navigate(`/product/${product.id}?tenantId=${product.tenantId}`)}
                 className="flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
               >
                 <div className="relative h-40 bg-slate-100">
-                  {isData ? (
+                  {product ? (
                     <img src={getImageUrl(product.imageUrl)} alt={product.name} loading="lazy" className="h-full w-full object-cover" />
                   ) : (
                     <div className="h-full w-full animate-pulse bg-slate-200" />
                   )}
                   <div className="absolute right-2 top-2 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 shadow-sm backdrop-blur">
                     <Star className="h-3 w-3 fill-current text-orange-500" />
-                    <span className="text-[11px] font-bold text-slate-700">{isData ? '实时' : '加载中'}</span>
+                    <span className="text-[11px] font-bold text-slate-700">{product ? '实时' : '加载中'}</span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 p-3">
                   <span className="h-10 line-clamp-2 text-sm font-semibold leading-relaxed text-slate-900">
-                    {isData ? product.name : '加载商品中...'}
+                    {product ? product.name : '加载商品中...'}
                   </span>
                   <div className="flex items-center gap-1">
                     <span className="rounded border border-red-100 bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-500">
-                      {isData ? product.category || '平台商品' : '同步中'}
+                      {product ? product.category || '平台商品' : '同步中'}
                     </span>
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     <div className="text-red-500">
-                      <span className="text-sm font-black">{isData ? formatCurrency(product.price) : '...'}</span>
+                      <span className="text-sm font-black">{product ? formatCurrency(product.price) : '...'}</span>
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (isData) {
+                        if (product) {
                           addItem({ ...product, tenantId: product.tenantId });
                           showToast('已加入购物车', 'success');
                         }

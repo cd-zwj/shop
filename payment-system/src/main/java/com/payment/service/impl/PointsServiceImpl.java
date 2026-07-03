@@ -21,7 +21,14 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * 积分服务实现类
+ * 积分服务实现类，负责多租户场景下积分体系的完整业务处理。
+ * <p>核心职责包括：</p>
+ * <ul>
+ *     <li>积分规则管理：查询、创建及更新各租户的积分获取规则</li>
+ *     <li>积分发放与扣减：基于乐观锁重试机制保障并发安全，记录积分变动明细</li>
+ *     <li>积分兑换商品：管理兑换商品的增删改查，支持积分兑换下单并扣减库存</li>
+ *     <li>退款积分回退：订单退款时将已消耗积分退回用户账户</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -42,6 +49,12 @@ public class PointsServiceImpl implements PointsService {
     @Autowired
     private ProductMapper productMapper;
     
+    /**
+     * 查询指定租户的积分规则（状态为启用的规则）
+     *
+     * @param tenantId 租户ID
+     * @return 积分规则实体，不存在时返回null
+     */
     @Override
     public PointsRule getPointsRule(Long tenantId) {
         return pointsRuleMapper.selectOne(
@@ -51,6 +64,11 @@ public class PointsServiceImpl implements PointsService {
         );
     }
     
+    /**
+     * 设置当前租户的积分规则，已存在则更新，不存在则创建
+     *
+     * @param dto 积分规则配置DTO，包含积分比例和启用状态
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void setPointsRule(PointsRuleDTO dto) {
@@ -85,6 +103,13 @@ public class PointsServiceImpl implements PointsService {
         }
     }
     
+    /**
+     * 根据消费金额和租户积分规则计算应获得的积分数
+     *
+     * @param amount   消费金额
+     * @param tenantId 租户ID
+     * @return 计算得到的积分数，规则不存在或未启用时返回0
+     */
     @Override
     public Integer calculatePoints(BigDecimal amount, Long tenantId) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -105,6 +130,15 @@ public class PointsServiceImpl implements PointsService {
         return points;
     }
     
+    /**
+     * 向用户发放积分，采用乐观锁重试机制保障并发安全。
+     * 若用户积分记录不存在则自动创建，并发创建冲突时回退为重试更新。
+     *
+     * @param userId  用户ID
+     * @param points  发放的积分数（必须大于0）
+     * @param reason  发放原因说明
+     * @param orderNo 关联订单号，可为null
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void grantPoints(Long userId, Integer points, String reason, String orderNo) {
@@ -186,6 +220,15 @@ public class PointsServiceImpl implements PointsService {
                 userId, points, userPoints.getPoints(), reason);
     }
     
+    /**
+     * 扣减用户积分，采用乐观锁重试机制保障并发安全。
+     * 扣减前校验积分余额是否充足，不足时抛出业务异常。
+     *
+     * @param userId 用户ID
+     * @param points 扣减的积分数（必须大于0）
+     * @param reason 扣减原因说明
+     * @throws BusinessException 积分余额不足或操作冲突时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deductPoints(Long userId, Integer points, String reason) {
@@ -238,6 +281,13 @@ public class PointsServiceImpl implements PointsService {
                 userId, points, userPoints.getPoints(), reason);
     }
     
+    /**
+     * 查询用户在指定租户下的当前积分余额
+     *
+     * @param userId   用户ID
+     * @param tenantId 租户ID
+     * @return 当前积分余额，积分记录不存在时返回0
+     */
     @Override
     public Integer getUserPoints(Long userId, Long tenantId) {
         UserPoints userPoints = userPointsMapper.selectOne(

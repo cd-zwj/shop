@@ -11,12 +11,15 @@ import java.time.LocalDateTime;
 /**
  * 重试任务实体。
  * 对应 retry_task 表，用于统一管理各类异步任务的重试调度。
+ * 支持多种业务场景（支付回调、订单关闭、退款查询等）的失败重试，
+ * 采用指数退避策略，超过最大重试次数后标记为 DEAD 进入死信处理。
  */
 @Data
 @TableName("retry_task")
 public class RetryTask implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** 主键 ID，自增 */
     @TableId(type = IdType.AUTO)
     private Long id;
 
@@ -53,6 +56,9 @@ public class RetryTask implements Serializable {
     /** 扩展信息（JSON） */
     private String extensionJson;
 
+    /** 创建时间 */
     private LocalDateTime createTime;
+
+    /** 更新时间 */
     private LocalDateTime updateTime;
 }

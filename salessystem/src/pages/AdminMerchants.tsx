@@ -132,13 +132,11 @@ export default function AdminMerchants() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from({ length: 5 }) : merchants).map((merchant, index) => {
-                const isData = typeof merchant === 'object';
-                return (
+              {(isLoading ? Array.from<AdminMerchantListItem | undefined>({ length: 5 }) : merchants).map((merchant, index) => {                return (
                   <tr
-                    key={isData ? merchant.id : index}
+                    key={merchant ? merchant.id : index}
                     className="cursor-pointer transition-colors hover:bg-slate-50/50"
-                    onClick={() => isData && navigate(`/admin/merchant/${merchant.id}`)}
+                    onClick={() => merchant && navigate(`/admin/merchant/${merchant.id}`)}
                   >
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
@@ -147,38 +145,38 @@ export default function AdminMerchants() {
                         </div>
                         <div>
                           <p className="text-sm font-black text-slate-900">
-                            {isData ? merchant.name : '加载中...'}
+                            {merchant ? merchant.name : '加载中...'}
                           </p>
                           <p className="mt-1 text-xs font-medium text-slate-400">
-                            {isData ? merchant.tenantCode : '--'}
+                            {merchant ? merchant.tenantCode : '--'}
                           </p>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
                       <p className="text-sm font-bold text-slate-700">
-                        {isData ? merchant.contactName || '--' : '--'}
+                        {merchant ? merchant.contactName || '--' : '--'}
                       </p>
                       <p className="mt-1 text-xs font-medium text-slate-400">
-                        {isData ? merchant.contactPhone || '--' : '--'}
+                        {merchant ? merchant.contactPhone || '--' : '--'}
                       </p>
                     </td>
                     <td className="px-8 py-6">
                       <span
                         className={`rounded-lg px-3 py-1 text-[10px] font-black uppercase tracking-widest ${
-                          isData && merchant.status === 1
+                          merchant && merchant.status === 1
                             ? 'bg-green-100 text-green-700'
                             : 'bg-slate-200 text-slate-500'
                         }`}
                       >
-                        {isData ? (merchant.status === 1 ? '启用中' : '已禁用') : '...'}
+                        {merchant ? (merchant.status === 1 ? '启用中' : '已禁用') : '...'}
                       </span>
                     </td>
                     <td className="px-8 py-6 text-sm font-medium text-slate-500">
-                      {isData ? formatDateTime(merchant.createTime) : '--'}
+                      {merchant ? formatDateTime(merchant.createTime) : '--'}
                     </td>
                     <td className="px-8 py-6 text-right">
-                      {isData && (
+                      {merchant && (
                         <button
                           onClick={(event) => {
                             event.stopPropagation();

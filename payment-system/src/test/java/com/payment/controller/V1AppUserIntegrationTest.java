@@ -1,6 +1,5 @@
 package com.payment.controller;
 
-import cn.dev33.satoken.stp.StpUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payment.common.GlobalExceptionHandler;
 import com.payment.config.TestSaTokenConfig;
@@ -46,10 +45,7 @@ class V1AppUserIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        try {
-            StpUtil.logout();
-        } catch (Exception ignored) {
-        }
+        SaTokenTestSupport.logoutPlatformUser();
 
         testUser = new PlatformUser();
         testUser.setId(1L);
@@ -71,11 +67,11 @@ class V1AppUserIntegrationTest {
         @DisplayName("已登录用户获取个人信息应返回完整用户数据")
         void getCurrentUser_已登录_返回用户信息() throws Exception {
             // 模拟登录
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             when(platformIdentityService.getCurrentUser()).thenReturn(testUser);
 
             mockMvc.perform(get("/v1/app/users/me")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200))
                     .andExpect(jsonPath("$.message").value("操作成功"))
@@ -112,12 +108,12 @@ class V1AppUserIntegrationTest {
         @Test
         @DisplayName("返回数据不应包含密码哈希字段")
         void getCurrentUser_不泄露密码哈希() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             testUser.setPasswordHash("$2a$10$secretHash");
             when(platformIdentityService.getCurrentUser()).thenReturn(testUser);
 
             mockMvc.perform(get("/v1/app/users/me")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.passwordHash").doesNotExist());
         }
@@ -125,11 +121,11 @@ class V1AppUserIntegrationTest {
         @Test
         @DisplayName("返回数据不应包含deleted字段")
         void getCurrentUser_不泄露内部字段() throws Exception {
-            StpUtil.login(1L);
+            String token = SaTokenTestSupport.loginPlatformUser(1L);
             when(platformIdentityService.getCurrentUser()).thenReturn(testUser);
 
             mockMvc.perform(get("/v1/app/users/me")
-                            .header("Authorization", StpUtil.getTokenValue()))
+                            .header("Authorization", token))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.deleted").doesNotExist())
                     .andExpect(jsonPath("$.data.updateTime").doesNotExist());

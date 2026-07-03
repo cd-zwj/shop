@@ -31,7 +31,7 @@ public class V1AdminUserController {
 
     private final V1AdminService v1AdminService;
 
-    @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/users")
     public Result<PageResult<AdminPlatformUserVO>> listUsers(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                               @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
@@ -41,27 +41,27 @@ public class V1AdminUserController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckPermission(value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:user:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/users/{userId}")
     public Result<AdminPlatformUserVO> getUserDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         return Result.success(v1AdminService.getPlatformUserDetail(userId));
     }
 
-    @SaCheckPermission(value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
     @PutMapping("/users/{userId}/enable")
     public Result<Void> enableUser(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         v1AdminService.enablePlatformUser(userId);
         return Result.success();
     }
 
-    @SaCheckPermission(value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:user:update", "admin:dashboard"}, mode = SaMode.OR)
     @PutMapping("/users/{userId}/disable")
     public Result<Void> disableUser(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         v1AdminService.disablePlatformUser(userId);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:permission:list")
+    @SaCheckPermission(type = "admin", value = "admin:permission:list")
     @GetMapping("/permissions")
     public Result<Map<String, List<PermissionVO>>> listPermissions() {
         Map<String, List<Permission>> raw = v1AdminService.listPermissions();
@@ -77,20 +77,20 @@ public class V1AdminUserController {
         return Result.success(voMap);
     }
 
-    @SaCheckPermission("admin:user:permission")
+    @SaCheckPermission(type = "admin", value = "admin:user:permission")
     @GetMapping("/users/{userId}/permissions")
     public Result<UserPermissionVO> getUserPermissions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId) {
         return Result.success(v1AdminService.getUserPermissions(userId));
     }
 
-    @SaCheckPermission("admin:user:permission")
+    @SaCheckPermission(type = "admin", value = "admin:user:permission")
     @PutMapping("/users/{userId}/permissions")
     public Result<Void> setUserPermissions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId, @Valid @RequestBody UserPermissionDTO dto) {
         v1AdminService.setUserPermissions(userId, dto);
         return Result.success();
     }
 
-    @SaCheckPermission("admin:user:permission")
+    @SaCheckPermission(type = "admin", value = "admin:user:permission")
     @DeleteMapping("/users/{userId}/permissions/{permissionId}")
     public Result<Void> removeUserPermission(@PathVariable @Min(value = 1, message = "ID必须大于0") Long userId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long permissionId) {
         v1AdminService.removeUserPermission(userId, permissionId);

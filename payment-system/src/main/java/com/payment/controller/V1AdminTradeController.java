@@ -25,13 +25,13 @@ public class V1AdminTradeController {
 
     private final V1AdminService v1AdminService;
 
-    @SaCheckPermission(value = {"admin:trade:overview", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:trade:overview", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/trades/overview")
     public Result<AdminTradeOverviewVO> getTradeOverview() {
         return Result.success(v1AdminService.getTradeOverview());
     }
 
-    @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/orders")
     public Result<PageResult<AdminOrderListVO>> listOrders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                             @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
@@ -43,13 +43,13 @@ public class V1AdminTradeController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckPermission(value = {"admin:trade:detail", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:trade:detail", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/orders/{orderNo}")
     public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable String orderNo) {
         return Result.success(v1AdminService.getOrderDetail(orderNo));
     }
 
-    @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/payment-bills")
     public Result<PageResult<AdminPaymentBillVO>> listPaymentBills(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                                     @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
@@ -60,7 +60,7 @@ public class V1AdminTradeController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckPermission(value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
+    @SaCheckPermission(type = "admin", value = {"admin:trade:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/recharge-orders")
     public Result<PageResult<AdminRechargeOrderVO>> listRechargeOrders(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                                         @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,

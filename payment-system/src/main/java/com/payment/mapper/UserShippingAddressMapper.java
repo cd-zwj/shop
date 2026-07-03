@@ -7,7 +7,8 @@ import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Update;
 
 /**
- * 用户收货地址数据访问接口，用于执行地址数据的增删改查。
+ * 用户收货地址数据访问接口，提供用户收货地址表（user_shipping_address）的 CRUD 操作。
+ * 支持多地址管理及默认地址切换。
  */
 @Mapper
 public interface UserShippingAddressMapper extends BaseMapper<UserShippingAddress> {

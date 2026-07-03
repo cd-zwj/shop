@@ -21,6 +21,12 @@ public class MerchantRechargeRuleServiceImpl implements MerchantRechargeRuleServ
 
     private final MerchantRechargeRuleMapper merchantRechargeRuleMapper;
 
+    /**
+     * 查询指定商户下启用的充值规则列表（按排序权重升序）。
+     *
+     * @param tenantId 租户 ID
+     * @return 启用状态的充值规则列表
+     */
     @Override
     public List<MerchantRechargeRule> listActiveRules(Long tenantId) {
         return merchantRechargeRuleMapper.selectList(new LambdaQueryWrapper<MerchantRechargeRule>()
@@ -29,6 +35,11 @@ public class MerchantRechargeRuleServiceImpl implements MerchantRechargeRuleServ
                 .orderByAsc(MerchantRechargeRule::getSortOrder));
     }
 
+    /**
+     * 查询所有商户下启用的充值规则（跨租户）。
+     *
+     * @return 所有启用状态的充值规则列表
+     */
     @Override
     public List<MerchantRechargeRule> listAllActiveRules() {
         return merchantRechargeRuleMapper.selectList(new LambdaQueryWrapper<MerchantRechargeRule>()
@@ -36,6 +47,12 @@ public class MerchantRechargeRuleServiceImpl implements MerchantRechargeRuleServ
                 .orderByAsc(MerchantRechargeRule::getSortOrder));
     }
 
+    /**
+     * 查询指定商户下所有充值规则（包含启用和禁用）。
+     *
+     * @param tenantId 租户 ID
+     * @return 全部充值规则列表
+     */
     @Override
     public List<MerchantRechargeRule> listAllRules(Long tenantId) {
         return merchantRechargeRuleMapper.selectList(new LambdaQueryWrapper<MerchantRechargeRule>()

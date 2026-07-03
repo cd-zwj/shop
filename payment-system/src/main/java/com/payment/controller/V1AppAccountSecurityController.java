@@ -24,14 +24,14 @@ public class V1AppAccountSecurityController {
 
     private final AppAccountSecurityService appAccountSecurityService;
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @GetMapping("/summary")
     public Result<AppAccountSecurityVO> getSecuritySummary() {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         return Result.success(appAccountSecurityService.getSecuritySummary(platformUserId));
     }
 
-    @SaCheckLogin
+    @SaCheckLogin(type = "platform")
     @PostMapping("/change-password")
     public Result<Void> changePassword(@Valid @RequestBody AppChangePasswordDTO dto) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();

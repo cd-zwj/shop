@@ -26,7 +26,7 @@ public class V1AdminWithdrawalController {
 
     private final V1AdminService v1AdminService;
 
-    @SaCheckPermission("admin:withdrawal:list")
+    @SaCheckPermission(type = "admin", value = "admin:withdrawal:list")
     @GetMapping
     public Result<PageResult<WithdrawalVO>> listWithdrawals(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                              @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
@@ -38,14 +38,14 @@ public class V1AdminWithdrawalController {
         return Result.success(PageResult.from(page));
     }
 
-    @SaCheckPermission("admin:withdrawal:approve")
+    @SaCheckPermission(type = "admin", value = "admin:withdrawal:approve")
     @PutMapping("/{withdrawalId}/approve")
     public Result<Void> approve(@PathVariable @Min(value = 1, message = "ID必须大于0") Long withdrawalId) {
         v1AdminService.approveWithdrawal(withdrawalId, PlatformSessionHelper.getPlatformUserId());
         return Result.success();
     }
 
-    @SaCheckPermission("admin:withdrawal:reject")
+    @SaCheckPermission(type = "admin", value = "admin:withdrawal:reject")
     @PutMapping("/{withdrawalId}/reject")
     public Result<Void> reject(@PathVariable @Min(value = 1, message = "ID必须大于0") Long withdrawalId,
                                @Valid @RequestBody RejectWithdrawalRequest request) {

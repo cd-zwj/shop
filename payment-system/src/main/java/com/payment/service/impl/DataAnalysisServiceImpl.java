@@ -31,7 +31,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 数据分析服务实现类
+ * 数据分析服务实现类。
+ * <p>
+ * 负责平台数据分析任务的创建与异步执行。创建分析记录后通过 Outbox 模式发送消息到 RabbitMQ，
+ * 由消费者异步调用外部 AI 模块完成分析。支持用户行为分析（USER_BEHAVIOR）、支付趋势分析（PAYMENT_TREND）、
+ * 用户分群分析（USER_SEGMENT）等多种分析类型。分析结果持久化到 data_analysis_result 表。
+ * </p>
+ *
+ * @see DataAnalysisService
  */
 @Slf4j
 @Service
@@ -52,6 +59,15 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
     @Value("${ai.analyze-endpoint}")
     private String analyzeEndpoint;
     
+    /**
+     * 创建数据分析任务并发布 Outbox 消息。
+     * <p>
+     * 立即创建状态为 PROCESSING 的分析记录，然后通过 Outbox 模式发送异步消息，
+     * 由 MQ 消费者调用 AI 模块执行实际分析。
+     *
+     * @param request 分析请求参数，包含分析类型、用户 ID 及自定义参数
+     * @return 已创建的分析结果记录（状态为 PROCESSING）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DataAnalysisResult analyze(AnalysisRequestDTO request) {
@@ -68,7 +84,13 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
     }
     
     /**
-     * 执行 AI 模块调用。
+     * 异步调用 AI 模块执行分析。
+     * <p>
+     * 准备分析数据后调用外部 AI 接口，成功则更新分析结果为 SUCCESS，
+     * 失败则标记为 FAIL 并重新抛出异常交由消费者处理。
+     *
+     * @param resultId 分析结果记录 ID
+     * @param request  分析请求参数
      */
     @Override
     public void executeAnalysis(Long resultId, AnalysisRequestDTO request) {
@@ -113,6 +135,12 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         }
     }
 
+    /**
+     * 异步调用 AI 分析的入口方法，委托给 {@link #executeAnalysis(Long, AnalysisRequestDTO)}。
+     *
+     * @param resultId 分析结果记录 ID
+     * @param request  分析请求参数
+     */
     public void callAiModuleAsync(Long resultId, AnalysisRequestDTO request) {
         executeAnalysis(resultId, request);
     }
@@ -146,11 +174,25 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         return data;
     }
     
+    /**
+     * 查询分析结果详情。
+     *
+     * @param id 分析结果记录 ID
+     * @return 分析结果实体，不存在时返回 null
+     */
     @Override
     public DataAnalysisResult getAnalysisResult(Long id) {
         return getById(id);
     }
     
+    /**
+     * 分页查询分析结果列表。
+     *
+     * @param analysisType 分析类型过滤条件，为 null 时不过滤
+     * @param current      当前页码
+     * @param size         每页条数
+     * @return 分析结果分页数据，按创建时间倒序排列
+     */
     @Override
     public Page<DataAnalysisResult> getAnalysisList(String analysisType, Integer current, Integer size) {
         Page<DataAnalysisResult> page = new Page<>(current, size);
@@ -162,6 +204,12 @@ public class DataAnalysisServiceImpl extends ServiceImpl<DataAnalysisResultMappe
         return page(page, wrapper);
     }
 
+    /**
+     * 通过 Outbox 模式发布 AI 分析任务消息到 RabbitMQ。
+     *
+     * @param resultId 分析结果记录 ID
+     * @param request  分析请求参数
+     */
     private void publishAiAnalysisOutbox(Long resultId, AnalysisRequestDTO request) {
         outboxPublisher.publish(OutboxMessageCommand.builder()
                 .messagePrefix("AI")

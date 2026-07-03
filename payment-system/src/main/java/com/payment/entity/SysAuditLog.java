@@ -9,13 +9,16 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 运营审计日志实体
+ * 运营审计日志实体。
+ * 对应 sys_audit_log 表，记录平台管理端的关键操作行为。
+ * 用于安全审计、操作追溯和合规检查，涵盖商户审核、订单管理、权限变更等操作。
  */
 @Data
 @TableName("sys_audit_log")
 public class SysAuditLog implements Serializable {
     private static final long serialVersionUID = 1L;
 
+    /** 主键 ID，自增 */
     @TableId(type = IdType.AUTO)
     private Long id;
 
@@ -69,5 +72,6 @@ public class SysAuditLog implements Serializable {
      */
     private String ip;
 
+    /** 操作时间 */
     private LocalDateTime createTime;
 }

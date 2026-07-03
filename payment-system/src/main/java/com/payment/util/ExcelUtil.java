@@ -11,16 +11,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Excel导出工具�?
+ * Excel 导出工具类。
+ * <p>
+ * 基于 Apache POI 实现 .xlsx 格式的 Excel 文件导出，支持自定义表头、数据行样式，
+ * 直接写入 HttpServletResponse 输出流。
+ * </p>
  */
 public class ExcelUtil {
-    
+
     /**
-     * 导出Excel
-     * @param headers 表头
-     * @param data 数据
-     * @param fileName 文件�?
-     * @param response HTTP响应
+     * 导出 Excel 文件到 HTTP 响应流。
+     *
+     * @param headers  表头数组，每个元素对应一列标题
+     * @param data     数据行列表，每个 String[] 为一行数据
+     * @param fileName 文件名（不含扩展名），会自动添加 .xlsx 后缀
+     * @param response HTTP 响应对象，用于输出文件流
+     * @throws IOException 写入输出流失败时抛出
      */
     public static void exportExcel(String[] headers, List<String[]> data, String fileName, HttpServletResponse response) throws IOException {
         // 创建工作�?

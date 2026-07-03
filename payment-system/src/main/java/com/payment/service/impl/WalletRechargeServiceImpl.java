@@ -49,6 +49,15 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
     private final MemberPointsAccountService memberPointsAccountService;
     private final WithdrawalService withdrawalService;
 
+    /**
+     * 创建统一钱包充值订单并发起支付。
+     * <p>
+     * 流程：创建充值订单 → 创建支付账单 → 调用第三方支付 → 返回支付链接。
+     *
+     * @param platformUserId 平台用户 ID
+     * @param dto            统一钱包充值请求（金额、支付渠道）
+     * @return 充值支付信息 VO（含充值单号和外部支付链接）
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RechargePaymentVO createUnifiedRecharge(Long platformUserId, CreateUnifiedWalletRechargeDTO dto) {
@@ -76,6 +85,18 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         return buildRechargeVO(rechargeOrder, paymentBill, payResponse);
     }
 
+    /**
+     * 创建商户钱包充值订单并发起支付。
+     * <p>
+     * 流程：校验充值规则 → 确保用户为商户会员 → 创建充值订单 → 创建支付账单 → 调用第三方支付。
+     * 充值规则中可包含赠送金额和赠送积分。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     * @param dto            商户钱包充值请求（规则 ID、支付渠道）
+     * @return 充值支付信息 VO
+     * @throws BusinessException 充值规则不存在时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RechargePaymentVO createMerchantRecharge(Long tenantId, Long platformUserId, CreateMerchantWalletRechargeDTO dto) {
@@ -115,6 +136,18 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         return buildRechargeVO(rechargeOrder, paymentBill, payResponse);
     }
 
+    /**
+     * 处理充值支付成功回调。
+     * <p>
+     * 将充值订单标记为成功，并执行以下到账操作：
+     * <ul>
+     *   <li>统一钱包充值：直接入账统一钱包</li>
+     *   <li>商户钱包充值：入账商户钱包 + 发放赠送积分 + 增加商户财务余额</li>
+     * </ul>
+     *
+     * @param rechargeNo 充值单号
+     * @throws BusinessException 充值单不存在时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleRechargeSuccess(String rechargeNo) {
@@ -146,6 +179,12 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         withdrawalService.addMerchantBalance(rechargeOrder.getTenantId(), rechargeOrder.getRechargeAmount(), rechargeNo);
     }
 
+    /**
+     * 确保用户已是该商户的会员，若不是则自动注册为会员。
+     *
+     * @param tenantId       租户 ID
+     * @param platformUserId 平台用户 ID
+     */
     private void ensureTenantMember(Long tenantId, Long platformUserId) {
         TenantMember tenantMember = tenantMemberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
                 .eq(TenantMember::getTenantId, tenantId)
@@ -163,6 +202,14 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         tenantMemberMapper.insert(newMember);
     }
 
+    /**
+     * 将充值订单和支付信息组装为返回 VO。
+     *
+     * @param rechargeOrder 充值订单实体
+     * @param paymentBill   支付账单实体
+     * @param payResponse   第三方支付返回信息
+     * @return 充值支付信息 VO
+     */
     private RechargePaymentVO buildRechargeVO(RechargeOrderV1 rechargeOrder, PaymentBill paymentBill, PayResponseDTO payResponse) {
         RechargePaymentVO vo = new RechargePaymentVO();
         vo.setRechargeNo(rechargeOrder.getRechargeNo());
@@ -176,6 +223,13 @@ public class WalletRechargeServiceImpl implements WalletRechargeService {
         return vo;
     }
 
+    /**
+     * 校验支付渠道不为空，为空时抛出异常。
+     *
+     * @param channelCode 支付渠道枚举
+     * @return 校验通过的支付渠道枚举
+     * @throws BusinessException 支付渠道为空时抛出
+     */
     private PaymentChannelCodeEnum requireChannel(PaymentChannelCodeEnum channelCode) {
         if (channelCode == null) {
             throw new BusinessException("支付渠道不能为空");

@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.payment.common.Result;
+import com.payment.config.AuthStpKit;
 import com.payment.dto.ProductSalesRankDTO;
 import com.payment.dto.SalesOverviewDTO;
 import com.payment.dto.SalesQueryDTO;
@@ -40,7 +41,7 @@ public class SalesStatisticsController {
     /**
      * 获取销售数据概览
      */
-    @SaCheckPermission("statistics:view")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "statistics:view")
     @GetMapping("/overview")
     public Result<SalesOverviewDTO> getSalesOverview() {
         log.info("商家查询销售数据概览");
@@ -52,7 +53,7 @@ public class SalesStatisticsController {
     /**
      * 获取销售趋势图表数据
      */
-    @SaCheckPermission("statistics:view")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "statistics:view")
     @GetMapping("/trend")
 
     public Result<List<SalesTrendDTO>> getSalesTrend(
@@ -72,7 +73,7 @@ public class SalesStatisticsController {
     /**
      * 获取商品销售排行
      */
-    @SaCheckPermission("statistics:view")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "statistics:view")
     @GetMapping("/product-rank")
     public Result<List<ProductSalesRankDTO>> getProductSalesRank(
                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
@@ -92,7 +93,7 @@ public class SalesStatisticsController {
     /**
      * 导出销售报表
      */
-    @SaCheckPermission("statistics:export")
+    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "statistics:export")
     @GetMapping("/export")
     public void exportSalesReport(
                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,

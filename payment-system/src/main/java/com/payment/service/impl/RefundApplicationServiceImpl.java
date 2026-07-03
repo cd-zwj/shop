@@ -34,6 +34,23 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * 退款申请服务实现类，管理用户退款申请的完整生命周期。
+ * <p>
+ * 核心职责：
+ * <ul>
+ *   <li><b>创建退款申请</b>：校验订单状态、退款金额、退款类型，防止并发重复退款（唯一约束）</li>
+ *   <li><b>查询退款</b>：用户端"我的退款"列表与详情、商家端退款列表</li>
+ *   <li><b>取消退款</b>：用户可取消待审核状态的退款申请</li>
+ *   <li><b>商家审核</b>：通过或拒绝退款申请，通过时处理交付撤销并触发渠道退款</li>
+ *   <li><b>完成退款</b>：退款到账后标记完成，回退积分、回收交付资源</li>
+ * </ul>
+ * <p>
+ * 支持仅退款（REFUND_ONLY）和退货退款（RETURN_REFUND）两种类型。
+ * 审核通过时根据交付状态决定是否需要先撤销交付资源（卡密作废、权益冻结等）。
+ *
+ * @see com.payment.service.RefundApplicationService
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -61,6 +78,18 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     private final OrderDeliveryService orderDeliveryService;
     private final RefundService refundService;
 
+    /**
+     * 创建退款申请。
+     * <p>
+     * 校验订单归属、状态、退款金额上限、退款类型，并检查是否存在进行中的退款。
+     * 通过 INSERT 唯一约束防止并发重复退款。创建成功后发送通知。
+     *
+     * @param platformUserId 申请用户 ID
+     * @param tenantId       商户 ID
+     * @param dto            退款申请参数
+     * @return 已创建的退款申请实体
+     * @throws BusinessException 校验不通过时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RefundApplication createRefund(Long platformUserId, Long tenantId, RefundCreateDTO dto) {
@@ -124,6 +153,16 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return app;
     }
 
+    /**
+     * 查询用户退款申请列表，支持按状态筛选。
+     *
+     * @param platformUserId 用户 ID
+     * @param tenantId       商户 ID
+     * @param status         退款状态筛选，可为 null
+     * @param page           页码
+     * @param size           每页条数
+     * @return 退款申请分页结果（含可退金额等展示快照）
+     */
     @Override
     public Page<RefundApplication> listMyRefunds(Long platformUserId, Long tenantId, String status, int page, int size) {
         Page<RefundApplication> pageParam = new Page<>(page, size);
@@ -137,6 +176,15 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return result;
     }
 
+    /**
+     * 获取退款申请详情，校验归属用户与商户。
+     *
+     * @param platformUserId 用户 ID
+     * @param tenantId       商户 ID
+     * @param refundId       退款申请 ID
+     * @return 退款申请详情（含可退金额等展示快照）
+     * @throws BusinessException 退款申请不存在或无权访问时抛出
+     */
     @Override
     public RefundApplication getRefundDetail(Long platformUserId, Long tenantId, Long refundId) {
         RefundApplication app = refundApplicationMapper.selectById(refundId);
@@ -147,6 +195,16 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return app;
     }
 
+    /**
+     * 取消退款申请。
+     * <p>
+     * 仅允许取消待审核（PENDING）状态的退款申请。
+     *
+     * @param platformUserId 用户 ID
+     * @param tenantId       商户 ID
+     * @param refundId       退款申请 ID
+     * @throws BusinessException 退款申请不存在、无权或状态不允许取消时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelRefund(Long platformUserId, Long tenantId, Long refundId) {
@@ -162,6 +220,15 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         log.info("退款申请已取消: refundNo={}", app.getRefundNo());
     }
 
+    /**
+     * 商户端分页查询退款申请列表，支持按状态筛选。
+     *
+     * @param tenantId 商户 ID
+     * @param status   退款状态筛选，可为 null
+     * @param page     页码
+     * @param size     每页条数
+     * @return 退款申请分页结果（含可退金额等展示快照）
+     */
     @Override
     public Page<RefundApplication> listTenantRefunds(Long tenantId, String status, int page, int size) {
         Page<RefundApplication> pageParam = new Page<>(page, size);
@@ -174,6 +241,19 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return result;
     }
 
+    /**
+     * 审核退款申请。
+     * <p>
+     * 通过时：检查交付状态，若已交付则先撤销交付资源，再触发渠道退款流程。
+     * 拒绝时：必须填写拒绝原因。
+     *
+     * @param tenantId     商户 ID
+     * @param refundId     退款申请 ID
+     * @param adminId      审核人 ID
+     * @param approved     是否通过
+     * @param rejectReason 拒绝原因（拒绝时必填）
+     * @throws BusinessException 审核不通过校验时抛出
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void auditRefund(Long tenantId, Long refundId, Long adminId, boolean approved, String rejectReason) {
@@ -221,6 +301,20 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         refundApplicationMapper.updateById(app);
     }
 
+    /**
+     * 标记退款申请为已完成。
+     * <p>
+     * 退款到账后由退款服务调用。操作包括：
+     * <ul>
+     *   <li>将退款状态置为 COMPLETED</li>
+     *   <li>积分兑换订单回退积分</li>
+     *   <li>兜底回收交付资源（卡密作废/权益冻结）</li>
+     * </ul>
+     * 幂等处理：已完成的退款不会重复处理。
+     *
+     * @param tenantId 商户 ID
+     * @param refundId 退款申请 ID
+     */
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void completeRefund(Long tenantId, Long refundId) {

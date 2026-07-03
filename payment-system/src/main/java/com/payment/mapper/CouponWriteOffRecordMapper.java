@@ -5,7 +5,8 @@ import com.payment.entity.CouponWriteOffRecord;
 import org.apache.ibatis.annotations.Mapper;
 
 /**
- * 优惠券核销记录数据访问接口。
+ * 优惠券核销记录表数据访问接口，提供优惠券核销（使用）记录的增删改查操作。
+ * <p>对应实体表：{@link com.payment.entity.CouponWriteOffRecord}</p>
  */
 @Mapper
 public interface CouponWriteOffRecordMapper extends BaseMapper<CouponWriteOffRecord> {

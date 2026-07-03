@@ -13,7 +13,7 @@ import {
   Store,
   Zap,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
 import { appAuthService } from '../services/modules/appAuth';
@@ -24,6 +24,7 @@ const SMS_COOLDOWN_SECONDS = 60;
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { loginAdmin, loginMerchant, loginUser } = useAuth();
   // 从 URL 读取被 401 踢出的角色，预选对应登录标签
   function getInitialRole(): AuthRole {
@@ -46,6 +47,16 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
+  const fromPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+
+  function getTargetPath(role: AuthRole) {
+    if (fromPath && !fromPath.startsWith('/login')) {
+      return fromPath;
+    }
+    if (role === 'merchant') return '/merchant';
+    if (role === 'admin') return '/admin';
+    return '/';
+  }
 
   const roles = [
     { id: 'user', title: '普通用户', desc: '浏览商品、充值钱包、查看消费', icon: Smartphone, color: 'bg-blue-50 text-blue-600' },
@@ -153,13 +164,13 @@ export default function Login() {
 
       if (selectedRole === 'user') {
         await loginUser(loginMethod, payload);
-        navigate('/');
+        navigate(getTargetPath('user'), { replace: true });
       } else if (selectedRole === 'merchant') {
         await loginMerchant(payload);
-        navigate('/merchant');
+        navigate(getTargetPath('merchant'), { replace: true });
       } else {
         await loginAdmin(payload);
-        navigate('/admin');
+        navigate(getTargetPath('admin'), { replace: true });
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
@@ -197,7 +208,7 @@ export default function Login() {
         captchaKey,
         captchaCode: captchaCode.trim(),
       });
-      navigate('/');
+      navigate(getTargetPath('user'), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '登录失败，请稍后重试');
       void loadCaptcha();
@@ -226,7 +237,7 @@ export default function Login() {
         captchaKey,
         captchaCode: captchaCode.trim(),
       });
-      navigate('/');
+      navigate(getTargetPath('user'), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '第三方登录失败，请稍后重试');
       void loadCaptcha();

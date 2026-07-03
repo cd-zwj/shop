@@ -18,9 +18,18 @@ import java.util.List;
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
+    /** 允许的跨域来源列表，可通过 cors.allowed-origins 配置 */
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private List<String> allowedOrigins;
 
+    /**
+     * 创建全局 CORS 过滤器 Bean。
+     * <p>
+     * 使用 Servlet Filter 级别的 CorsFilter 而非 addCorsMappings，确保 OPTIONS 预检请求
+     * 在 Sa-Token 拦截器之前获得正确的 CORS 响应头。
+     *
+     * @return CorsFilter 实例
+     */
     @Bean
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
@@ -37,7 +46,20 @@ public class WebConfig implements WebMvcConfigurer {
         return new CorsFilter(source);
     }
 
-    /** 安全响应头过滤器 */
+    /**
+     * 创建安全响应头过滤器 Bean。
+     * <p>
+     * 为每个响应注入安全相关的 HTTP 头，包括：
+     * <ul>
+     *   <li>X-Content-Type-Options: nosniff — 防止 MIME 类型嗅探</li>
+     *   <li>X-Frame-Options: DENY — 防止点击劫持</li>
+     *   <li>X-XSS-Protection — 启用 XSS 过滤</li>
+     *   <li>Strict-Transport-Security — 强制 HTTPS</li>
+     *   <li>Content-Security-Policy — 限制资源加载来源</li>
+     * </ul>
+     *
+     * @return OncePerRequestFilter 实例
+     */
     @Bean
     public org.springframework.web.filter.OncePerRequestFilter securityHeadersFilter() {
         return new org.springframework.web.filter.OncePerRequestFilter() {

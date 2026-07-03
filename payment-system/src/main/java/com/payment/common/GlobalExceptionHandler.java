@@ -14,12 +14,28 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import java.util.Set;
 
+/**
+ * 全局异常处理器
+ * <p>
+ * 统一拦截并处理各类异常，将异常转换为标准 {@link Result} 响应格式返回给前端。
+ * 覆盖 Sa-Token 认证异常、业务异常、参数校验异常及系统未知异常。
+ * </p>
+ *
+ * @author payment-system
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     /**
-     * Sa-Token 未登录异常
+     * 处理 Sa-Token 未登录异常
+     * <p>
+     * 根据异常类型细分提示信息：未提供 Token、Token 无效、Token 过期、
+     * 账号被替换、账号被踢下线等。
+     * </p>
+     *
+     * @param e Sa-Token 未登录异常
+     * @return 包含 401 状态码的统一响应
      */
     @ExceptionHandler(NotLoginException.class)
     public Result<?> handleNotLoginException(NotLoginException e) {
@@ -48,7 +64,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Sa-Token 无权限异常（不暴露内部权限码）
+     * 处理 Sa-Token 无权限异常（不暴露内部权限码）
+     *
+     * @param e Sa-Token 权限不足异常
+     * @return 包含 403 状态码的统一响应
      */
     @ExceptionHandler(NotPermissionException.class)
     public Result<?> handleNotPermissionException(NotPermissionException e) {
@@ -57,7 +76,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Sa-Token 无角色异常（不暴露内部角色名）
+     * 处理 Sa-Token 无角色异常（不暴露内部角色名）
+     *
+     * @param e Sa-Token 角色不足异常
+     * @return 包含 403 状态码的统一响应
      */
     @ExceptionHandler(NotRoleException.class)
     public Result<?> handleNotRoleException(NotRoleException e) {
@@ -65,18 +87,36 @@ public class GlobalExceptionHandler {
         return Result.error(403, "无权限访问");
     }
 
+    /**
+     * 处理未知系统异常（兜底）
+     *
+     * @param e 系统异常
+     * @return 包含 500 状态码的统一响应
+     */
     @ExceptionHandler(Exception.class)
     public Result<?> handleException(Exception e) {
         log.error("系统异常", e);
         return Result.error("系统异常，请稍后重试");
     }
 
+    /**
+     * 处理业务异常
+     *
+     * @param e 业务异常
+     * @return 包含对应业务错误码的统一响应
+     */
     @ExceptionHandler(BusinessException.class)
     public Result<?> handleBusinessException(BusinessException e) {
         log.warn("业务异常：{}", e.getMessage());
         return Result.error(e.getCode(), e.getMessage());
     }
 
+    /**
+     * 处理 @RequestBody 参数校验异常
+     *
+     * @param e 方法参数校验异常
+     * @return 包含 400 状态码及首个字段错误信息的统一响应
+     */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Result<?> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
         FieldError fieldError = e.getBindingResult().getFieldError();
@@ -84,6 +124,12 @@ public class GlobalExceptionHandler {
         return Result.error(ResultCode.PARAM_ERROR.getCode(), message);
     }
 
+    /**
+     * 处理表单绑定异常
+     *
+     * @param e 绑定异常
+     * @return 包含 400 状态码及首个字段错误信息的统一响应
+     */
     @ExceptionHandler(BindException.class)
     public Result<?> handleBindException(BindException e) {
         FieldError fieldError = e.getBindingResult().getFieldError();
@@ -91,6 +137,12 @@ public class GlobalExceptionHandler {
         return Result.error(ResultCode.PARAM_ERROR.getCode(), message);
     }
 
+    /**
+     * 处理 JSR 303/380 约束违反异常
+     *
+     * @param e 约束违反异常
+     * @return 包含 400 状态码及首个违反信息的统一响应
+     */
     @ExceptionHandler(ConstraintViolationException.class)
     public Result<?> handleConstraintViolationException(ConstraintViolationException e) {
         Set<ConstraintViolation<?>> violations = e.getConstraintViolations();
@@ -98,4 +150,3 @@ public class GlobalExceptionHandler {
         return Result.error(ResultCode.PARAM_ERROR.getCode(), message);
     }
 }
-

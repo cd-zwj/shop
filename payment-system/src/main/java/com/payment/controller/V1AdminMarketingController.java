@@ -37,7 +37,7 @@ public class V1AdminMarketingController {
     private final CouponService couponService;
     private final PromotionService promotionService;
 
-    @SaCheckPermission("admin:marketing:list")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:list")
     @GetMapping("/coupons")
     public Result<List<CouponTemplateVO>> listPlatformCouponTemplates(@RequestParam(required = false) String status) {
         return Result.success(couponService.listPlatformTemplates(status).stream()
@@ -45,7 +45,7 @@ public class V1AdminMarketingController {
                 .collect(Collectors.toList()));
     }
 
-    @SaCheckPermission("admin:marketing:create")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:create")
     @PostMapping("/coupons")
     public Result<CouponTemplateVO> createPlatformCouponTemplate(@Valid @RequestBody CouponTemplateCreateDTO dto) {
         CouponTemplate entity = couponService.createTemplate(toPlatformCouponTemplateDTO(dto));
@@ -54,7 +54,7 @@ public class V1AdminMarketingController {
         return Result.success(vo);
     }
 
-    @SaCheckPermission("admin:marketing:list")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:list")
     @GetMapping("/coupons/{templateId}/scopes")
     public Result<List<CouponScopeVO>> listCouponScopes(@PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         return Result.success(couponService.listPlatformScopes(templateId).stream()
@@ -62,7 +62,7 @@ public class V1AdminMarketingController {
                 .collect(Collectors.toList()));
     }
 
-    @SaCheckPermission("admin:marketing:create")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:create")
     @PostMapping("/coupons/{templateId}/scopes")
     public Result<CouponScopeVO> addCouponScope(@PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId,
                                               @Valid @RequestBody CouponScopeCreateDTO dto) {
@@ -73,7 +73,7 @@ public class V1AdminMarketingController {
         return Result.success(vo);
     }
 
-    @SaCheckPermission("admin:marketing:update")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:update")
     @PutMapping("/coupons/{templateId}/activate")
     public Result<Void> activateCouponTemplate(@PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         couponService.listPlatformScopes(templateId);
@@ -81,7 +81,7 @@ public class V1AdminMarketingController {
         return Result.success();
     }
 
-    @SaCheckPermission("admin:marketing:update")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:update")
     @PutMapping("/coupons/{templateId}/disable")
     public Result<Void> disableCouponTemplate(@PathVariable @Min(value = 1, message = "ID必须大于0") Long templateId) {
         couponService.listPlatformScopes(templateId);
@@ -89,7 +89,7 @@ public class V1AdminMarketingController {
         return Result.success();
     }
 
-    @SaCheckPermission("admin:marketing:list")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:list")
     @GetMapping("/activities")
     public Result<List<PromotionActivityVO>> listPlatformActivities(@RequestParam(required = false) String status) {
         return Result.success(promotionService.listPlatformActivities(status).stream()
@@ -97,7 +97,7 @@ public class V1AdminMarketingController {
                 .collect(Collectors.toList()));
     }
 
-    @SaCheckPermission("admin:marketing:create")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:create")
     @PostMapping("/activities")
     public Result<PromotionActivityVO> createPlatformActivity(@Valid @RequestBody PromotionActivityCreateDTO dto) {
         PromotionActivity entity = promotionService.createActivity(toPlatformActivityDTO(dto));
@@ -106,7 +106,7 @@ public class V1AdminMarketingController {
         return Result.success(vo);
     }
 
-    @SaCheckPermission("admin:marketing:list")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:list")
     @GetMapping("/activities/{activityId}/rules")
     public Result<List<ActivityRuleVO>> listActivityRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         return Result.success(promotionService.listPlatformRules(activityId).stream()
@@ -114,7 +114,7 @@ public class V1AdminMarketingController {
                 .collect(Collectors.toList()));
     }
 
-    @SaCheckPermission("admin:marketing:create")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:create")
     @PostMapping("/activities/{activityId}/rules")
     public Result<ActivityRuleVO> addActivityRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId,
                                                 @Valid @RequestBody ActivityRuleCreateDTO dto) {
@@ -125,7 +125,7 @@ public class V1AdminMarketingController {
         return Result.success(vo);
     }
 
-    @SaCheckPermission("admin:marketing:update")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:update")
     @PutMapping("/activities/{activityId}/activate")
     public Result<Void> activateActivity(@PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         promotionService.listPlatformRules(activityId);
@@ -133,7 +133,7 @@ public class V1AdminMarketingController {
         return Result.success();
     }
 
-    @SaCheckPermission("admin:marketing:update")
+    @SaCheckPermission(type = "admin", value = "admin:marketing:update")
     @PutMapping("/activities/{activityId}/disable")
     public Result<Void> disableActivity(@PathVariable @Min(value = 1, message = "ID必须大于0") Long activityId) {
         promotionService.listPlatformRules(activityId);

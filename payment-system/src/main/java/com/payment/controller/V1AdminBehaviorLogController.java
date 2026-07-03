@@ -24,7 +24,7 @@ public class V1AdminBehaviorLogController {
 
     private final UserBehaviorLogService userBehaviorLogService;
 
-    @SaCheckPermission("admin:behaviorlog:list")
+    @SaCheckPermission(type = "admin", value = "admin:behaviorlog:list")
     @GetMapping
     public Result<PageResult<UserBehaviorLogVO>> listBehaviorLogs(
             @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,

@@ -85,7 +85,7 @@ export default function Discovery() {
            (store.address || '').toLowerCase().includes(debouncedQuery.toLowerCase());
   });
 
-  const displayStores = isLoading ? Array.from({ length: 6 }) : filteredStores;
+  const displayStores = isLoading ? Array.from<Tenant | undefined>({ length: 6 }) : filteredStores;
 
   return (
     <div className="flex flex-col gap-6 pb-10 md:gap-8">
@@ -134,13 +134,13 @@ export default function Discovery() {
               const isData = typeof store === 'object';
               return (
                 <motion.article
-                  key={isData ? store.id : index}
+                  key={store ? store.id : index}
                   whileHover={{ y: -8 }}
-                  onClick={() => isData && navigate(`/merchant-store/${store.id}`)}
+                  onClick={() => store && navigate(`/merchant-store/${store.id}`)}
                   className="group flex cursor-pointer flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition-all duration-500 hover:shadow-xl"
                 >
                   <div className="relative h-48 w-full overflow-hidden bg-slate-100">
-                    {isData ? (
+                    {store ? (
                       <img
                         src={getImageUrl(undefined, 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80')}
                         alt={store.name}
@@ -152,7 +152,7 @@ export default function Discovery() {
                     )}
                     <div className="absolute right-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 shadow-md backdrop-blur-md">
                       <Star className="h-4 w-4 fill-current text-primary" />
-                      <span className="text-sm font-bold text-slate-800">{isData ? '平台商户' : '加载中'}</span>
+                      <span className="text-sm font-bold text-slate-800">{store ? '平台商户' : '加载中'}</span>
                     </div>
                     <button className="absolute left-4 top-4 rounded-full bg-white/20 p-2 text-white transition-colors hover:bg-white/40">
                       <Heart className="h-5 w-5" />
@@ -162,12 +162,12 @@ export default function Discovery() {
                   <div className="flex flex-1 flex-col p-6">
                     <div className="mb-2 flex justify-between">
                       <h3 className="line-clamp-1 text-xl font-bold text-slate-900 transition-colors group-hover:text-primary">
-                        {isData ? store.name : '加载商户中...'}
+                        {store ? store.name : "加载商户中..."}
                       </h3>
                     </div>
                     <div className="mb-4 flex items-center gap-1 text-sm text-slate-500">
                       <MapPin className="h-4 w-4" />
-                      <span>{isData ? store.address || `商户 ID: ${store.id}` : '请稍候'}</span>
+                      <span>{store ? store.address || `商户 ID: ${store.id}` : "请稍候"}</span>
                     </div>
                     <p className="mb-6 flex-1 line-clamp-2 text-[15px] leading-relaxed text-slate-600">
                       {isData

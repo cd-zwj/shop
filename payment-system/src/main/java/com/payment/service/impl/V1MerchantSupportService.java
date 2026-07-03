@@ -13,6 +13,11 @@ import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * 商户端辅助支撑服务。
+ * <p>提供商户员工身份校验（requireEmployee）、当前用户可访问的活跃商户列表查询等功能，
+ * 被商户端其他 Service 注入使用，作为统一的权限校验入口。</p>
+ */
 @Service
 @RequiredArgsConstructor
 public class V1MerchantSupportService {
@@ -20,6 +25,12 @@ public class V1MerchantSupportService {
     private final TenantEmployeeMapper tenantEmployeeMapper;
     private final TenantMapper tenantMapper;
 
+    /**
+     * 查询指定用户所属的所有活跃员工记录（关联租户未删除且已启用）。
+     *
+     * @param platformUserId 平台用户ID
+     * @return 活跃员工记录列表，按创建时间升序排列
+     */
     public List<TenantEmployee> listActiveEmployees(Long platformUserId) {
         return tenantEmployeeMapper.selectList(new LambdaQueryWrapper<TenantEmployee>()
                 .eq(TenantEmployee::getPlatformUserId, platformUserId)
@@ -36,6 +47,14 @@ public class V1MerchantSupportService {
                 .toList();
     }
 
+    /**
+     * 校验用户是否为指定租户的有效员工，同时校验租户状态，不满足则抛出异常。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @return 校验通过的员工记录
+     * @throws BusinessException 当用户无权访问该商户，或商户不存在/已停用时抛出
+     */
     public TenantEmployee requireEmployee(Long tenantId, Long platformUserId) {
         TenantEmployee employee = tenantEmployeeMapper.selectOne(new LambdaQueryWrapper<TenantEmployee>()
                 .eq(TenantEmployee::getTenantId, tenantId)
@@ -52,6 +71,12 @@ public class V1MerchantSupportService {
         return employee;
     }
 
+    /**
+     * 获取当前用户可访问的所有商户列表（含商户名称和员工角色）。
+     *
+     * @param platformUserId 平台用户ID
+     * @return 可访问的商户VO列表，包含租户ID、商户名称、员工角色
+     */
     public List<V1MerchantTenantVO> listAccessibleTenants(Long platformUserId) {
         return listActiveEmployees(platformUserId).stream()
                 .map(employee -> {
