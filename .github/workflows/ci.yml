@@ -33,8 +33,10 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
-      - run: mvn test -B
-      - run: mvn package -DskipTests -B
+      - working-directory: payment-system
+        run: mvn test -B
+      - working-directory: payment-system
+        run: mvn package -DskipTests -B
 
   frontend:
     runs-on: ubuntu-latest
@@ -42,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
           cache: npm
           cache-dependency-path: salessystem/package-lock.json
       - working-directory: salessystem
