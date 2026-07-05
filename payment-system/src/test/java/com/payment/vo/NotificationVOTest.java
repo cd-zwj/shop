@@ -41,6 +41,28 @@ class NotificationVOTest {
     }
 
     @Test
+    void walletRechargeNotificationShouldExposePaymentStatusAction() {
+        UserNotification notification = notification("WALLET", "统一钱包充值 WR202607060001 已到账");
+
+        NotificationVO vo = NotificationVO.from(notification);
+
+        assertThat(vo.getActionType()).isEqualTo("RECHARGE_STATUS");
+        assertThat(vo.getActionLabel()).isEqualTo("查看充值");
+        assertThat(vo.getActionUrl()).isEqualTo("/payment/status?bizNo=WR202607060001&source=recharge");
+    }
+
+    @Test
+    void walletNotificationWithoutRechargeNoShouldExposeWalletAction() {
+        UserNotification notification = notification("WALLET", "余额发生变动");
+
+        NotificationVO vo = NotificationVO.from(notification);
+
+        assertThat(vo.getActionType()).isEqualTo("WALLET");
+        assertThat(vo.getActionLabel()).isEqualTo("查看钱包");
+        assertThat(vo.getActionUrl()).isEqualTo("/wallet");
+    }
+
+    @Test
     void systemNotificationWithoutBizNoShouldHaveNoAction() {
         UserNotification notification = notification("SYSTEM", "系统维护通知");
 

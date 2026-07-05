@@ -7,10 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
-  Package,
-  CreditCard,
-  Sparkles,
-  Info,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -19,6 +15,7 @@ import type { AppNotification } from '../types/addressNotification';
 import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
 import { getNotificationAction } from '../utils/notificationAction';
+import { getNotificationPresentation } from '../utils/notificationPresentation';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -37,34 +34,6 @@ function formatDate(isoString: string | null): string {
       minute: '2-digit',
     })
     .replace(/\//g, '-');
-}
-
-function getCategoryIcon(category: string | null) {
-  switch (category) {
-    case 'ORDER':
-      return Package;
-    case 'PAYMENT':
-      return CreditCard;
-    case 'PROMOTION':
-      return Sparkles;
-    default:
-      return Info;
-  }
-}
-
-function getCategoryLabel(category: string | null): string {
-  switch (category) {
-    case 'ORDER':
-      return '订单';
-    case 'PAYMENT':
-      return '支付';
-    case 'PROMOTION':
-      return '活动';
-    case 'SYSTEM':
-      return '系统';
-    default:
-      return '通知';
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -197,7 +166,8 @@ export default function Notifications() {
             className="flex flex-col gap-3"
           >
             {notifications.map((notification) => {
-              const Icon = getCategoryIcon(notification.category);
+              const presentation = getNotificationPresentation(notification.category);
+              const Icon = presentation.icon;
               const isUnread = notification.readStatus === 0;
               const action = getNotificationAction(notification);
 
@@ -253,7 +223,7 @@ export default function Notifications() {
                       </p>
                       <div className="flex items-center gap-2 mt-2">
                         <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
-                          {getCategoryLabel(notification.category)}
+                          {presentation.label}
                         </span>
                         <span className="text-slate-200">&bull;</span>
                         <span className="text-[10px] font-semibold text-slate-300">

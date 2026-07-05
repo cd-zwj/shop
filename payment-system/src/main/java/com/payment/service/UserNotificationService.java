@@ -18,7 +18,7 @@ public interface UserNotificationService {
      * @param platformUserId 目标用户ID
      * @param title          通知标题（非空，不超过200字，自动去除 HTML）
      * @param content        通知内容（非空，不超过5000字，自动去除 HTML）
-     * @param category       通知分类（ORDER / PAYMENT / REFUND / COUPON / SYSTEM / PROMOTION）
+     * @param category       通知分类（ORDER / PAYMENT / REFUND / COUPON / WALLET / SYSTEM / PROMOTION）
      * @return 创建的通知记录
      * @throws com.payment.common.exception.BusinessException 参数不合法时抛出
      */

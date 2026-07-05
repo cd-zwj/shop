@@ -31,7 +31,7 @@ public class UserNotificationServiceImpl implements UserNotificationService {
 
     /** 允许的通知分类 */
     private static final Set<String> ALLOWED_CATEGORIES = Set.of(
-            "ORDER", "PAYMENT", "REFUND", "COUPON", "SYSTEM", "PROMOTION"
+            "ORDER", "PAYMENT", "REFUND", "COUPON", "WALLET", "SYSTEM", "PROMOTION"
     );
 
     /**

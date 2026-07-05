@@ -18,6 +18,7 @@ public class NotificationVO implements Serializable {
 
     private static final long serialVersionUID = 1L;
     private static final Pattern ORDER_NO_PATTERN = Pattern.compile("\\b(?:SO|ORD|EX)[A-Z0-9_-]{2,}\\b");
+    private static final Pattern RECHARGE_NO_PATTERN = Pattern.compile("\\b(?:WR|RCH|RECHARGE)[A-Z0-9_-]{2,}\\b");
 
     private Long id;
     private String title;
@@ -77,6 +78,20 @@ public class NotificationVO implements Serializable {
             vo.setActionType("COUPON_CENTER");
             vo.setActionLabel("查看优惠券");
             vo.setActionUrl("/coupons");
+            return;
+        }
+
+        if ("WALLET".equals(category)) {
+            String rechargeNo = extractRechargeNo(content);
+            if (rechargeNo != null) {
+                vo.setActionType("RECHARGE_STATUS");
+                vo.setActionLabel("查看充值");
+                vo.setActionUrl("/payment/status?bizNo=" + encodeQuery(rechargeNo) + "&source=recharge");
+            } else {
+                vo.setActionType("WALLET");
+                vo.setActionLabel("查看钱包");
+                vo.setActionUrl("/wallet");
+            }
         }
     }
 
@@ -87,5 +102,14 @@ public class NotificationVO implements Serializable {
 
     private static String encodePath(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private static String extractRechargeNo(String content) {
+        Matcher matcher = RECHARGE_NO_PATTERN.matcher(content);
+        return matcher.find() ? matcher.group() : null;
+    }
+
+    private static String encodeQuery(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

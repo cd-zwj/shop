@@ -4,7 +4,9 @@ export type NotificationActionType =
   | 'ORDER_DETAIL'
   | 'REFUND_DETAIL'
   | 'ORDER_LIST'
-  | 'COUPON_CENTER';
+  | 'COUPON_CENTER'
+  | 'WALLET'
+  | 'RECHARGE_STATUS';
 
 export interface NotificationAction {
   type: NotificationActionType;
@@ -13,6 +15,7 @@ export interface NotificationAction {
 }
 
 const ORDER_NO_PATTERN = /\b(?:SO|ORD|EX)[A-Z0-9_-]{2,}\b/;
+const RECHARGE_NO_PATTERN = /\b(?:WR|RCH|RECHARGE)[A-Z0-9_-]{2,}\b/;
 
 export function getNotificationAction(notification: AppNotification): NotificationAction | null {
   if (isValidBackendAction(notification)) {
@@ -58,6 +61,23 @@ export function getNotificationAction(notification: AppNotification): Notificati
     };
   }
 
+  if (category === 'WALLET') {
+    const rechargeNo = extractRechargeNo(notification.content);
+    if (rechargeNo) {
+      return {
+        type: 'RECHARGE_STATUS',
+        label: '查看充值',
+        path: `/payment/status?bizNo=${encodeURIComponent(rechargeNo)}&source=recharge`,
+      };
+    }
+
+    return {
+      type: 'WALLET',
+      label: '查看钱包',
+      path: '/wallet',
+    };
+  }
+
   return null;
 }
 
@@ -77,4 +97,12 @@ function extractOrderNo(content?: string | null) {
   }
 
   return content.match(ORDER_NO_PATTERN)?.[0] ?? null;
+}
+
+function extractRechargeNo(content?: string | null) {
+  if (!content) {
+    return null;
+  }
+
+  return content.match(RECHARGE_NO_PATTERN)?.[0] ?? null;
 }

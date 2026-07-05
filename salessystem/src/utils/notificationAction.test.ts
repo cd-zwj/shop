@@ -46,6 +46,32 @@ describe('notificationAction', () => {
     expect(action?.path).toBe('/coupons');
   });
 
+  it('routes wallet notifications with recharge number to payment status', () => {
+    const action = getNotificationAction(notification({
+      category: 'WALLET',
+      content: '统一钱包充值 WR202607060001 已到账',
+    }));
+
+    expect(action).toEqual({
+      type: 'RECHARGE_STATUS',
+      label: '查看充值',
+      path: '/payment/status?bizNo=WR202607060001&source=recharge',
+    });
+  });
+
+  it('routes wallet notifications without recharge number to wallet center', () => {
+    const action = getNotificationAction(notification({
+      category: 'WALLET',
+      content: '余额发生变动',
+    }));
+
+    expect(action).toEqual({
+      type: 'WALLET',
+      label: '查看钱包',
+      path: '/wallet',
+    });
+  });
+
   it('returns null when no action can be derived', () => {
     expect(getNotificationAction(notification({ category: 'SYSTEM', content: '系统维护' }))).toBeNull();
   });
