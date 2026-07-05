@@ -25,6 +25,13 @@ class SalesOrderVoTest {
     @Test
     void detailVoKeepsIdentityFieldsNeededByRefundAndWorkbenchFlows() {
         SalesOrder order = buildOrder();
+        order.setShippingAddressId(55L);
+        order.setShippingReceiverName("张三");
+        order.setShippingPhone("13800000000");
+        order.setShippingProvince("浙江省");
+        order.setShippingCity("杭州市");
+        order.setShippingDistrict("西湖区");
+        order.setShippingDetail("文三路 1 号");
         com.payment.dto.SalesOrderDetailVO detail = new com.payment.dto.SalesOrderDetailVO();
         detail.setOrder(order);
         detail.setPaymentBillNo("PB202607050001");
@@ -41,6 +48,11 @@ class SalesOrderVoTest {
         assertThat(vo.getPaymentBillStatus()).isEqualTo("FAILED");
         assertThat(vo.getPaymentBillStatusRemark()).isEqualTo("渠道返回：用户取消支付");
         assertThat(vo.getPaymentBillExpireTime()).isEqualTo("2026-07-05T10:30");
+        assertThat(vo.getShippingAddressId()).isEqualTo(55L);
+        assertThat(vo.getShippingReceiverName()).isEqualTo("张三");
+        assertThat(vo.getShippingPhone()).isEqualTo("13800000000");
+        assertThat(vo.getShippingCity()).isEqualTo("杭州市");
+        assertThat(vo.getShippingDetail()).isEqualTo("文三路 1 号");
     }
 
     private SalesOrder buildOrder() {

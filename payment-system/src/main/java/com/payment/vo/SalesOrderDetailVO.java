@@ -35,6 +35,13 @@ public class SalesOrderDetailVO {
     private Long payableAmount;
     private String subject;
     private String source;
+    private Long shippingAddressId;
+    private String shippingReceiverName;
+    private String shippingPhone;
+    private String shippingProvince;
+    private String shippingCity;
+    private String shippingDistrict;
+    private String shippingDetail;
     private String walletStrategy;
     private String expireTime;
     private String createTime;
@@ -84,6 +91,13 @@ public class SalesOrderDetailVO {
                 .payableAmount(VoConverterUtil.toFen(order.getPayableAmount()))
                 .subject(order.getSubject())
                 .source(order.getSource())
+                .shippingAddressId(order.getShippingAddressId())
+                .shippingReceiverName(order.getShippingReceiverName())
+                .shippingPhone(order.getShippingPhone())
+                .shippingProvince(order.getShippingProvince())
+                .shippingCity(order.getShippingCity())
+                .shippingDistrict(order.getShippingDistrict())
+                .shippingDetail(order.getShippingDetail())
                 .walletStrategy(order.getWalletStrategy())
                 .expireTime(VoConverterUtil.formatTime(order.getExpireTime()))
                 .createTime(VoConverterUtil.formatTime(order.getCreateTime()))

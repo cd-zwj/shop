@@ -14,6 +14,7 @@ import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
+import com.payment.entity.UserShippingAddress;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
@@ -24,6 +25,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.mapper.OrderDiscountSnapshotMapper;
+import com.payment.mapper.UserShippingAddressMapper;
 import com.payment.service.CouponService;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantWalletService;
@@ -332,6 +334,154 @@ class AppOrderServiceImplTest {
         assertEquals("商品价格已变化, productId=1", exception.getMessage());
         verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
         verify(orderPricingService, never()).calculate(any());
+    }
+
+    @Test
+    void createOrderShouldRejectPhysicalProductWhenShippingAddressMissing() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+        UserShippingAddressMapper userShippingAddressMapper = mock(UserShippingAddressMapper.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService,
+                userShippingAddressMapper
+        );
+
+        Product product = buildProduct(1L, 9L, "纸质书", "39.00");
+        product.setProductType("PHYSICAL");
+        product.setFulfillmentMode("EXPRESS_DELIVERY");
+        when(productMapper.selectBatchIds(any())).thenReturn(List.of(product));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(buildStock(1L, 3)));
+        when(userShippingAddressMapper.selectOne(any())).thenReturn(null);
+
+        AppCreateOrderDTO dto = new AppCreateOrderDTO();
+        dto.setTenantId(9L);
+        dto.setWalletStrategy(com.payment.enums.WalletStrategyEnum.NO_WALLET);
+        dto.setItems(List.of(buildItem(1L, 1)));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
+
+        assertEquals("收货地址不存在", exception.getMessage());
+        verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
+        verify(orderPricingService, never()).calculate(any());
+    }
+
+    @Test
+    void createOrderShouldPersistShippingAddressSnapshotForPhysicalProduct() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+        UserShippingAddressMapper userShippingAddressMapper = mock(UserShippingAddressMapper.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService,
+                userShippingAddressMapper
+        );
+
+        Product product = buildProduct(1L, 9L, "纸质书", "39.00");
+        product.setProductType("PHYSICAL");
+        product.setFulfillmentMode("EXPRESS_DELIVERY");
+        when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
+        when(productMapper.selectBatchIds(any())).thenReturn(List.of(product));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(buildStock(1L, 3)));
+        when(unifiedWalletService.getWallet(100L)).thenReturn(buildWallet("0.00"));
+        when(merchantWalletService.getWallet(9L, 100L)).thenReturn(buildWallet("0.00"));
+        when(orderPricingService.calculate(any())).thenReturn(buildPricingResult("39.00", "39.00"));
+        when(userShippingAddressMapper.selectById(55L)).thenReturn(buildAddress(55L, 100L));
+
+        doAnswer(invocation -> {
+            SalesOrder salesOrder = invocation.getArgument(0);
+            salesOrder.setId(188L);
+            return 1;
+        }).when(salesOrderMapper).insert(any(SalesOrder.class));
+
+        PaymentBill paymentBill = new PaymentBill();
+        paymentBill.setBillNo("PB_SHIP");
+        when(paymentBillV1Service.createBill(any(), any(), any(), any(), any(), any())).thenReturn(paymentBill);
+        PayResponseDTO payResponseDTO = new PayResponseDTO();
+        payResponseDTO.setPayUrl("https://pay.local/PB_SHIP");
+        when(paymentBillV1Service.createExternalPayment(paymentBill)).thenReturn(payResponseDTO);
+
+        AppCreateOrderDTO dto = new AppCreateOrderDTO();
+        dto.setTenantId(9L);
+        dto.setWalletStrategy(com.payment.enums.WalletStrategyEnum.NO_WALLET);
+        dto.setPaymentChannelCode(PaymentChannelCodeEnum.ALIPAY_PAGE);
+        dto.setAddressId(55L);
+        dto.setItems(List.of(buildItem(1L, 1)));
+
+        service.createOrder(100L, dto);
+
+        ArgumentCaptor<SalesOrder> orderCaptor = ArgumentCaptor.forClass(SalesOrder.class);
+        verify(salesOrderMapper).insert(orderCaptor.capture());
+        SalesOrder savedOrder = orderCaptor.getValue();
+        assertEquals(55L, savedOrder.getShippingAddressId());
+        assertEquals("张三", savedOrder.getShippingReceiverName());
+        assertEquals("13800000000", savedOrder.getShippingPhone());
+        assertEquals("浙江省", savedOrder.getShippingProvince());
+        assertEquals("杭州市", savedOrder.getShippingCity());
+        assertEquals("西湖区", savedOrder.getShippingDistrict());
+        assertEquals("文三路 1 号", savedOrder.getShippingDetail());
     }
 
     @Test
@@ -683,6 +833,8 @@ class AppOrderServiceImplTest {
         product.setName(name);
         product.setPrice(new BigDecimal(price));
         product.setStoreId(66L);
+        product.setProductType("VIRTUAL");
+        product.setFulfillmentMode("ONLINE_VIRTUAL");
         product.setStatus(1);
         product.setDeleted(0);
         return product;
@@ -715,6 +867,21 @@ class AppOrderServiceImplTest {
         stock.setProductId(productId);
         stock.setQuantity(quantity);
         return stock;
+    }
+
+    private UserShippingAddress buildAddress(Long id, Long platformUserId) {
+        UserShippingAddress address = new UserShippingAddress();
+        address.setId(id);
+        address.setPlatformUserId(platformUserId);
+        address.setReceiverName(" 张三 ");
+        address.setPhone(" 13800000000 ");
+        address.setProvince(" 浙江省 ");
+        address.setCity(" 杭州市 ");
+        address.setDistrict(" 西湖区 ");
+        address.setDetail(" 文三路 1 号 ");
+        address.setIsDefault(1);
+        address.setDeleted(0);
+        return address;
     }
 
     private OrderPricingResultVO buildPricingResult(String totalAmount, String payableAmount) {

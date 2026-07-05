@@ -17,8 +17,9 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { appAddressService } from '../services/modules/appAddress';
 import { appCatalogService } from '../services/modules/appCatalog';
-import { createOrderForItems, getOrderCheckoutPath } from '../services/orderCheckout';
+import { createOrderForItems, getOrderCheckoutPath, requiresShippingAddress } from '../services/orderCheckout';
 import type { WalletStrategy } from '../types/order';
 import { ApiError } from '../types/api';
 import type { Product } from '../types/catalog';
@@ -109,6 +110,8 @@ export default function ProductDetails() {
       imageUrl: detail.imageUrl,
       stock: detail.stock,
       category: detail.category,
+      productType: detail.productType,
+      fulfillmentMode: detail.fulfillmentMode,
     };
   }
 
@@ -153,10 +156,21 @@ export default function ProductDetails() {
     setIsSubmittingOrder(true);
 
     try {
+      const checkoutItem = toCheckoutItem(product);
+      let addressId: number | undefined;
+      if (requiresShippingAddress([checkoutItem])) {
+        const addresses = await appAddressService.list();
+        const defaultAddress = addresses.find((address) => address.isDefault === 1) ?? addresses[0];
+        if (!defaultAddress) {
+          setActionMessage('实物商品需要先新增收货地址，请到地址管理维护默认地址后再购买');
+          return;
+        }
+        addressId = defaultAddress.id;
+      }
       const walletStrategy: WalletStrategy = paymentMethod === 'UNIFIED_WALLET' ? 'UNIFIED_ONLY' : 'NO_WALLET';
       const channelCode = paymentMethod === 'UNIFIED_WALLET' ? undefined : paymentMethod;
       const payment = await createOrderForItems(
-        [toCheckoutItem(product)], 'APP_BUY_NOW', undefined, walletStrategy, channelCode);
+        [checkoutItem], 'APP_BUY_NOW', undefined, walletStrategy, channelCode, addressId);
       if (payment.externalPayUrl) {
         const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
         if (!isOpened && payment.paymentBillNo) {

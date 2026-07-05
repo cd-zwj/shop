@@ -53,6 +53,8 @@ function toCartItem(product: Product & { tenantId?: number }, quantity: number):
     imageUrl: product.imageUrl,
     stock: product.stock,
     category: product.category,
+    productType: product.productType,
+    fulfillmentMode: product.fulfillmentMode,
   };
 }
 
@@ -81,6 +83,8 @@ function readCartItems(): CartItem[] {
         imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : null,
         stock: typeof item.stock === 'number' ? item.stock : null,
         category: typeof item.category === 'string' ? item.category : null,
+        productType: typeof item.productType === 'string' ? item.productType : null,
+        fulfillmentMode: typeof item.fulfillmentMode === 'string' ? item.fulfillmentMode : null,
       }));
   } catch {
     return [];
@@ -112,6 +116,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
               imageUrl: product.imageUrl,
               stock: product.stock,
               category: product.category,
+              productType: product.productType,
+              fulfillmentMode: product.fulfillmentMode,
               quantity: clampQuantity(item.quantity + quantity, product.stock),
             }
           : item,

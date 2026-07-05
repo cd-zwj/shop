@@ -22,6 +22,7 @@ import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
+import com.payment.entity.UserShippingAddress;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentBizTypeEnum;
@@ -35,6 +36,7 @@ import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
+import com.payment.mapper.UserShippingAddressMapper;
 import com.payment.service.AppOrderService;
 import com.payment.service.CouponService;
 import com.payment.service.MemberPointsAccountService;
@@ -50,6 +52,7 @@ import com.payment.util.TenantContextHolder;
 import com.payment.vo.VoConverterUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -82,7 +85,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @Autowired)
 public class AppOrderServiceImpl implements AppOrderService {
 
     private final SalesOrderMapper salesOrderMapper;
@@ -102,6 +105,30 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
     private final UserBehaviorLogService userBehaviorLogService;
     private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService;
+    private final UserShippingAddressMapper userShippingAddressMapper;
+
+    public AppOrderServiceImpl(SalesOrderMapper salesOrderMapper,
+                               SalesOrderItemMapper salesOrderItemMapper,
+                               TenantEmployeeMapper tenantEmployeeMapper,
+                               TenantMemberMapper tenantMemberMapper,
+                               ProductMapper productMapper,
+                               UnifiedWalletService unifiedWalletService,
+                               MerchantWalletService merchantWalletService,
+                               PaymentBillV1Service paymentBillV1Service,
+                               WithdrawalService withdrawalService,
+                               MemberPointsAccountService memberPointsAccountService,
+                               PointsRuleMapper pointsRuleMapper,
+                               OrderPricingService orderPricingService,
+                               CouponService couponService,
+                               PromotionService promotionService,
+                               OrderDiscountSnapshotMapper orderDiscountSnapshotMapper,
+                               UserBehaviorLogService userBehaviorLogService,
+                               com.payment.service.delivery.OrderDeliveryService orderDeliveryService) {
+        this(salesOrderMapper, salesOrderItemMapper, tenantEmployeeMapper, tenantMemberMapper, productMapper,
+                unifiedWalletService, merchantWalletService, paymentBillV1Service, withdrawalService,
+                memberPointsAccountService, pointsRuleMapper, orderPricingService, couponService, promotionService,
+                orderDiscountSnapshotMapper, userBehaviorLogService, orderDeliveryService, null);
+    }
 
     /**
      * 创建订单并发起支付。
@@ -137,6 +164,7 @@ public class AppOrderServiceImpl implements AppOrderService {
 
     private OrderPaymentVO createOrderInTenantContext(Long platformUserId, AppCreateOrderDTO dto) {
         List<OrderLine> orderLines = buildOrderLines(dto);
+        ShippingAddressSnapshot shippingAddressSnapshot = resolveShippingAddressSnapshot(platformUserId, dto, orderLines);
         ensureTenantMember(dto.getTenantId(), platformUserId);
 
         String orderNo = BizNoGenerator.generate("SO");
@@ -161,6 +189,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setPayableAmount(pricingResult.getPayableAmount());
         salesOrder.setSubject(resolveSubject(dto.getSubject(), orderLines));
         salesOrder.setSource(dto.getSource());
+        applyShippingAddressSnapshot(salesOrder, shippingAddressSnapshot);
         salesOrder.setStoreId(resolveStoreId(orderLines));
         salesOrder.setWalletStrategy(dto.getWalletStrategy().name());
         salesOrder.setExpireTime(LocalDateTime.now().plusMinutes(30));
@@ -530,6 +559,81 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
 
         return orderLines;
+    }
+
+    private ShippingAddressSnapshot resolveShippingAddressSnapshot(Long platformUserId,
+                                                                   AppCreateOrderDTO dto,
+                                                                   List<OrderLine> orderLines) {
+        if (!requiresShippingAddress(orderLines)) {
+            return null;
+        }
+        if (userShippingAddressMapper == null) {
+            throw new BusinessException("实物商品需要先选择收货地址");
+        }
+
+        UserShippingAddress address = dto.getAddressId() == null
+                ? selectDefaultShippingAddress(platformUserId)
+                : userShippingAddressMapper.selectById(dto.getAddressId());
+
+        if (address == null
+                || !platformUserId.equals(address.getPlatformUserId())
+                || Integer.valueOf(1).equals(address.getDeleted())) {
+            throw new BusinessException("收货地址不存在");
+        }
+
+        return new ShippingAddressSnapshot(
+                address.getId(),
+                trimRequired(address.getReceiverName(), "收货人不能为空"),
+                trimRequired(address.getPhone(), "收货手机号不能为空"),
+                trim(address.getProvince()),
+                trimRequired(address.getCity(), "收货城市不能为空"),
+                trim(address.getDistrict()),
+                trimRequired(address.getDetail(), "收货详细地址不能为空")
+        );
+    }
+
+    private UserShippingAddress selectDefaultShippingAddress(Long platformUserId) {
+        return userShippingAddressMapper.selectOne(new LambdaQueryWrapper<UserShippingAddress>()
+                .eq(UserShippingAddress::getPlatformUserId, platformUserId)
+                .eq(UserShippingAddress::getDeleted, 0)
+                .eq(UserShippingAddress::getIsDefault, 1)
+                .last("LIMIT 1"));
+    }
+
+    private boolean requiresShippingAddress(List<OrderLine> orderLines) {
+        return orderLines.stream().anyMatch(orderLine -> {
+            String productType = orderLine.product().getProductType();
+            String fulfillmentMode = orderLine.product().getFulfillmentMode();
+            return productType == null
+                    || productType.isBlank()
+                    || com.payment.enums.ProductTypeEnum.PHYSICAL.name().equals(productType)
+                    || "EXPRESS_DELIVERY".equals(fulfillmentMode);
+        });
+    }
+
+    private void applyShippingAddressSnapshot(SalesOrder salesOrder, ShippingAddressSnapshot snapshot) {
+        if (snapshot == null) {
+            return;
+        }
+        salesOrder.setShippingAddressId(snapshot.addressId());
+        salesOrder.setShippingReceiverName(snapshot.receiverName());
+        salesOrder.setShippingPhone(snapshot.phone());
+        salesOrder.setShippingProvince(snapshot.province());
+        salesOrder.setShippingCity(snapshot.city());
+        salesOrder.setShippingDistrict(snapshot.district());
+        salesOrder.setShippingDetail(snapshot.detail());
+    }
+
+    private String trimRequired(String value, String message) {
+        String trimmed = trim(value);
+        if (trimmed == null) {
+            throw new BusinessException(message);
+        }
+        return trimmed;
+    }
+
+    private String trim(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     /**
@@ -1083,6 +1187,15 @@ public class AppOrderServiceImpl implements AppOrderService {
     private record OrderLine(Product product,
                              Integer quantity,
                              BigDecimal subtotal) {
+    }
+
+    private record ShippingAddressSnapshot(Long addressId,
+                                           String receiverName,
+                                           String phone,
+                                           String province,
+                                           String city,
+                                           String district,
+                                           String detail) {
     }
 
     /**

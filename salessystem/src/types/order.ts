@@ -26,6 +26,7 @@ export interface AppCreateOrderPayload {
   merchantWalletAmount?: number;
   allowExternalPayFallback?: boolean;
   selectedUserCouponId?: number;
+  addressId?: number;
 }
 
 export interface OrderPayment {
@@ -57,6 +58,13 @@ export interface SalesOrder {
   payableAmount?: number | null;
   subject?: string | null;
   source?: string | null;
+  shippingAddressId?: number | null;
+  shippingReceiverName?: string | null;
+  shippingPhone?: string | null;
+  shippingProvince?: string | null;
+  shippingCity?: string | null;
+  shippingDistrict?: string | null;
+  shippingDetail?: string | null;
   walletStrategy?: string | null;
   expireTime?: string | null;
   createTime?: string | null;

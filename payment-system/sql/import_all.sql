@@ -41,6 +41,7 @@ SOURCE 31_platform_auth_provider.sql;
 SOURCE 32_product_delivery_framework.sql;
 SOURCE 33_card_key_pool.sql;
 SOURCE 35_virtual_product_taxonomy.sql;
+SOURCE 36_order_shipping_snapshot.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

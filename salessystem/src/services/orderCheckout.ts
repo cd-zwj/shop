@@ -8,7 +8,8 @@ export function buildOrderPayload(
   source: CheckoutSource,
   selectedUserCouponId: number | undefined,
   walletStrategy: WalletStrategy,
-  paymentChannelCode: PaymentChannelCode,
+  paymentChannelCode: PaymentChannelCode | undefined,
+  addressId?: number,
 ): AppCreateOrderPayload {
   if (items.length === 0) {
     throw new Error('购物车为空，无法创建订单');
@@ -34,7 +35,17 @@ export function buildOrderPayload(
     walletStrategy,
     paymentChannelCode,
     selectedUserCouponId,
+    addressId,
   };
+}
+
+export function requiresShippingAddress(items: CartItem[]) {
+  return items.some((item) => {
+    const productType = item.productType;
+    return !productType
+      || productType === 'PHYSICAL'
+      || item.fulfillmentMode === 'EXPRESS_DELIVERY';
+  });
 }
 
 export function createOrderForItems(
@@ -42,9 +53,10 @@ export function createOrderForItems(
   source: CheckoutSource,
   selectedUserCouponId: number | undefined,
   walletStrategy: WalletStrategy,
-  paymentChannelCode: PaymentChannelCode,
+  paymentChannelCode: PaymentChannelCode | undefined,
+  addressId?: number,
 ): Promise<OrderPayment> {
-  return appOrderService.createOrder(buildOrderPayload(items, source, selectedUserCouponId, walletStrategy, paymentChannelCode));
+  return appOrderService.createOrder(buildOrderPayload(items, source, selectedUserCouponId, walletStrategy, paymentChannelCode, addressId));
 }
 
 export function getOrderCheckoutPath(payment: OrderPayment) {

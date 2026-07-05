@@ -83,6 +83,8 @@ export async function validateCartItemsAgainstCatalog(
       imageUrl: product.imageUrl,
       stock: product.stock,
       category: product.category,
+      productType: product.productType,
+      fulfillmentMode: product.fulfillmentMode,
     });
   }
 

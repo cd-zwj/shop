@@ -74,6 +74,9 @@ export default function UserOrderDetail() {
   }, [id]);
 
   const order = detail?.order;
+  const shippingAddressText = order
+    ? [order.shippingProvince, order.shippingCity, order.shippingDistrict, order.shippingDetail].filter(Boolean).join('')
+    : '';
   const lifecycle = getOrderLifecyclePresentation(order);
   const latestPaymentPresentation = getPaymentStatusPresentation(
     detail?.paymentBillStatus
@@ -283,6 +286,22 @@ export default function UserOrderDetail() {
                 <p className="font-medium text-slate-500">创建时间：{order?.createTime || '--'}</p>
                 <p className="font-medium text-slate-500">订单来源：{order?.source || '--'}</p>
                 <p className="font-medium text-slate-500">支付策略：{order?.walletStrategy || '--'}</p>
+                {(order?.shippingReceiverName || shippingAddressText) && (
+                  <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-emerald-700">
+                      <MapPin className="h-4 w-4" /> 收货地址快照
+                    </div>
+                    <p className="text-sm font-bold text-slate-900">
+                      {order.shippingReceiverName || '--'} {order.shippingPhone || ''}
+                    </p>
+                    <p className="mt-1 text-sm font-medium leading-relaxed text-slate-600">
+                      {shippingAddressText || '该订单未记录详细地址'}
+                    </p>
+                    <p className="mt-2 text-xs font-medium text-emerald-700">
+                      这是下单时锁定的地址，后续修改地址簿不会改变该订单。
+                    </p>
+                  </div>
+                )}
                 {detail?.paymentBillNo && (
                   <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
                     <div className="mb-2 flex items-center justify-between gap-3">

@@ -77,6 +77,27 @@ public class SalesOrder implements Serializable {
     /** 订单来源渠道，如：APP / H5 / MINI_PROGRAM / POS */
     private String source;
 
+    /** 下单时选择的收货地址 ID，用于追溯来源地址 */
+    private Long shippingAddressId;
+
+    /** 收货人姓名快照 */
+    private String shippingReceiverName;
+
+    /** 收货人手机号快照 */
+    private String shippingPhone;
+
+    /** 收货省份快照 */
+    private String shippingProvince;
+
+    /** 收货城市快照 */
+    private String shippingCity;
+
+    /** 收货区县快照 */
+    private String shippingDistrict;
+
+    /** 收货详细地址快照 */
+    private String shippingDetail;
+
     /**
      * 钱包支付策略，取值如：NO_WALLET / UNIFIED_ONLY / MERCHANT_ONLY /
      * MERCHANT_THEN_UNIFIED / UNIFIED_THEN_MERCHANT / CUSTOM_SPLIT

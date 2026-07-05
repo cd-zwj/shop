@@ -51,6 +51,8 @@ public class AppCreateOrderDTO {
     private Boolean allowExternalPayFallback;
     /** 用户选择的优惠券 ID */
     private Long selectedUserCouponId;
+    /** 用户选择的收货地址 ID；实物商品为空时使用默认地址 */
+    private Long addressId;
     /** 实际使用积分数 */
     private Integer usedPoints;
     /** 用户期望使用的积分数 */

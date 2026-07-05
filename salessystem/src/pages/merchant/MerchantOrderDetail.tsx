@@ -119,6 +119,9 @@ export default function MerchantOrderDetail() {
   }, [id, tenantId]);
 
   const order = detail?.order;
+  const shippingAddressText = order
+    ? [order.shippingProvince, order.shippingCity, order.shippingDistrict, order.shippingDetail].filter(Boolean).join('')
+    : '';
   const timeline = useMemo(
     () => [
       {
@@ -295,7 +298,11 @@ export default function MerchantOrderDetail() {
                 </div>
                 <div>
                   <p className="text-lg font-black">平台用户 UID: {order?.platformUserId || '--'}</p>
-                  <span className="text-xs font-medium text-slate-500">当前接口未返回收货人与地址详情</span>
+                  <span className="text-xs font-medium text-slate-500">
+                    {order?.shippingReceiverName
+                      ? `${order.shippingReceiverName} ${order.shippingPhone || ''}`
+                      : '该订单未记录收货人快照'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -308,6 +315,7 @@ export default function MerchantOrderDetail() {
                   <p>订单来源：{order?.source || '--'}</p>
                   <p>支付策略：{order?.walletStrategy || '--'}</p>
                   <p>到期时间：{order?.expireTime || '--'}</p>
+                  <p>收货地址：{shippingAddressText || '--'}</p>
                 </div>
               </div>
             </div>

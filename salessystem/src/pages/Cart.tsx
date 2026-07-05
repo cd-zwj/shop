@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowRight,
+  MapPin,
   Minus,
   Plus,
   ShoppingBag,
@@ -14,12 +15,15 @@ import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { appCatalogService } from '../services/modules/appCatalog';
+import { appAddressService } from '../services/modules/appAddress';
 import { appCouponService } from '../services/modules/appCoupon';
 import {
   createOrderForItems,
   getOrderCheckoutPath,
+  requiresShippingAddress,
 } from '../services/orderCheckout';
 import { ApiError } from '../types/api';
+import type { Address } from '../types/addressNotification';
 import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
@@ -68,6 +72,10 @@ export default function Cart() {
     null,
   );
   const [error, setError] = useState('');
+  const [addressError, setAddressError] = useState('');
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [selectedAddressIdByTenant, setSelectedAddressIdByTenant] = useState<Record<number, number | undefined>>({});
   const [paymentMethod, setPaymentMethod] = useState<'ALIPAY_PAGE' | 'UNIFIED_WALLET'>('ALIPAY_PAGE');
 
   // Coupon states
@@ -305,6 +313,60 @@ export default function Cart() {
     return Array.from(groups.values());
   }, [items, tenantNames]);
 
+  const shippingTenantIds = useMemo(
+    () => groupedItems
+      .filter((group) => requiresShippingAddress(group.items))
+      .map((group) => group.tenantId),
+    [groupedItems],
+  );
+
+  useEffect(() => {
+    if (currentRole !== 'user' || shippingTenantIds.length === 0) {
+      setAddressError('');
+      return undefined;
+    }
+
+    let isMounted = true;
+    setIsLoadingAddresses(true);
+
+    async function loadAddresses() {
+      try {
+        const result = await appAddressService.list();
+        if (!isMounted) return;
+
+        setAddresses(result);
+        setAddressError('');
+        const defaultAddress = result.find((address) => address.isDefault === 1) ?? result[0];
+        if (!defaultAddress) {
+          return;
+        }
+
+        setSelectedAddressIdByTenant((prev) => {
+          const next = { ...prev };
+          shippingTenantIds.forEach((tenantId) => {
+            if (!next[tenantId]) {
+              next[tenantId] = defaultAddress.id;
+            }
+          });
+          return next;
+        });
+      } catch {
+        if (!isMounted) return;
+        setAddressError('收货地址加载失败，请稍后重试或前往地址管理确认。');
+      } finally {
+        if (isMounted) {
+          setIsLoadingAddresses(false);
+        }
+      }
+    }
+
+    void loadAddresses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentRole, shippingTenantIds.join(',')]);
+
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const totalDiscount = useMemo(() => {
@@ -344,6 +406,13 @@ export default function Cart() {
       return;
     }
 
+    const needsShippingAddress = requiresShippingAddress(validation.refreshedItems);
+    const selectedAddressId = selectedAddressIdByTenant[tenantId];
+    if (needsShippingAddress && !selectedAddressId) {
+      setError('实物商品需要先选择收货地址，请新增或选择默认地址后再结算。');
+      return;
+    }
+
     setError('');
     setIsSubmittingTenantId(tenantId);
 
@@ -373,7 +442,14 @@ export default function Cart() {
 
       const walletStrategy = paymentMethod === 'UNIFIED_WALLET' ? 'UNIFIED_ONLY' : 'NO_WALLET';
       const channelCode = paymentMethod === 'UNIFIED_WALLET' ? undefined : paymentMethod;
-      const payment = await createOrderForItems(tenantItems, 'APP_CART', finalCouponId, walletStrategy, channelCode);
+      const payment = await createOrderForItems(
+        tenantItems,
+        'APP_CART',
+        finalCouponId,
+        walletStrategy,
+        channelCode,
+        needsShippingAddress ? selectedAddressId : undefined,
+      );
       clearTenantItems(tenantId);
 
       if (payment.externalPayUrl) {
@@ -414,9 +490,9 @@ export default function Cart() {
         </p>
       </header>
 
-      {error && (
+      {(error || addressError) && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+          {error || addressError}
         </div>
       )}
 
@@ -439,6 +515,9 @@ export default function Cart() {
               0,
             );
             const isSubmitting = isSubmittingTenantId === group.tenantId;
+            const groupNeedsShipping = requiresShippingAddress(group.items);
+            const selectedAddressId = selectedAddressIdByTenant[group.tenantId];
+            const selectedAddress = addresses.find((address) => address.id === selectedAddressId);
 
             return (
               <motion.section
@@ -536,6 +615,52 @@ export default function Cart() {
                     </article>
                   ))}
                 </div>
+
+                {groupNeedsShipping && (
+                  <div className="flex flex-col gap-3 border-t border-slate-100 bg-white px-5 py-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex items-center gap-1.5 text-sm font-bold text-slate-700">
+                        <MapPin className="h-4 w-4 text-primary" />
+                        收货地址
+                      </span>
+                      {addresses.length > 0 ? (
+                        <select
+                          value={selectedAddressId ?? ''}
+                          disabled={isLoadingAddresses}
+                          onChange={(event) => {
+                            const rawValue = event.target.value;
+                            setSelectedAddressIdByTenant((prev) => ({
+                              ...prev,
+                              [group.tenantId]: rawValue ? Number(rawValue) : undefined,
+                            }));
+                          }}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary sm:w-96"
+                        >
+                          <option value="">请选择收货地址</option>
+                          {addresses.map((address) => (
+                            <option key={address.id} value={address.id}>
+                              {address.isDefault === 1 ? '默认 · ' : ''}
+                              {address.receiverName} {address.phone} · {[address.province, address.city, address.district, address.detail].filter(Boolean).join('')}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => navigate('/addresses')}
+                          className="rounded-xl border border-primary/20 px-4 py-2 text-xs font-black text-primary transition-colors hover:bg-primary/5"
+                        >
+                          去新增地址
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium leading-relaxed text-slate-500">
+                      {selectedAddress
+                        ? `${selectedAddress.receiverName} ${selectedAddress.phone} · ${[selectedAddress.province, selectedAddress.city, selectedAddress.district, selectedAddress.detail].filter(Boolean).join('')}`
+                        : '实物商品会在下单时生成地址快照，后续修改地址不会影响该订单。'}
+                    </p>
+                  </div>
+                )}
 
                 {/* Coupon Selector Section */}
                 <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/20 px-5 py-4">
