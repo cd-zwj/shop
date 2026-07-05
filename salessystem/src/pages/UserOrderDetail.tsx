@@ -33,6 +33,7 @@ import {
   isClosedOrder,
   isPaidOrder,
 } from '../utils/orderLifecycle';
+import { getOrderItemFulfillmentPresentation } from '../utils/orderFulfillment';
 
 export default function UserOrderDetail() {
   const navigate = useNavigate();
@@ -289,21 +290,48 @@ export default function UserOrderDetail() {
               <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-slate-400">商品清单</h3>
               <div className="flex flex-col gap-6">
                 {(isLoading ? Array.from<SalesOrderItem | undefined>({ length: 2 }) : detail?.items || []).map((item, index) => {
+                  const fulfillment = item ? getOrderItemFulfillmentPresentation(item) : null;
                   return (
                     <div key={item ? item.id : index} className="group flex gap-4">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                         <Package className="h-8 w-8 text-slate-300" />
                       </div>
                       <div className="flex flex-1 flex-col justify-center">
-                        <h4 className="font-black leading-tight text-slate-900">
-                          {item ? item.productName : '加载商品中...'}
-                        </h4>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <h4 className="font-black leading-tight text-slate-900">
+                            {item ? item.productName : '加载商品中...'}
+                          </h4>
+                          {fulfillment && (
+                            <span className={cn(
+                              'rounded-lg border px-2 py-0.5 text-[10px] font-black',
+                              getFulfillmentToneClass(fulfillment.tone),
+                            )}>
+                              {fulfillment.label}
+                            </span>
+                          )}
+                        </div>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-sm font-black text-primary">
                             {item ? formatCurrency(item.subtotal) : '...'}
                           </span>
                           <span className="text-xs font-bold text-slate-400">x {item ? item.quantity : '--'}</span>
                         </div>
+                        {fulfillment && (
+                          <div className="mt-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-xs font-medium leading-relaxed text-slate-600">
+                              {fulfillment.description}
+                            </p>
+                            {fulfillment.actionPath && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(fulfillment.actionPath!)}
+                                className="mt-2 text-xs font-black text-primary hover:text-primary/80"
+                              >
+                                {fulfillment.actionLabel}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -439,4 +467,11 @@ export default function UserOrderDetail() {
       </div>
     </div>
   );
+}
+
+function getFulfillmentToneClass(tone: 'neutral' | 'warning' | 'success' | 'danger') {
+  if (tone === 'success') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (tone === 'warning') return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (tone === 'danger') return 'border-red-200 bg-red-50 text-red-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
 }

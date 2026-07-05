@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle2, Clock, Copy, ExternalLink, Package, Truck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { appPurchasesService, type DeliveryStatus, type ProductType, type PurchaseRecord } from '../services/modules/appPurchases';
 import { EmptyState } from '../components/ui/EmptyState';
@@ -48,10 +48,12 @@ function formatTime(t?: string | null): string {
 
 export default function MyPurchases() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { showToast } = useToast();
   const [tab, setTab] = useState<'ALL' | DeliveryStatus>('ALL');
   const [items, setItems] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const orderNoFilter = searchParams.get('orderNo')?.trim() || '';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +67,11 @@ export default function MyPurchases() {
       setLoading(false);
     }
   }, [tab, showToast]);
+
+  const visibleItems = useMemo(
+    () => orderNoFilter ? items.filter((item) => item.orderNo === orderNoFilter) : items,
+    [items, orderNoFilter],
+  );
 
   useEffect(() => {
     void load();
@@ -120,20 +127,25 @@ export default function MyPurchases() {
             </button>
           ))}
         </div>
+        {orderNoFilter && (
+          <div className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-xs font-semibold text-blue-700">
+            正在查看订单 {orderNoFilter} 的履约记录。
+          </div>
+        )}
       </section>
 
       {/* List */}
       <section className="flex flex-col gap-3 px-4">
         {loading && items.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">加载中...</div>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <EmptyState
             icon={<Package className="h-6 w-6" />}
-            title="还没有已购商品"
-            subtitle="支付完成后,商品交付信息会在这里展示"
+            title={orderNoFilter ? '暂无该订单的履约记录' : '还没有已购商品'}
+            subtitle={orderNoFilter ? '如果订单刚完成支付，请稍后刷新查看交付状态。' : '支付完成后,商品交付信息会在这里展示'}
           />
         ) : (
-          items.map((item) => (
+          visibleItems.map((item) => (
             <PurchaseCard
               key={item.id}
               record={item}
