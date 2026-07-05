@@ -48,6 +48,9 @@ public class OrderDeliveryRecord implements Serializable {
     /** 商品 ID，关联 product 表 */
     private Long productId;
 
+    /** 商品名称快照，便于用户侧已购列表展示历史商品 */
+    private String productName;
+
     /** 商品类型，决定 payload 的解读方式 */
     private String productType;
 

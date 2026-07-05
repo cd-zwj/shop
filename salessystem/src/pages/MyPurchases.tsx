@@ -5,6 +5,10 @@ import { useToast } from '../context/ToastContext';
 import { appPurchasesService, type DeliveryStatus, type ProductType, type PurchaseRecord } from '../services/modules/appPurchases';
 import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
+import {
+  getPurchaseDeliveryPresentation,
+  parseDeliveryPayload,
+} from '../utils/purchaseDelivery';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -17,14 +21,6 @@ const TABS: { key: 'ALL' | DeliveryStatus; label: string }[] = [
   { key: 'CONFIRMED', label: '已确认' },
 ];
 
-const PRODUCT_TYPE_LABEL: Record<ProductType, string> = {
-  PHYSICAL: '实物',
-  VIRTUAL: '虚拟内容',
-  CARD_KEY: '兑换码',
-  SERVICE: '服务',
-  SUBSCRIPTION: '订阅',
-};
-
 const STATUS_STYLE: Record<DeliveryStatus, { label: string; cls: string }> = {
   PENDING: { label: '待交付', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
   DELIVERING: { label: '交付中', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
@@ -32,21 +28,12 @@ const STATUS_STYLE: Record<DeliveryStatus, { label: string; cls: string }> = {
   CONFIRMED: { label: '已确认', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
   FAILED: { label: '交付失败', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
   REVOKED: { label: '已撤销', cls: 'bg-slate-100 text-slate-500 border-slate-200' },
+  REVOKE_FAILED: { label: '撤销失败', cls: 'bg-rose-50 text-rose-700 border-rose-200' },
 };
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-function parsePayload(payload?: string | null): Record<string, unknown> | null {
-  if (!payload) return null;
-  try {
-    const v = JSON.parse(payload);
-    return typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
 
 function formatTime(t?: string | null): string {
   if (!t) return '';
@@ -152,6 +139,7 @@ export default function MyPurchases() {
               record={item}
               onConfirm={() => handleConfirm(item.id)}
               onCopy={handleCopy}
+              onOpenOrder={() => navigate(`/order/${encodeURIComponent(item.orderNo)}`)}
             />
           ))
         )}
@@ -168,12 +156,13 @@ interface CardProps {
   record: PurchaseRecord;
   onConfirm: () => void;
   onCopy: (text: string) => void;
+  onOpenOrder: () => void;
 }
 
-function PurchaseCard({ record, onConfirm, onCopy }: CardProps) {
-  const payload = useMemo(() => parsePayload(record.payload), [record.payload]);
+function PurchaseCard({ record, onConfirm, onCopy, onOpenOrder }: CardProps) {
+  const payload = useMemo(() => parseDeliveryPayload(record.payload), [record.payload]);
+  const presentation = useMemo(() => getPurchaseDeliveryPresentation(record), [record]);
   const statusStyle = STATUS_STYLE[record.status] ?? STATUS_STYLE.PENDING;
-  const productLabel = PRODUCT_TYPE_LABEL[record.productType] ?? record.productType;
 
   return (
     <article className="rounded-3xl border border-slate-100 bg-white p-5 shadow-sm">
@@ -191,31 +180,29 @@ function PurchaseCard({ record, onConfirm, onCopy }: CardProps) {
           <IconForType type={record.productType} />
         </div>
         <div className="flex flex-1 flex-col">
-          <span className="text-sm font-black text-slate-900">{productLabel}</span>
-          <span className="text-xs text-slate-400">下单时间 {formatTime(record.createTime)}</span>
+          <span className="text-sm font-black text-slate-900">{presentation.title}</span>
+          <span className="text-xs text-slate-400">{presentation.subtitle}</span>
+          <span className="mt-0.5 text-[11px] text-slate-400">下单时间 {formatTime(record.createTime)}</span>
         </div>
       </div>
+
+      <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600">
+        {presentation.guidance}
+      </p>
 
       {/* Payload 渲染：按类型展示对应字段 */}
       <DeliveryDetail record={record} payload={payload} onCopy={onCopy} />
 
       {/* 操作区 */}
-      {record.status === 'DELIVERED' && (
+      {(presentation.primaryAction || record.status === 'DELIVERED') && (
         <div className="mt-4 flex justify-end">
-          <button
-            onClick={onConfirm}
-            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            确认收货
-          </button>
+          <PrimaryActionButton
+            action={presentation.primaryAction}
+            onConfirm={onConfirm}
+            onCopy={onCopy}
+            onOpenOrder={onOpenOrder}
+          />
         </div>
-      )}
-
-      {record.status === 'FAILED' && record.failReason && (
-        <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700">
-          失败原因: {record.failReason}
-        </p>
       )}
     </article>
   );
@@ -274,7 +261,7 @@ function DeliveryDetail({ record, payload, onCopy }: DetailProps) {
             className="flex items-center gap-1.5 text-xs font-black text-emerald-700 hover:underline"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            查看内容
+            打开交付内容
           </a>
         )}
         {account && (
@@ -331,4 +318,76 @@ function DeliveryDetail({ record, payload, onCopy }: DetailProps) {
     );
   }
   return null;
+}
+
+function PrimaryActionButton({
+  action,
+  onConfirm,
+  onCopy,
+  onOpenOrder,
+}: {
+  action?: ReturnType<typeof getPurchaseDeliveryPresentation>['primaryAction'];
+  onConfirm: () => void;
+  onCopy: (text: string) => void;
+  onOpenOrder: () => void;
+}) {
+  if (!action) {
+    return (
+      <button
+        onClick={onConfirm}
+        className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        确认收货
+      </button>
+    );
+  }
+
+  if (action.kind === 'open' && action.value) {
+    return (
+      <a
+        href={action.value}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
+        {action.label}
+      </a>
+    );
+  }
+
+  if (action.kind === 'copy' && action.value) {
+    return (
+      <button
+        onClick={() => onCopy(action.value ?? '')}
+        className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+      >
+        <Copy className="h-3.5 w-3.5" />
+        {action.label}
+      </button>
+    );
+  }
+
+  if (action.kind === 'confirm') {
+    return (
+      <button
+        onClick={onConfirm}
+        className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        {action.label}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      onClick={onOpenOrder}
+      className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+    >
+      <ExternalLink className="h-3.5 w-3.5" />
+      {action.label}
+    </button>
+  );
 }

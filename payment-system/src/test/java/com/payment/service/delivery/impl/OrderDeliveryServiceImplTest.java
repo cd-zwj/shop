@@ -130,6 +130,7 @@ class OrderDeliveryServiceImplTest {
         verify(deliveryRecordMapper, atLeastOnce()).insert(recordCaptor.capture());
         List<OrderDeliveryRecord> all = recordCaptor.getAllValues();
         assertEquals(3, all.size());
+        org.junit.jupiter.api.Assertions.assertTrue(all.stream().allMatch(r -> r.getProductName() != null && !r.getProductName().isBlank()));
 
         // PHYSICAL → PENDING, VIRTUAL → DELIVERED(含 contentUrl), CARD_KEY → DELIVERED(真实配置 code)
         OrderDeliveryRecord physicalRec = all.stream().filter(r -> r.getProductType().equals("PHYSICAL")).findFirst().orElseThrow();

@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS order_delivery_record (
     order_item_id BIGINT NOT NULL COMMENT '订单项ID',
     platform_user_id BIGINT NOT NULL COMMENT '用户ID',
     product_id BIGINT NOT NULL COMMENT '商品ID',
+    product_name VARCHAR(200) NULL COMMENT '商品名称快照',
     product_type VARCHAR(32) NOT NULL COMMENT '商品类型',
     status VARCHAR(32) NOT NULL COMMENT '状态: PENDING/DELIVERED/CONFIRMED/REVOKED/REVOKE_FAILED/FAILED',
     payload TEXT NULL COMMENT 'JSON 交付内容: 卡密=code, 虚拟=url, 服务=核销码, 实物=物流单号',

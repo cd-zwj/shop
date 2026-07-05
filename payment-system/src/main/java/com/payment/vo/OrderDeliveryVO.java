@@ -19,6 +19,7 @@ public class OrderDeliveryVO implements Serializable {
     private String orderNo;
     private Long orderItemId;
     private Long productId;
+    private String productName;
     private String productType;
     private String status;
     /** 交付内容(JSON 字符串),前端按 productType 解读 */
@@ -39,6 +40,7 @@ public class OrderDeliveryVO implements Serializable {
         vo.setOrderNo(entity.getOrderNo());
         vo.setOrderItemId(entity.getOrderItemId());
         vo.setProductId(entity.getProductId());
+        vo.setProductName(entity.getProductName());
         vo.setProductType(entity.getProductType());
         vo.setStatus(entity.getStatus());
         vo.setPayload(entity.getPayload());

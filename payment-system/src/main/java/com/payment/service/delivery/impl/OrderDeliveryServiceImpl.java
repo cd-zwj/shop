@@ -177,6 +177,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         existing.setOrderNo(order.getOrderNo());
         existing.setPlatformUserId(order.getPlatformUserId());
         existing.setProductId(item.getProductId());
+        existing.setProductName(item.getProductName());
         existing.setProductType(type.name());
         existing.setStatus(result.status().name());
         existing.setPayload(result.payload());
@@ -201,6 +202,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         record.setOrderItemId(item.getId());
         record.setPlatformUserId(order.getPlatformUserId());
         record.setProductId(item.getProductId());
+        record.setProductName(item.getProductName());
         record.setProductType(type.name());
         record.setStatus(result.status().name());
         record.setPayload(result.payload());

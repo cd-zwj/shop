@@ -17,7 +17,8 @@ export type DeliveryStatus =
   | 'DELIVERED'
   | 'CONFIRMED'
   | 'FAILED'
-  | 'REVOKED';
+  | 'REVOKED'
+  | 'REVOKE_FAILED';
 
 export interface PurchaseRecord {
   id: number;
@@ -25,6 +26,7 @@ export interface PurchaseRecord {
   orderNo: string;
   orderItemId: number;
   productId: number;
+  productName?: string | null;
   productType: ProductType;
   status: DeliveryStatus;
   /** JSON 字符串，按 productType 解读 */
