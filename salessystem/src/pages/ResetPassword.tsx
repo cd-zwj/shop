@@ -43,7 +43,7 @@ export default function ResetPassword() {
   }, []);
 
   useEffect(() => {
-    if (cooldown <= 0) return;
+    if (cooldown <= 0) return undefined;
     const timer = window.setInterval(() => {
       setCooldown((value) => (value <= 1 ? 0 : value - 1));
     }, 1000);

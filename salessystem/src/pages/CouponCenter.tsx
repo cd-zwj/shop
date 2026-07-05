@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ticket, ArrowLeft, Store, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Ticket, ArrowLeft, Store, Clock } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appCatalogService } from '../services/modules/appCatalog';
 import { appCouponService } from '../services/modules/appCoupon';
@@ -61,7 +61,7 @@ export default function CouponCenter() {
 
   // Load coupon data for active tenant
   useEffect(() => {
-    if (!activeTenant) return;
+    if (!activeTenant) return undefined;
 
     let isMounted = true;
     async function loadCoupons() {

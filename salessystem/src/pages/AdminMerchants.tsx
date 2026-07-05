@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpDown, Plus, Search, Store } from 'lucide-react';
+import { Plus, Search, Store } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { adminMerchantService } from '../services/modules/adminMerchant';
 import type { AdminMerchantListItem } from '../types/admin';

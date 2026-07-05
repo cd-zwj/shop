@@ -50,4 +50,6 @@ jobs:
       - working-directory: salessystem
         run: npx tsc --noEmit
       - working-directory: salessystem
+        run: npm test
+      - working-directory: salessystem
         run: npm run build

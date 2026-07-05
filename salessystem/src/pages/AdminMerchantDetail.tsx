@@ -18,7 +18,6 @@ export default function AdminMerchantDetailPage() {
   const { id } = useParams();
   const merchantId = Number(id);
   const [merchant, setMerchant] = useState<AdminMerchantDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -29,7 +28,6 @@ export default function AdminMerchantDetailPage() {
     async function loadDetail() {
       if (!Number.isFinite(merchantId)) {
         setError('商户编号无效');
-        setIsLoading(false);
         return;
       }
 
@@ -41,10 +39,6 @@ export default function AdminMerchantDetailPage() {
       } catch {
         if (!isMounted) return;
         setError('商户详情加载失败，请稍后重试');
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
       }
     }
 

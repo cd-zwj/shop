@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
 import {
   ArrowDown,
   ArrowLeft,

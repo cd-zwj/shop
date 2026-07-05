@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { getErrorMessage } from '../utils/errorMessage';
 import {
   ragScenarioChatStream,
   ragSessionCreate,
@@ -123,6 +125,7 @@ function buildWelcomeMessages(role: ActorRole): Message[] {
 
 export default function AIAssistant() {
   const { currentRole } = useAuth();
+  const { showToast } = useToast();
   const safeRole = currentRole === 'merchant' || currentRole === 'admin' ? currentRole : 'user';
   const RoleIcon = roleIcon[safeRole];
   const [selectedScenario, setSelectedScenario] = useState<AiScenario>(roleScenarios[safeRole][0].scenario);
@@ -159,7 +162,7 @@ export default function AIAssistant() {
   }, [safeRole]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) return undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -173,8 +176,8 @@ export default function AIAssistant() {
         }));
         setMessages([...buildWelcomeMessages(safeRole), ...historyMessages]);
         setTurnCount(historyMessages.filter(m => m.role === 'user').length);
-      } catch {
-        // 静默失败，不影响正常使用
+      } catch (error) {
+        showToast(getErrorMessage(error, '历史会话加载失败'), 'error');
       }
     })();
     return () => { cancelled = true; };
@@ -193,8 +196,8 @@ export default function AIAssistant() {
     try {
       const result = await ragSessionList('');
       setSessionIds(result.sessions ?? []);
-    } catch {
-      // 静默
+    } catch (error) {
+      showToast(getErrorMessage(error, '历史会话列表加载失败'), 'error');
     }
   }, []);
 
@@ -216,8 +219,8 @@ export default function AIAssistant() {
       await ragSessionDelete(sid, '');
       setSessionIds(prev => prev.filter(id => id !== sid));
       if (sessionId === sid) handleNewSession();
-    } catch {
-      // 静默
+    } catch (error) {
+      showToast(getErrorMessage(error, '删除会话失败'), 'error');
     }
   }, [sessionId, handleNewSession]);
 
@@ -233,8 +236,8 @@ export default function AIAssistant() {
         messageIndex: messages.find(m => m.id === msgId)?.messageIndex ?? 0,
         feedbackType,
       });
-    } catch {
-      // 静默
+    } catch (error) {
+      showToast(getErrorMessage(error, '反馈提交失败'), 'error');
     }
   }, [sessionId, messages]);
 
@@ -291,7 +294,9 @@ export default function AIAssistant() {
         try {
           const text = await ragAsr(blob);
           if (text) setInput(prev => prev + text);
-        } catch { /* ASR 失败静默 */ }
+        } catch (error) {
+          showToast(getErrorMessage(error, '语音识别失败'), 'error');
+        }
       };
       recorder.start();
       mediaRecorderRef.current = recorder;
@@ -303,10 +308,10 @@ export default function AIAssistant() {
           return prev + 1;
         });
       }, 1000);
-    } catch {
-      // 麦克风权限拒绝
+    } catch (error) {
+      showToast(getErrorMessage(error, '无法访问麦克风'), 'error');
     }
-  }, [isRecording]);
+  }, [isRecording, showToast]);
 
   const appendAiToken = (messageId: string, token: string) => {
     setMessages(prev => prev.map(msg => (

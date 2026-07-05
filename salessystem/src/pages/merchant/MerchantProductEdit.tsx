@@ -135,7 +135,7 @@ export default function MerchantProductEdit() {
   }, [id, isEdit, tenantId]);
 
   useEffect(() => {
-    if (!tenantId) return;
+    if (!tenantId) return undefined;
     let isMounted = true;
 
     async function loadOptions() {

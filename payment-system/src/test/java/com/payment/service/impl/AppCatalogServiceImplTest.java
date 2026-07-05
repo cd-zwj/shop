@@ -84,7 +84,7 @@ class AppCatalogServiceImplTest {
     @Test
     void getProductShouldRecordViewBehavior() {
         Product product = buildProduct(5L, 9L);
-        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(product);
+        when(productMapper.selectVisibleAppProductById(5L)).thenReturn(product);
 
         Product result = service.getProductAndRecordView(5L);
 
@@ -95,7 +95,7 @@ class AppCatalogServiceImplTest {
 
     @Test
     void getProductShouldSkipBehaviorWhenProductMissing() {
-        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(productMapper.selectVisibleAppProductById(404L)).thenReturn(null);
 
         assertNull(service.getProductAndRecordView(404L));
         verify(userBehaviorLogService, never())
@@ -105,7 +105,7 @@ class AppCatalogServiceImplTest {
     @Test
     void getProductShouldSwallowBehaviorLogFailure() {
         Product product = buildProduct(5L, 9L);
-        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(product);
+        when(productMapper.selectVisibleAppProductById(5L)).thenReturn(product);
         doThrow(new RuntimeException("埋点异常")).when(userBehaviorLogService)
                 .recordBehavior(any(), any(), any(), any(), any(), any());
 
@@ -116,7 +116,7 @@ class AppCatalogServiceImplTest {
     @Test
     void getProductShouldReturnNullWhenInactiveOrDeleted() {
         // status=0 / deleted=1 的商品不应通过详情接口暴露给 C 端
-        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(productMapper.selectVisibleAppProductById(404L)).thenReturn(null);
 
         assertNull(service.getProductAndRecordView(404L));
         verify(userBehaviorLogService, never())

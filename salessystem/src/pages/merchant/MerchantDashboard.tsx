@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
 import {
   ArrowRight,
   ArrowUpRight,
@@ -7,7 +6,6 @@ import {
   CreditCard,
   Package,
   Plus,
-  ShoppingBag,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -27,6 +25,7 @@ import { merchantProductService } from '../../services/modules/merchantProduct';
 import type { MerchantOrder, MerchantProduct } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
+import { getErrorMessage } from '../../utils/errorMessage';
 
 export default function MerchantDashboard() {
   const navigate = useNavigate();
@@ -36,11 +35,13 @@ export default function MerchantDashboard() {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadDashboard() {
+      setIsLoading(true);
       if (!tenantId) {
         setError('当前商户会话缺少 tenantId，请重新登录');
         setIsLoading(false);
@@ -56,9 +57,11 @@ export default function MerchantDashboard() {
         if (!isMounted) return;
         setProducts(productPage.records ?? []);
         setOrders(orderPage.records ?? []);
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
-        setError('商户仪表盘数据加载失败，请稍后重试');
+        setProducts([]);
+        setOrders([]);
+        setError(getErrorMessage(loadError, '商户仪表盘数据加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -71,7 +74,7 @@ export default function MerchantDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [tenantId]);
+  }, [tenantId, reloadKey]);
 
   const totalSales = useMemo(
     () => orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0),
@@ -124,7 +127,12 @@ export default function MerchantDashboard() {
 
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+          <div className="flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="shrink-0 font-black text-red-700">
+              重试
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
 import {
   ArrowUpDown,
   CheckCircle2,

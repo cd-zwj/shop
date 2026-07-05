@@ -13,6 +13,7 @@ spring:
       - org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
       - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.springframework.ai.vectorstore.milvus.autoconfigure.MilvusVectorStoreAutoConfiguration
       - cn.dev33.satoken.dao.SaTokenDaoRedisJackson
   data:
     elasticsearch:
@@ -70,6 +71,7 @@ logging:
 
 # Spring AI 测试占位，避免测试上下文依赖真实外部凭据
 spring.ai.mcp.client.enabled: false
+spring.ai.vectorstore.milvus.enabled: false
 spring.ai.dashscope.api-key: test-dashscope-key
 spring.ai.dashscope.connect-timeout-ms: 100
 spring.ai.dashscope.read-timeout-ms: 1000

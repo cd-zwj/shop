@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { adminTradeService } from '../services/modules/adminTrade';
 import type { AdminPaymentBill } from '../types/admin';
 import { formatCurrency } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function AdminPayments() {
   const navigate = useNavigate();
@@ -13,11 +14,13 @@ export default function AdminPayments() {
   const [payments, setPayments] = useState<AdminPaymentBill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPayments() {
+      setIsLoading(true);
       try {
         const result = await adminTradeService.listPaymentBills({
           current: 1,
@@ -29,9 +32,10 @@ export default function AdminPayments() {
         if (!isMounted) return;
         setPayments(result.records ?? []);
         setError('');
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
-        setError('支付单列表加载失败，请稍后重试');
+        setPayments([]);
+        setError(getErrorMessage(loadError, '支付单列表加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -44,7 +48,7 @@ export default function AdminPayments() {
     return () => {
       isMounted = false;
     };
-  }, [bizType, payStatus, channelCode]);
+  }, [bizType, payStatus, channelCode, reloadKey]);
 
   const totalAmount = useMemo(
     () => payments.reduce((sum, item) => sum + Number(item.payAmount || 0), 0),
@@ -66,7 +70,12 @@ export default function AdminPayments() {
 
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+          <div className="flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="shrink-0 font-black text-red-700">
+              重试
+            </button>
+          </div>
         </div>
       )}
 

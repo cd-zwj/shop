@@ -10,7 +10,6 @@ export default function AdminOrderDetail() {
   const { id } = useParams();
   const orderNo = id || '';
   const [detail, setDetail] = useState<AdminOrderDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -19,7 +18,6 @@ export default function AdminOrderDetail() {
     async function loadDetail() {
       if (!orderNo) {
         setError('订单号为空');
-        setIsLoading(false);
         return;
       }
 
@@ -31,10 +29,6 @@ export default function AdminOrderDetail() {
       } catch {
         if (!isMounted) return;
         setError('订单详情加载失败，请稍后重试');
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
       }
     }
 

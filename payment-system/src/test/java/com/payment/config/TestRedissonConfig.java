@@ -5,16 +5,20 @@ import org.mockito.Mockito;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RedissonClient;
 import org.redisson.config.Config;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.mail.MailProperties;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.mail.javamail.JavaMailSender;
 
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -63,5 +67,25 @@ public class TestRedissonConfig {
     @Primary
     public MailProperties testMailProperties() {
         return new MailProperties();
+    }
+
+    @Bean
+    @Primary
+    @Qualifier("leafVectorStore")
+    public VectorStore leafVectorStore() {
+        return emptyVectorStore();
+    }
+
+    @Bean
+    @Primary
+    @Qualifier("summaryVectorStore")
+    public VectorStore summaryVectorStore() {
+        return emptyVectorStore();
+    }
+
+    private VectorStore emptyVectorStore() {
+        VectorStore mock = Mockito.mock(VectorStore.class);
+        when(mock.similaritySearch(any(SearchRequest.class))).thenReturn(List.of());
+        return mock;
     }
 }

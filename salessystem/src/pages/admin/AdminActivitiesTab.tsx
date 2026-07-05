@@ -6,8 +6,6 @@ import {
   Calendar,
   Layers,
   X,
-  CheckCircle,
-  PowerOff,
   ChevronDown,
   ChevronUp,
   Percent,
@@ -17,7 +15,6 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { adminMarketingService } from '../../services/modules/adminMarketing';
 import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload } from '../../types/marketing';
-import { formatCurrency } from '../../utils/display';
 import { cn } from '../../lib/utils';
 
 interface AdminActivitiesTabProps {

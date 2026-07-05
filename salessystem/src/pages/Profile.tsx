@@ -5,7 +5,6 @@ import {
   LogOut,
   MapPin,
   Package,
-  Settings,
   Shield,
   ShoppingBag,
   Wallet,

@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 
-const apiBaseURL = process.env.E2E_API_BASE_URL || 'http://127.0.0.1:8080/api';
 const defaultUser = process.env.E2E_USER_NAME || 'user';
 const defaultPassword = process.env.E2E_USER_PASSWORD || 'admin123';
 const redisContainer = process.env.E2E_REDIS_CONTAINER || 'payment-system-redis-1';

@@ -26,6 +26,7 @@ import type { Product, Tenant } from '../types/catalog';
 type ProductWithTenant = Product & { tenantId: number };
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ export default function Home() {
   const [featuredProducts, setFeaturedProducts] = useState<ProductWithTenant[]>([]);
   const [featuredMerchants, setFeaturedMerchants] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -59,6 +62,8 @@ export default function Home() {
     let isMounted = true;
 
     async function loadHomeData() {
+      setIsLoading(true);
+      setError('');
       try {
         const tenants = await appCatalogService.listTenants();
         if (!isMounted) return;
@@ -72,10 +77,11 @@ export default function Home() {
         );
         if (!isMounted) return;
         setFeaturedProducts(productGroups.flat().slice(0, 4));
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
         setFeaturedMerchants([]);
         setFeaturedProducts([]);
+        setError(getErrorMessage(loadError, '首页数据加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -88,7 +94,7 @@ export default function Home() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   return (
     <div className="flex flex-col gap-6 pb-10 md:gap-8">
@@ -169,6 +175,17 @@ export default function Home() {
             查看全部 <ChevronRight className="h-4 w-4" />
           </button>
         </div>
+
+        {error && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            <div className="flex items-center justify-between gap-4">
+              <span>{error}</span>
+              <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="shrink-0 font-black text-red-700">
+                重试
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           {(isLoading ? Array.from<ProductWithTenant | undefined>({ length: 4 }) : featuredProducts).map((product, index) => {            return (

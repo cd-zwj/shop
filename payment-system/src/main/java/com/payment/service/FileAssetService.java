@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.payment.entity.FileAsset;
 import com.payment.vo.FileAssetVO;
 
-import java.util.List;
+import com.payment.common.PageResult;
 
 /**
  * 文件资产管理服务接口。
@@ -40,7 +40,7 @@ public interface FileAssetService extends IService<FileAsset> {
      * @param size     每页条数
      * @return 文件资产 VO 列表
      */
-    List<FileAssetVO> listByTenant(Long tenantId, int page, int size);
+    PageResult<FileAssetVO> listByTenant(Long tenantId, int page, int size);
 
     /**
      * 标记文件为已删除（软删除）。

@@ -6,8 +6,8 @@
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Java 17 / Spring Boot 3.3.8 / MyBatis-Plus 3.5.5 |
-| 认证 | Sa-Token 1.37.0 + JWT，RBAC 五表权限模型 |
+| 后端 | Java 21 / Spring Boot 3.5.15 / MyBatis-Plus 3.5.7 |
+| 认证 | Sa-Token 1.45.0 + JWT，RBAC 五表权限模型 |
 | 前端 | React 19 / TypeScript 5.8 / Vite 6.2 / Tailwind CSS 4 |
 | 数据库 | MySQL 8 / Redis / Elasticsearch |
 | 消息队列 | RabbitMQ + Outbox 模式 + 死信队列 + 补偿机制 |
@@ -19,7 +19,7 @@
 
 ### 前置条件
 
-- Java 17+
+- Java 21+
 - Maven 3.8+
 - Node.js 18+
 - MySQL 8.0+
@@ -57,6 +57,14 @@ npm run dev
 ```bash
 docker-compose up -d
 ```
+
+本地 Docker 默认关闭 Elasticsearch，商品搜索会降级到 MySQL 模糊查询。AI/Milvus、OAuth、微信支付、线上支付回调和真实短信服务需要额外第三方配置，本地开发可以不启用。
+
+## 本地模式能力边界
+
+- 短信默认使用 mock provider，仅用于本地和测试环境。
+- OAuth、微信支付、线上回调地址不在本地模式内。
+- 支付宝真实联调需要配置密钥与可访问回调地址；普通本地开发可只验证内部支付单、订单和退款状态流转。
 
 ## 目录结构
 

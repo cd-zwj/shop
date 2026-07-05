@@ -110,7 +110,7 @@ export default function MerchantFinance() {
 
   /* ---------- 收支流水加载 ---------- */
   useEffect(() => {
-    if (!tenantId) return;
+    if (!tenantId) return undefined;
     let isMounted = true;
     setTxLoading(true);
 

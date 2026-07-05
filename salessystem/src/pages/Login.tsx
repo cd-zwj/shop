@@ -77,7 +77,7 @@ export default function Login() {
 
   // SMS cooldown countdown
   useEffect(() => {
-    if (smsCooldown <= 0) return;
+    if (smsCooldown <= 0) return undefined;
     const timer = setInterval(() => {
       setSmsCooldown((prev) => (prev <= 1 ? 0 : prev - 1));
     }, 1000);

@@ -37,7 +37,7 @@ function toPackage(rule: UnifiedRechargeRule, index: number): RechargePackage {
 
 /** 当后端规则为空时，使用前端硬编码兜底。 */
 function fallbackPackages(): RechargePackage[] {
-  return PRESET_PACKAGES.map((p, i) => ({
+  return PRESET_PACKAGES.map((p) => ({
     id: p.id,
     label: p.label,
     amount: p.amount,

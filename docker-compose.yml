@@ -57,7 +57,7 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_URL: mysql:3306/payment_db
+      DB_URL: jdbc:mysql://mysql:3306/payment_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
       DB_USERNAME: root
       DB_PASSWORD: ${DB_PASSWORD:-root}
       REDIS_HOST: redis

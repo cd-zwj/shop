@@ -10,15 +10,17 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { Tenant } from '../types/catalog';
-import { cn } from '../lib/utils';
 import { getImageUrl } from '../utils/display';
 import { EmptyState } from '../components/ui/EmptyState';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function Discovery() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stores, setStores] = useState<Tenant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('keyword') || '');
   const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get('keyword') || '');
 
@@ -27,13 +29,16 @@ export default function Discovery() {
     let isMounted = true;
 
     async function loadStores() {
+      setIsLoading(true);
+      setError('');
       try {
         const tenants = await appCatalogService.listTenants();
         if (!isMounted) return;
         setStores(tenants);
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
         setStores([]);
+        setError(getErrorMessage(loadError, '门店列表加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -46,7 +51,7 @@ export default function Discovery() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   // Sync search query from URL search parameters
   useEffect(() => {
@@ -120,6 +125,17 @@ export default function Discovery() {
             </div>
           </div>
         </div>
+
+        {error && (
+          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            <div className="flex items-center justify-between gap-4">
+              <span>{error}</span>
+              <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="shrink-0 font-black text-red-700">
+                重试
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {!isLoading && filteredStores.length === 0 ? (

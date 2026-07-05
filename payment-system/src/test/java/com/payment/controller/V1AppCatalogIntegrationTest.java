@@ -207,8 +207,8 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("获取商品详情成功应返回完整商品信息")
         void getProduct_返回商品详情() throws Exception {
-            // service 层用 selectOne + LambdaQueryWrapper 过滤 status=1 / deleted=0
-            when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(product1);
+            // service 层使用专用查询过滤 status=1 / deleted=0
+            when(productMapper.selectVisibleAppProductById(1L)).thenReturn(product1);
 
             mockMvc.perform(get("/v1/app/products/1")
                             .header("Authorization", token))
@@ -226,7 +226,7 @@ class V1AppCatalogIntegrationTest {
         @Test
         @DisplayName("商品不存在时data应为null")
         void getProduct_商品不存在_返回null() throws Exception {
-            when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+            when(productMapper.selectVisibleAppProductById(999L)).thenReturn(null);
 
             mockMvc.perform(get("/v1/app/products/999")
                             .header("Authorization", token))

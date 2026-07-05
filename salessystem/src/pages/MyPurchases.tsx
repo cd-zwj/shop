@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Clock, Copy, ExternalLink, Package, Truck, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock, Copy, ExternalLink, Package, Truck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { appPurchasesService, type DeliveryStatus, type ProductType, type PurchaseRecord } from '../services/modules/appPurchases';

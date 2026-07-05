@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Ticket, Sparkles, ShieldAlert } from 'lucide-react';
 import AdminCouponsTab from './admin/AdminCouponsTab';
 import AdminActivitiesTab from './admin/AdminActivitiesTab';

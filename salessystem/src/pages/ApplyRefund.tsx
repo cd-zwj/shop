@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { appOrderService } from '../services/modules/appOrder';
 import { appRefundService } from '../services/modules/appRefund';
 import { useToast } from '../context/ToastContext';
-import { ApiError } from '../types/api';
 import type { SalesOrderDetail } from '../types/order';
 import type { Refund } from '../types/refund';
 import { formatCurrency } from '../utils/display';

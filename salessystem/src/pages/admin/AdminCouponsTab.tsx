@@ -5,16 +5,12 @@ import {
   Plus,
   Settings,
   X,
-  Layers,
-  ShoppingBag,
-  FolderTree,
   CheckCircle,
   PowerOff
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { adminMarketingService } from '../../services/modules/adminMarketing';
 import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload } from '../../types/marketing';
-import { formatCurrency } from '../../utils/display';
 import { cn } from '../../lib/utils';
 
 interface AdminCouponsTabProps {

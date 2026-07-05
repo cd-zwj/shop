@@ -2,10 +2,10 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.dev33.satoken.annotation.SaMode;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
-import com.payment.entity.CompensationTask;
-import com.payment.entity.RetryTask;
+import com.payment.dto.CompensationTaskVO;
+import com.payment.dto.RetryTaskVO;
 import com.payment.service.CompensationTaskService;
 import com.payment.service.RetryTaskService;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +30,14 @@ public class V1AdminCompensationController {
 
     @SaCheckPermission(type = "admin", value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/compensation-tasks")
-    public Result<Page<CompensationTask>> listCompensationTasks(
+    public Result<PageResult<CompensationTaskVO>> listCompensationTasks(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String bizType,
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size) {
-        return Result.success(compensationTaskService.list(status, bizType, current, size));
+        return Result.success(PageResult.from(
+                compensationTaskService.list(status, bizType, current, size),
+                CompensationTaskVO::from));
     }
 
     @SaCheckPermission(type = "admin", value = "admin:compensation:operate")
@@ -56,12 +58,14 @@ public class V1AdminCompensationController {
 
     @SaCheckPermission(type = "admin", value = {"admin:compensation:list", "admin:dashboard"}, mode = SaMode.OR)
     @GetMapping("/retry-tasks")
-    public Result<Page<RetryTask>> listRetryTasks(
+    public Result<PageResult<RetryTaskVO>> listRetryTasks(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String taskType,
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size) {
-        return Result.success(retryTaskService.list(status, taskType, current, size));
+        return Result.success(PageResult.from(
+                retryTaskService.list(status, taskType, current, size),
+                RetryTaskVO::from));
     }
 
     @SaCheckPermission(type = "admin", value = "admin:compensation:operate")

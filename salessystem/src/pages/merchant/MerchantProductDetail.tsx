@@ -5,7 +5,6 @@ import {
   Edit3,
   Eye,
   ExternalLink,
-  Package,
   ShieldCheck,
   ShoppingBag,
   Trash2,

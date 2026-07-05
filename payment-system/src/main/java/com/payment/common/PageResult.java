@@ -30,20 +30,26 @@ public class PageResult<T> implements Serializable {
     private List<T> records;
     private Long total;
     private Integer page;
+    private Integer current;
     private Integer size;
+    private Integer pages;
 
     public PageResult() {
         this.records = Collections.emptyList();
         this.total = 0L;
         this.page = 1;
+        this.current = 1;
         this.size = 10;
+        this.pages = 0;
     }
 
     public PageResult(List<T> records, long total, int page, int size) {
         this.records = records;
         this.total = total;
         this.page = page;
+        this.current = page;
         this.size = size;
+        this.pages = calculatePages(total, size);
     }
 
     /**
@@ -72,5 +78,12 @@ public class PageResult<T> implements Serializable {
                 (int) page.getCurrent(),
                 (int) page.getSize()
         );
+    }
+
+    private static int calculatePages(long total, int size) {
+        if (size <= 0 || total <= 0) {
+            return 0;
+        }
+        return (int) ((total + size - 1) / size);
     }
 }

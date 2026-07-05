@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Coins, ArrowLeft, Clock, ShoppingBag, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
+import { Coins, ArrowLeft, Clock, ShoppingBag, Sparkles } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appPointsService } from '../services/modules/appPoints';
 import { appCatalogService } from '../services/modules/appCatalog';
@@ -29,8 +29,6 @@ export default function Points() {
   const [isExchanging, setIsExchanging] = useState<number | null>(null);
 
   // Pagination for logs
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
 
   // Fetch initial data
   const loadPointsData = async () => {
@@ -85,7 +83,6 @@ export default function Points() {
       // Load logs
       const logsData = await appPointsService.getPointsLogs(tenantId, 1, 20);
       setLogs(logsData.records ?? []);
-      setTotalPages(logsData.pages ?? 1);
     } catch (e) {
       showToast('获取积分中心数据失败', 'error');
     } finally {

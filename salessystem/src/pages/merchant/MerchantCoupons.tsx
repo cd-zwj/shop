@@ -3,16 +3,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Ticket,
   Plus,
-  Calendar,
-  Lock,
   Layers,
   Settings,
   X,
-  AlertCircle,
-  Tag,
   ShoppingBag,
   FolderTree,
-  Eye,
   CheckCircle,
   PowerOff
 } from 'lucide-react';
@@ -20,7 +15,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
 import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload, MarketingEffectSummary } from '../../types/marketing';
-import { formatCurrency } from '../../utils/display';
 import { cn } from '../../lib/utils';
 
 export default function MerchantCoupons() {

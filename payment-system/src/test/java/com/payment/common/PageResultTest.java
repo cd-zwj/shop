@@ -62,6 +62,7 @@ class PageResultTest {
 
             // Assert
             assertThat(result.getPage()).isEqualTo(5);
+            assertThat(result.getCurrent()).isEqualTo(5);
         }
 
         @Test
@@ -76,6 +77,7 @@ class PageResultTest {
 
             // Assert
             assertThat(result.getSize()).isEqualTo(20);
+            assertThat(result.getPages()).isEqualTo(3);
         }
 
         @Test
@@ -152,7 +154,9 @@ class PageResultTest {
             assertThat(result.getRecords()).isNotNull().isEmpty();
             assertThat(result.getTotal()).isEqualTo(0L);
             assertThat(result.getPage()).isEqualTo(1);
+            assertThat(result.getCurrent()).isEqualTo(1);
             assertThat(result.getSize()).isEqualTo(10);
+            assertThat(result.getPages()).isEqualTo(0);
         }
 
         @Test
@@ -208,7 +212,39 @@ class PageResultTest {
             assertThat(result.getRecords()).containsExactly("item1", "item2");
             assertThat(result.getTotal()).isEqualTo(50L);
             assertThat(result.getPage()).isEqualTo(3);
+            assertThat(result.getCurrent()).isEqualTo(3);
             assertThat(result.getSize()).isEqualTo(15);
+            assertThat(result.getPages()).isEqualTo(4);
+        }
+    }
+
+    @Nested
+    @DisplayName("兼容前端分页字段")
+    class FrontendCompatibility {
+
+        @Test
+        @DisplayName("current 应始终等于 page")
+        void current应等于page() {
+            PageResult<String> result = new PageResult<>(List.of("a"), 21L, 2, 10);
+
+            assertThat(result.getPage()).isEqualTo(2);
+            assertThat(result.getCurrent()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("pages 应按总数和页大小向上取整")
+        void pages应向上取整() {
+            PageResult<String> result = new PageResult<>(List.of("a"), 21L, 1, 10);
+
+            assertThat(result.getPages()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("size 非正数时 pages 应为 0")
+        void size非正数时pages为0() {
+            PageResult<String> result = new PageResult<>(List.of(), 21L, 1, 0);
+
+            assertThat(result.getPages()).isEqualTo(0);
         }
     }
 

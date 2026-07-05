@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.payment.common.BusinessException;
+import com.payment.common.PageResult;
 import com.payment.entity.FileAsset;
 import com.payment.mapper.FileAssetMapper;
 import com.payment.service.FileAssetService;
@@ -12,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 文件资产管理服务实现。
@@ -58,7 +58,7 @@ public class FileAssetServiceImpl
     }
 
     @Override
-    public List<FileAssetVO> listByTenant(Long tenantId, int page, int size) {
+    public PageResult<FileAssetVO> listByTenant(Long tenantId, int page, int size) {
         if (tenantId == null) {
             throw new BusinessException("租户ID不能为空");
         }
@@ -68,9 +68,7 @@ public class FileAssetServiceImpl
                         .eq(FileAsset::getTenantId, tenantId)
                         .eq(FileAsset::getStatus, 1)
                         .orderByDesc(FileAsset::getCreateTime));
-        return pageParam.getRecords().stream()
-                .map(FileAssetVO::from)
-                .toList();
+        return PageResult.from(pageParam, FileAssetVO::from);
     }
 
     @Override

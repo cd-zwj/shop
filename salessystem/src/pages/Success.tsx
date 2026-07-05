@@ -24,7 +24,7 @@ export default function Success() {
   useEffect(() => {
     // 没有 orderNo 时直接展示通用成功页，不调用接口
     if (!orderNo) {
-      return;
+      return undefined;
     }
 
     let isMounted = true;

@@ -5,25 +5,17 @@ import {
   Plus,
   Calendar,
   Layers,
-  Settings,
   X,
-  AlertCircle,
-  ShoppingBag,
   FolderTree,
-  Eye,
-  CheckCircle,
-  PowerOff,
   ChevronDown,
   ChevronUp,
   Percent,
-  Gift,
-  ArrowRight
+  Gift
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
 import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload } from '../../types/marketing';
-import { formatCurrency } from '../../utils/display';
 import { cn } from '../../lib/utils';
 
 export default function MerchantActivities() {

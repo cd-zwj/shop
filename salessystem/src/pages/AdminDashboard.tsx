@@ -14,6 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { adminDashboardService } from '../services/modules/adminDashboard';
 import type { AdminDashboardOverview, AdminInfo } from '../types/admin';
 import { formatCurrency } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 
 const EMPTY_OVERVIEW: AdminDashboardOverview = {
   totalPlatformUsers: 0,
@@ -36,11 +37,13 @@ export default function AdminDashboard() {
   const [overview, setOverview] = useState<AdminDashboardOverview>(EMPTY_OVERVIEW);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadDashboard() {
+      setIsLoading(true);
       try {
         const [nextInfo, nextOverview] = await Promise.all([
           adminDashboardService.getInfo(),
@@ -50,9 +53,9 @@ export default function AdminDashboard() {
         setInfo(nextInfo);
         setOverview(nextOverview);
         setError('');
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
-        setError('管理端总览数据加载失败，请稍后重试');
+        setError(getErrorMessage(loadError, '管理端总览数据加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -65,7 +68,7 @@ export default function AdminDashboard() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const paymentSuccessRate = useMemo(() => {
     if (!overview.totalOrders) {
@@ -89,7 +92,12 @@ export default function AdminDashboard() {
 
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+          <div className="flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button type="button" onClick={() => setReloadKey((key) => key + 1)} className="shrink-0 font-black text-red-700">
+              重试
+            </button>
+          </div>
         </div>
       )}
 

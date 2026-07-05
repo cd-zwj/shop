@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, TrendingUp, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Clock, TrendingUp } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appGrowthService } from '../services/modules/appGrowth';
 import type { GrowthOverview, GrowthLog } from '../types/growth';

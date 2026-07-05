@@ -11,7 +11,6 @@ export default function AdminUserDetailPage() {
   const { id } = useParams();
   const userId = Number(id);
   const [user, setUser] = useState<AdminPlatformUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -22,7 +21,6 @@ export default function AdminUserDetailPage() {
     async function loadUser() {
       if (!Number.isFinite(userId)) {
         setError('用户编号无效');
-        setIsLoading(false);
         return;
       }
 
@@ -34,10 +32,6 @@ export default function AdminUserDetailPage() {
       } catch {
         if (!isMounted) return;
         setError('用户详情加载失败，请稍后重试');
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
       }
     }
 

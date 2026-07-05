@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
-  Clock,
   CreditCard,
   MapPin,
   MessageCircle,

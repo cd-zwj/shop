@@ -77,7 +77,7 @@ export default function Cart() {
     );
 
     if (tenantIds.length === 0) {
-      return;
+      return undefined;
     }
 
     let isMounted = true;
@@ -125,7 +125,7 @@ export default function Cart() {
 
     const tenantsToLoad = activeTenantIds.filter((id) => !loadedTenantsRef.current.has(id));
 
-    if (tenantsToLoad.length === 0) return;
+    if (tenantsToLoad.length === 0) return undefined;
 
     tenantsToLoad.forEach((id) => loadedTenantsRef.current.add(id));
 
