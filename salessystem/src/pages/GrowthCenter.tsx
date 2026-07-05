@@ -7,18 +7,7 @@ import { appGrowthService } from '../services/modules/appGrowth';
 import type { GrowthOverview, GrowthLog } from '../types/growth';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
-
-const CHANGE_TYPE_LABELS: Record<string, string> = {
-  EARN: '获得',
-  DEDUCT: '扣减',
-  ADJUST: '调整',
-};
-
-const BIZ_TYPE_LABELS: Record<string, string> = {
-  ORDER: '订单消费',
-  RECHARGE: '充值',
-  MANUAL: '人工调整',
-};
+import { getGrowthTracePresentation } from '../utils/assetTracePresentation';
 
 export default function GrowthCenter() {
   const navigate = useNavigate();
@@ -197,8 +186,9 @@ export default function GrowthCenter() {
                   <div className="flex flex-col gap-3">
                     <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white dark:bg-slate-900 shadow-sm divide-y divide-slate-50">
                       {logs.map((log) => {
-                        const isEarn = log.changeType === 'EARN';
-                        const isDeduct = log.changeType === 'DEDUCT';
+                        const trace = getGrowthTracePresentation(log);
+                        const isEarn = trace.tone === 'positive';
+                        const isDeduct = trace.tone === 'negative';
                         return (
                           <div
                             key={log.id}
@@ -219,21 +209,22 @@ export default function GrowthCenter() {
                               </div>
                               <div>
                                 <div className="font-extrabold text-slate-800 dark:text-white">
-                                  {log.remark || CHANGE_TYPE_LABELS[log.changeType] || log.changeType}
+                                  {trace.title}
                                 </div>
-                                <div className="mt-0.5 text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                                  {log.bizType && (
-                                    <span>{BIZ_TYPE_LABELS[log.bizType] || log.bizType}</span>
-                                  )}
-                                  {log.bizType && log.bizNo && (
-                                    <span className="text-slate-200">•</span>
-                                  )}
-                                  {log.bizNo && <span>单号: {log.bizNo}</span>}
-                                  {(log.bizType || log.bizNo) && (
-                                    <span className="text-slate-200">•</span>
-                                  )}
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
+                                  <span>{trace.source}</span>
+                                  <span className="text-slate-200">•</span>
                                   <span>{formatDate(log.createTime)}</span>
                                 </div>
+                                {trace.actionPath && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(trace.actionPath!)}
+                                    className="mt-1 text-[11px] font-bold text-primary hover:text-primary/80"
+                                  >
+                                    {trace.actionLabel}
+                                  </button>
+                                )}
                               </div>
                             </div>
                             <div className="text-right">
@@ -247,11 +238,10 @@ export default function GrowthCenter() {
                                       : 'text-blue-600'
                                 )}
                               >
-                                {isEarn ? '+' : isDeduct ? '-' : '~'}
-                                {Math.abs(log.changeGrowth)}
+                                {trace.effect}
                               </div>
                               <div className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                余额 {log.growthAfter}
+                                {trace.balance}
                               </div>
                             </div>
                           </div>

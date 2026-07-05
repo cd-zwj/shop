@@ -10,6 +10,7 @@ import type { Product } from '../types/catalog';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getImageUrl } from '../utils/display';
+import { getPointsTracePresentation } from '../utils/assetTracePresentation';
 
 type ProductWithTenant = Product & { tenantId: number };
 
@@ -239,7 +240,8 @@ export default function Points() {
                         </h3>
                         <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white dark:bg-slate-900 shadow-sm divide-y divide-slate-50">
                           {logItems.map((log) => {
-                            const isGrant = log.type === 'GRANT';
+                            const trace = getPointsTracePresentation(log);
+                            const isGrant = trace.tone === 'positive';
                             return (
                               <div key={log.id} className="flex items-center justify-between p-5 transition-colors hover:bg-slate-50/50">
                                 <div className="flex items-center gap-4">
@@ -251,12 +253,24 @@ export default function Points() {
                                   </div>
                                   <div>
                                     <div className="font-extrabold text-slate-800 dark:text-white">
-                                      {log.reason}
+                                      {trace.title}
                                     </div>
-                                    <div className="mt-0.5 text-xs font-semibold text-slate-400 flex items-center gap-1.5">
-                                      {log.orderNo && <span>订单号: {log.orderNo}</span>}
-                                      {log.orderNo && <span className="text-slate-200">•</span>}
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
+                                      <span>{trace.source}</span>
+                                      <span className="text-slate-200">•</span>
                                       <span>{formatDate(log.createTime)}</span>
+                                    </div>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">
+                                      {trace.hint && <span>{trace.hint}</span>}
+                                      {trace.actionPath && (
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(trace.actionPath!)}
+                                          className="text-primary hover:text-primary/80"
+                                        >
+                                          {trace.actionLabel}
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -265,10 +279,10 @@ export default function Points() {
                                     'text-lg font-black',
                                     isGrant ? 'text-green-600' : 'text-red-600'
                                   )}>
-                                    {isGrant ? '+' : ''}{log.points}
+                                    {trace.effect}
                                   </div>
                                   <div className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                    余额 {log.balance}
+                                    {trace.balance}
                                   </div>
                                 </div>
                               </div>
