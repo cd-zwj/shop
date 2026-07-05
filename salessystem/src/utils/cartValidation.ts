@@ -61,7 +61,15 @@ export async function validateCartItemsAgainstCatalog(
       issues.push({
         productId: item.productId,
         severity: 'warning',
-        message: `${product.name} 价格已从 ${formatCurrency(item.price / 100)} 调整为 ${formatCurrency(product.price / 100)}`,
+        message: `${product.name} 价格已从 ${formatCurrency(item.price)} 调整为 ${formatCurrency(product.price)}`,
+      });
+    }
+
+    if (hasFulfillmentChanged(item, product)) {
+      issues.push({
+        productId: item.productId,
+        severity: 'warning',
+        message: `${product.name} 交付方式已变化，请重新确认是否需要收货地址或虚拟交付说明`,
       });
     }
 
@@ -102,4 +110,12 @@ function isActiveProduct(product: Product) {
     || product.status === 1
     || product.status === '1'
     || product.status === 'active';
+}
+
+function hasFulfillmentChanged(item: CartItem, product: Product) {
+  const nextProductType = product.productType ?? null;
+  const nextFulfillmentMode = product.fulfillmentMode ?? null;
+
+  return (item.productType ?? null) !== nextProductType
+    || (item.fulfillmentMode ?? null) !== nextFulfillmentMode;
 }
