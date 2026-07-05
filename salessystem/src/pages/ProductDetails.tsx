@@ -29,6 +29,7 @@ import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import {
   getAfterSalesNote,
+  getDeliveryAccessPresentation,
   getFulfillmentPresentation,
   getInventoryPresentation,
   getPurchaseLimitNote,
@@ -93,6 +94,7 @@ export default function ProductDetails() {
     unit: product?.unit,
   });
   const fulfillment = getFulfillmentPresentation(product?.fulfillmentMode, product?.productType);
+  const deliveryAccess = getDeliveryAccessPresentation(product?.fulfillmentMode, product?.productType);
   const afterSalesNote = getAfterSalesNote(product?.fulfillmentMode, product?.productType);
   const purchaseLimitNote = getPurchaseLimitNote({
     stock: product?.stock,
@@ -329,6 +331,7 @@ export default function ProductDetails() {
               {[
                 { icon: PackageCheck, title: inventory.label, label: inventory.description },
                 { icon: Truck, title: fulfillment.label, label: fulfillment.description },
+                { icon: CheckCircle2, title: deliveryAccess.label, label: deliveryAccess.description },
                 { icon: ShieldCheck, title: '购买限制', label: purchaseLimitNote },
                 { icon: RotateCcw, title: '售后说明', label: afterSalesNote },
                 {
@@ -348,6 +351,28 @@ export default function ProductDetails() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div className="mb-12 rounded-2xl border border-blue-100 bg-blue-50 p-5">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-blue-600 shadow-sm">
+                <PackageCheck className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-black text-blue-900">{deliveryAccess.label}</h3>
+                <p className="mt-1 text-sm font-semibold leading-relaxed text-blue-700">
+                  {deliveryAccess.description}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate('/my-purchases')}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-blue-700 shadow-sm transition-all hover:bg-blue-100"
+                >
+                  {deliveryAccess.actionLabel}
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="mb-12">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   getAfterSalesNote,
+  getDeliveryAccessPresentation,
   getFulfillmentPresentation,
   getInventoryPresentation,
   getPurchaseLimitNote,
@@ -29,5 +30,35 @@ describe('productDetail helpers', () => {
 
   it('falls back to checkout validation when stock is unknown', () => {
     expect(getPurchaseLimitNote({ stock: null })).toBe('库存以结算时校验为准。');
+  });
+
+  it('tells users where to view delivered card keys after purchase', () => {
+    const presentation = getDeliveryAccessPresentation('ONLINE_VIRTUAL', 'CARD_KEY');
+
+    expect(presentation.label).toBe('卡密查看位置');
+    expect(presentation.description).toContain('我的已购');
+    expect(presentation.description).toContain('兑换码');
+  });
+
+  it('tells users where to reopen virtual files and links', () => {
+    const presentation = getDeliveryAccessPresentation('ONLINE_VIRTUAL', 'VIRTUAL');
+
+    expect(presentation.label).toBe('虚拟内容查看位置');
+    expect(presentation.description).toContain('文件');
+    expect(presentation.actionLabel).toBe('查看已购内容');
+  });
+
+  it('tells users where to present service vouchers', () => {
+    const presentation = getDeliveryAccessPresentation('OFFLINE_SERVICE', 'SERVICE');
+
+    expect(presentation.label).toBe('服务凭证查看位置');
+    expect(presentation.description).toContain('核销码');
+  });
+
+  it('falls back to order fulfillment for physical goods', () => {
+    const presentation = getDeliveryAccessPresentation('EXPRESS_DELIVERY', 'PHYSICAL');
+
+    expect(presentation.label).toBe('物流查看位置');
+    expect(presentation.description).toContain('订单详情');
   });
 });

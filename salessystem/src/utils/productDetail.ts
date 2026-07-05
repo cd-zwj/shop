@@ -12,6 +12,12 @@ export interface InventoryPresentation {
   isOutOfStock: boolean;
 }
 
+export interface DeliveryAccessPresentation {
+  label: string;
+  description: string;
+  actionLabel: string;
+}
+
 export function getInventoryPresentation(product: InventoryInput): InventoryPresentation {
   if (typeof product.stock !== 'number') {
     return {
@@ -96,6 +102,49 @@ export function getPurchaseLimitNote(product: InventoryInput) {
 
   const unit = product.unit?.trim() || '件';
   return `单次立即购买 1 ${unit}，购物车最多不超过当前库存 ${product.stock} ${unit}。`;
+}
+
+export function getDeliveryAccessPresentation(
+  fulfillmentMode?: FulfillmentMode | string | null,
+  productType?: ProductType | string | null,
+): DeliveryAccessPresentation {
+  if (fulfillmentMode === 'ONLINE_VIRTUAL') {
+    if (productType === 'CARD_KEY') {
+      return {
+        label: '卡密查看位置',
+        description: '支付完成并交付成功后，可在“我的已购”中重新查看和复制兑换码。',
+        actionLabel: '前往我的已购',
+      };
+    }
+
+    if (productType === 'SUBSCRIPTION') {
+      return {
+        label: '权益查看位置',
+        description: '支付完成后订阅权益会自动激活，可在“我的已购”查看有效期和交付记录。',
+        actionLabel: '查看权益记录',
+      };
+    }
+
+    return {
+      label: '虚拟内容查看位置',
+      description: '支付完成后，文件、链接或账号信息会进入“我的已购”，后续可随时重新打开。',
+      actionLabel: '查看已购内容',
+    };
+  }
+
+  if (fulfillmentMode === 'OFFLINE_SERVICE') {
+    return {
+      label: '服务凭证查看位置',
+      description: '支付完成后会生成服务核销凭证，可在“我的已购”中向商户出示或复制核销码。',
+      actionLabel: '查看服务凭证',
+    };
+  }
+
+  return {
+    label: '物流查看位置',
+    description: '支付完成后，发货进度和物流信息会同步到订单详情和“我的已购”。',
+    actionLabel: '查看订单履约',
+  };
 }
 
 function getProductTypeLabel(productType?: ProductType | string | null) {
