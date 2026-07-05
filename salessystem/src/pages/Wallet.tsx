@@ -17,6 +17,7 @@ import type { Tenant } from '../types/catalog';
 import type { WalletAccount, WalletLog } from '../types/wallet';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { getWalletLogPresentation } from '../utils/walletLogPresentation';
 
 export default function UserWallet() {
   const navigate = useNavigate();
@@ -72,19 +73,14 @@ export default function UserWallet() {
     }
 
     const totalChange = logs.reduce((sum, log) => sum + Math.abs(Number(log.changeAmount || 0)), 0) || 1;
-    return logs.slice(0, 3).map((log, index) => ({
-      name: log.bizType || `流水 ${index + 1}`,
-      type: log.remark || log.bizNo,
-      amount: formatCurrency(log.changeAmount),
-      percent: `${Math.round((Math.abs(Number(log.changeAmount || 0)) / totalChange) * 100)}%`,
-      color:
-        index === 0
-          ? 'bg-primary/10 text-primary'
-          : index === 1
-            ? 'bg-secondary/10 text-secondary'
-            : 'bg-slate-100 text-slate-600',
-      abbr: (log.bizType || 'WL').slice(0, 2).toUpperCase(),
-    }));
+    return logs.slice(0, 3).map((log, index) => {
+      const presentation = getWalletLogPresentation(log);
+      return {
+        ...presentation,
+        percent: `${Math.round((Math.abs(Number(log.changeAmount || 0)) / totalChange) * 100)}%`,
+        color: index === 0 ? 'bg-primary/10 text-primary' : presentation.badgeClass,
+      };
+    });
   }, [logs]);
 
   return (
@@ -189,29 +185,29 @@ export default function UserWallet() {
 
         <div className="divide-y divide-slate-50">
           {(recentDistribution.length > 0 ? recentDistribution : [{
-            name: '暂无流水',
-            type: '等待真实数据',
-            amount: '$0.00',
+            title: '暂无流水',
+            source: '等待真实数据',
+            amountText: '¥0.00',
             percent: '0%',
             color: 'bg-slate-100 text-slate-600',
-            abbr: 'NA',
+            initials: 'NA',
           }]).map((entry, index) => (
             <motion.div
-              key={`${entry.name}-${index}`}
+              key={`${entry.title}-${index}`}
               whileHover={{ backgroundColor: '#f8fafc' }}
               className="flex items-center justify-between px-8 py-5 transition-colors"
             >
               <div className="flex items-center gap-5">
                 <div className={cn('flex h-12 w-12 items-center justify-center rounded-2xl font-black text-sm shadow-sm', entry.color)}>
-                  {entry.abbr}
+                  {entry.initials}
                 </div>
                 <div>
-                  <div className="font-black text-slate-900">{entry.name}</div>
-                  <div className="mt-0.5 text-xs font-semibold text-slate-400">{entry.type}</div>
+                  <div className="font-black text-slate-900">{entry.title}</div>
+                  <div className="mt-0.5 text-xs font-semibold text-slate-400">{entry.source}</div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-black text-slate-900">{entry.amount}</div>
+                <div className="font-black text-slate-900">{entry.amountText}</div>
                 <div className="mt-0.5 text-xs font-semibold text-slate-400">占变动的 {entry.percent}</div>
               </div>
             </motion.div>

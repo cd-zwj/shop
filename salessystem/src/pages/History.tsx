@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Download, SearchIcon, Wallet } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { appWalletService } from '../services/modules/appWallet';
 import type { WalletLog } from '../types/wallet';
 import { formatCurrency } from '../utils/display';
+import { getWalletLogPresentation } from '../utils/walletLogPresentation';
 
 export default function ConsumptionHistory() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState<WalletLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pageSize, setPageSize] = useState(20);
@@ -151,8 +154,8 @@ export default function ConsumptionHistory() {
         <div className="divide-y divide-slate-50">
           {(isLoading ? Array.from({ length: 5 }) : filteredLogs).map((item: WalletLog | undefined, index) => {
             const isData = typeof item !== 'undefined';
-            const amount = isData ? Number(item.changeAmount || 0) : 0;
-            const isExpense = amount < 0;
+            const presentation = isData ? getWalletLogPresentation(item) : null;
+            const isExpense = presentation?.direction === 'expense';
 
             return (
               <motion.div
@@ -166,23 +169,32 @@ export default function ConsumptionHistory() {
                   </div>
                   <div>
                     <h4 className="text-lg font-black text-slate-900 transition-colors group-hover:text-primary">
-                      {isData ? item.bizType || '钱包流水' : '加载流水中...'}
+                      {presentation?.title ?? '加载流水中...'}
                     </h4>
                     <div className="mt-1 flex items-center gap-3">
                       <span className="text-xs font-bold text-slate-400">{isData ? item.createTime || '--' : '--'}</span>
                       <span className="rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-500">
-                        {isData ? item.bizNo : '同步中'}
+                        {isData ? presentation?.source : '同步中'}
                       </span>
                     </div>
+                    {presentation?.actionPath && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(presentation.actionPath!)}
+                        className="mt-3 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                      >
+                        {presentation.actionLabel}
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 <div className="text-right">
                   <p className={`text-xl font-black tracking-tight ${isExpense ? 'text-slate-900' : 'text-primary'}`}>
-                    {isData ? formatCurrency(amount) : '...'}
+                    {presentation?.amountText ?? '...'}
                   </p>
                   <p className="mt-1 text-xs font-bold text-slate-400">
-                    {isData ? item.remark || `余额变更至 ${formatCurrency(item.balanceAfter)}` : '正在同步'}
+                    {presentation?.balanceText ?? '正在同步'}
                   </p>
                 </div>
               </motion.div>
