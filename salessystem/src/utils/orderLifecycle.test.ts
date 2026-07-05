@@ -122,6 +122,20 @@ describe('orderLifecycle', () => {
     }).failureReason).toContain('交付撤销失败');
   });
 
+  it('keeps refund lifecycle visible when an order already has delivery records', () => {
+    const presentation = getOrderLifecyclePresentation(
+      { orderStatus: 'PAID', payStatus: 'SUCCESS' },
+      {
+        items: [{ deliveryStatus: 'CONFIRMED' }],
+        refunds: [{ refundStatus: 'REJECTED', rejectReason: '超过售后期' }],
+      },
+    );
+
+    expect(presentation.label).toBe('退款驳回');
+    expect(presentation.failureReason).toBe('超过售后期');
+    expect(presentation.nextActions.map((action) => action.key)).toEqual(['contact', 'refund']);
+  });
+
   it('builds actionable merchant work items from orders and stock', () => {
     const items = buildMerchantWorkItems({
       orders: [

@@ -14,8 +14,10 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { appOrderService } from '../services/modules/appOrder';
+import { appRefundService } from '../services/modules/appRefund';
 import { ApiError } from '../types/api';
 import type { SalesOrderDetail, SalesOrderItem } from '../types/order';
+import type { Refund } from '../types/refund';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
@@ -37,6 +39,7 @@ export default function UserOrderDetail() {
   const { id } = useParams();
   const { addCartItems } = useCart();
   const [detail, setDetail] = useState<SalesOrderDetail | null>(null);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   const [actionHint, setActionHint] = useState('');
@@ -57,6 +60,16 @@ export default function UserOrderDetail() {
         if (!isMounted) return;
         setDetail(result);
         setError('');
+
+        try {
+          const refundsResult = await appRefundService.listRefunds(result.order.tenantId, undefined, 1, 100);
+          if (!isMounted) return;
+          setRefunds((refundsResult.records ?? []).filter((refund) => refund.orderNo === result.order.orderNo));
+        } catch {
+          if (!isMounted) return;
+          setRefunds([]);
+          setActionHint('订单已加载，售后状态暂时同步失败，可稍后刷新或进入售后页查看。');
+        }
       } catch {
         if (!isMounted) return;
         setError('订单详情加载失败，请稍后重试');
@@ -79,6 +92,7 @@ export default function UserOrderDetail() {
     : '';
   const lifecycleWithContext = getOrderLifecyclePresentation(order, {
     items: detail?.items,
+    refunds,
     paymentBillStatus: detail?.paymentBillStatus,
     paymentBillStatusRemark: detail?.paymentBillStatusRemark,
   });
@@ -100,6 +114,7 @@ export default function UserOrderDetail() {
   const canRepurchase = canRepurchaseOrder(order);
   const canContinuePay = lifecycleWithContext.nextActions.some((action) => action.key === 'pay');
   const canApplyRefund = lifecycleWithContext.nextActions.some((action) => action.key === 'refund');
+  const canContactMerchant = lifecycleWithContext.nextActions.some((action) => action.key === 'contact');
   const canCancel =
     Boolean(order?.orderNo) &&
     order?.orderStatus !== 'PAID' &&
@@ -144,6 +159,13 @@ export default function UserOrderDetail() {
       await appOrderService.cancelOrder(order.orderNo);
       const refreshed = await appOrderService.getOrder(order.orderNo);
       setDetail(refreshed);
+      void appRefundService.listRefunds(refreshed.order.tenantId, undefined, 1, 100)
+        .then((refundsResult) => {
+          setRefunds((refundsResult.records ?? []).filter((refund) => refund.orderNo === refreshed.order.orderNo));
+        })
+        .catch(() => {
+          setActionHint('订单已更新，售后状态暂时同步失败，可稍后刷新或进入售后页查看。');
+        });
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : '取消订单失败，请稍后重试',
@@ -397,7 +419,11 @@ export default function UserOrderDetail() {
                   <RotateCcw size={16} /> 重新加入购物车
                 </button>
               )}
-              <button className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-100 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:border-primary hover:text-primary">
+              <button
+                onClick={() => order?.tenantId && navigate(`/merchant-store/${order.tenantId}`)}
+                disabled={!canContactMerchant || !order?.tenantId}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-100 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
                 <MessageCircle size={16} /> 联系商户
               </button>
               <button

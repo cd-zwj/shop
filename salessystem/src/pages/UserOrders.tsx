@@ -4,13 +4,16 @@ import {
   Ban,
   ChevronRight,
   CreditCard,
+  MessageCircle,
   RotateCcw,
   ShoppingBag,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appOrderService } from '../services/modules/appOrder';
+import { appRefundService } from '../services/modules/appRefund';
 import { ApiError } from '../types/api';
 import type { SalesOrder, SalesOrderDetail } from '../types/order';
+import type { Refund } from '../types/refund';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
@@ -31,22 +34,33 @@ const ORDER_TABS: Array<{ key: OrderTabKey; label: string }> = [
   { key: 'closed', label: '已关闭' },
 ];
 
-function getOrderLifecycleForList(order: SalesOrder, detail?: SalesOrderDetail) {
+function getOrderLifecycleForList(order: SalesOrder, detail?: SalesOrderDetail, refunds?: Refund[]) {
   return getOrderLifecyclePresentation(order, {
     items: detail?.items,
+    refunds,
     paymentBillStatus: detail?.paymentBillStatus,
     paymentBillStatusRemark: detail?.paymentBillStatusRemark,
   });
 }
 
-function resolveOrderTab(order: SalesOrder, detail?: SalesOrderDetail): OrderTabKey {
-  return getOrderLifecycleForList(order, detail).tab;
+function resolveOrderTab(order: SalesOrder, detail?: SalesOrderDetail, refunds?: Refund[]): OrderTabKey {
+  return getOrderLifecycleForList(order, detail, refunds).tab;
+}
+
+function groupRefundsByOrder(refunds: Refund[]) {
+  return refunds.reduce<Record<string, Refund[]>>((acc, refund) => {
+    return {
+      ...acc,
+      [refund.orderNo]: [...(acc[refund.orderNo] ?? []), refund],
+    };
+  }, {});
 }
 
 export default function UserOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [orderDetailMap, setOrderDetailMap] = useState<Record<string, SalesOrderDetail>>({});
+  const [orderRefundMap, setOrderRefundMap] = useState<Record<string, Refund[]>>({});
   const [paymentBillMap, setPaymentBillMap] = useState<Record<string, string>>({});
   const [selectedTab, setSelectedTab] = useState<OrderTabKey>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -85,9 +99,22 @@ export default function UserOrders() {
 
           setOrderDetailMap(nextDetailMap);
           setPaymentBillMap(nextPaymentBillMap);
+
+          const tenantIds = Array.from(new Set(nextOrders.map((order) => order.tenantId)));
+          const refundResults = await Promise.allSettled(
+            tenantIds.map((tenantId) => appRefundService.listRefunds(tenantId, undefined, 1, 100)),
+          );
+
+          if (!isMounted) return;
+
+          const nextRefundMap = groupRefundsByOrder(
+            refundResults.flatMap((result) => (result.status === 'fulfilled' ? result.value.records ?? [] : [])),
+          );
+          setOrderRefundMap(nextRefundMap);
         } else {
           setOrderDetailMap({});
           setPaymentBillMap({});
+          setOrderRefundMap({});
         }
         setError('');
       } catch {
@@ -111,8 +138,10 @@ export default function UserOrders() {
       return orders;
     }
 
-    return orders.filter((order) => resolveOrderTab(order, orderDetailMap[order.orderNo]) === selectedTab);
-  }, [orderDetailMap, orders, selectedTab]);
+    return orders.filter((order) =>
+      resolveOrderTab(order, orderDetailMap[order.orderNo], orderRefundMap[order.orderNo]) === selectedTab
+    );
+  }, [orderDetailMap, orderRefundMap, orders, selectedTab]);
 
   async function handleCancelOrder(orderNo: string) {
     if (isActionLoading) {
@@ -134,6 +163,16 @@ export default function UserOrders() {
         ...currentMap,
         [orderNo]: refreshed,
       }));
+      void appRefundService.listRefunds(refreshed.order.tenantId, undefined, 1, 100)
+        .then((refundResult) => {
+          setOrderRefundMap((currentMap) => ({
+            ...currentMap,
+            ...groupRefundsByOrder(refundResult.records ?? []),
+          }));
+        })
+        .catch(() => {
+          setActionHint('订单已更新，售后状态暂时同步失败，可进入订单详情或售后页刷新。');
+        });
       setPaymentBillMap((currentMap) => {
         const nextMap = { ...currentMap };
         delete nextMap[orderNo];
@@ -256,9 +295,11 @@ export default function UserOrders() {
             }
 
             const detail = orderDetailMap[order.orderNo];
-            const status = getOrderLifecycleForList(order, detail);
+            const refunds = orderRefundMap[order.orderNo];
+            const status = getOrderLifecycleForList(order, detail, refunds);
             const canCancel = status.nextActions.some((action) => action.key === 'cancel');
             const canContinuePay = status.nextActions.some((action) => action.key === 'pay') && Boolean(paymentBillMap[order.orderNo] || order.externalPayAmount);
+            const canContactMerchant = status.nextActions.some((action) => action.key === 'contact');
             const canRepurchase = canRepurchaseOrder(order);
             const isActing = isActionLoading === order.orderNo;
 
@@ -352,6 +393,15 @@ export default function UserOrders() {
                           >
                             <RotateCcw size={14} />
                             重新购买
+                          </button>
+                        )}
+                        {canContactMerchant && (
+                          <button
+                            onClick={() => navigate(`/merchant-store/${order.tenantId}`)}
+                            className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-black uppercase tracking-widest text-blue-700 transition-all hover:border-blue-200 hover:bg-blue-100"
+                          >
+                            <MessageCircle size={14} />
+                            联系商户
                           </button>
                         )}
                         <button
