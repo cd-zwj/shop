@@ -1,3 +1,6 @@
+export type ProductType = 'PHYSICAL' | 'VIRTUAL' | 'CARD_KEY' | 'SERVICE' | 'SUBSCRIPTION';
+export type FulfillmentMode = 'ONLINE_VIRTUAL' | 'OFFLINE_SERVICE' | 'EXPRESS_DELIVERY';
+
 export interface Tenant {
   id: number;
   tenantCode?: string | null;
@@ -11,6 +14,7 @@ export interface Tenant {
 
 export interface Product {
   id: number;
+  tenantId?: number | null;
   productCode?: string | null;
   name: string;
   price: number;
@@ -19,6 +23,8 @@ export interface Product {
   description?: string | null;
   imageUrl?: string | null;
   stock?: number | null;
+  fulfillmentMode?: FulfillmentMode | string | null;
+  productType?: ProductType | string | null;
   status?: number | string | null;
   createTime?: string | null;
 }

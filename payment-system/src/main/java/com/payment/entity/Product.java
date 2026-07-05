@@ -1,6 +1,7 @@
 package com.payment.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
@@ -93,6 +94,10 @@ public class Product implements Serializable {
      * </ul>
      */
     private String deliveryConfig;
+
+    /** 当前可售库存，仅用于用户端详情等联表查询结果承载。 */
+    @TableField(exist = false)
+    private Integer stock;
 
     /**
      * 商品状态：0-下架，1-上架

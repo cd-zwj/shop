@@ -4,12 +4,14 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
-  Database,
-  Headphones,
-  LineChart,
+  PackageCheck,
   PlayCircle,
+  RotateCcw,
   Search,
+  ShieldCheck,
   ShoppingCart,
+  Store,
+  Truck,
   ZoomIn,
 } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -24,6 +26,12 @@ import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
+import {
+  getAfterSalesNote,
+  getFulfillmentPresentation,
+  getInventoryPresentation,
+  getPurchaseLimitNote,
+} from '../utils/productDetail';
 
 export default function ProductDetails() {
   const navigate = useNavigate();
@@ -32,7 +40,6 @@ export default function ProductDetails() {
   const { currentRole } = useAuth();
   const { addItem, totalItems } = useCart();
   const productId = Number(id);
-  const [selectedTier, setSelectedTier] = useState('pro');
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -42,6 +49,7 @@ export default function ProductDetails() {
 
   const queryTenantId = searchParams.get('tenantId');
   const tenantId = queryTenantId ? Number(queryTenantId) : undefined;
+  const resolvedTenantId = product?.tenantId ?? tenantId;
 
   const thumbnails = [
     'https://images.unsplash.com/photo-1517048676732-d65bc937f952?auto=format&fit=crop&w=600&q=80',
@@ -79,12 +87,22 @@ export default function ProductDetails() {
     };
   }, [productId]);
 
-  const isOutOfStock = typeof product?.stock === 'number' && product.stock <= 0;
+  const inventory = getInventoryPresentation({
+    stock: product?.stock,
+    unit: product?.unit,
+  });
+  const fulfillment = getFulfillmentPresentation(product?.fulfillmentMode, product?.productType);
+  const afterSalesNote = getAfterSalesNote(product?.fulfillmentMode, product?.productType);
+  const purchaseLimitNote = getPurchaseLimitNote({
+    stock: product?.stock,
+    unit: product?.unit,
+  });
+  const isOutOfStock = inventory.isOutOfStock;
 
   function toCheckoutItem(detail: Product): CartItem {
     return {
       productId: detail.id,
-      tenantId: tenantId ?? 0,
+      tenantId: resolvedTenantId ?? 0,
       name: detail.name,
       price: detail.price,
       quantity: 1,
@@ -98,7 +116,7 @@ export default function ProductDetails() {
     if (!product) {
       return;
     }
-    if (!tenantId) {
+    if (!resolvedTenantId) {
       setActionMessage('当前商品缺少商户信息，请从商户店铺或商品列表重新进入');
       return;
     }
@@ -108,7 +126,7 @@ export default function ProductDetails() {
       return;
     }
 
-    addItem({ ...product, tenantId }, 1);
+    addItem({ ...product, tenantId: resolvedTenantId }, 1);
     setActionMessage('已加入购物车，可以继续选购或前往结算');
   }
 
@@ -116,7 +134,7 @@ export default function ProductDetails() {
     if (!product) {
       return;
     }
-    if (!tenantId) {
+    if (!resolvedTenantId) {
       setActionMessage('当前商品缺少商户信息，请从商户店铺或商品列表重新进入');
       return;
     }
@@ -237,7 +255,7 @@ export default function ProductDetails() {
           <div className="mb-8">
             <div className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-400">
               <CheckCircle2 className="h-4 w-4 fill-current text-blue-500" />
-              <span>SalesSystem 认证</span>
+              <span>{resolvedTenantId ? `商户 #${resolvedTenantId}` : '商户信息待确认'}</span>
             </div>
             <h1 className="mb-4 text-3xl font-black leading-tight text-slate-900 md:text-4xl">
               {product?.name || (isLoading ? '商品加载中...' : '未找到商品')}
@@ -252,8 +270,8 @@ export default function ProductDetails() {
               {product ? formatCurrency(product.price) : '...'}
             </span>
             {product?.stock !== undefined && product?.stock !== null && (
-              <span className="mb-1.5 rounded-md border border-red-100 bg-red-50 px-3 py-1 text-xs font-black text-red-600">
-                库存 {product.stock}
+              <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', inventory.toneClass)}>
+                {inventory.label}
               </span>
             )}
           </div>
@@ -291,45 +309,28 @@ export default function ProductDetails() {
             </div>
           </div>
 
-          <div className="mb-10 flex flex-col gap-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-slate-800">许可等级</h3>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { id: 'pro', label: '标准版', desc: '适合基础展示' },
-                { id: 'enterprise', label: '扩展版', desc: '适合企业场景' },
-              ].map((tier) => (
-                <label
-                  key={tier.id}
-                  className={cn(
-                    'relative flex cursor-pointer flex-col rounded-2xl border-2 bg-slate-50/50 p-5 shadow-sm transition-all hover:border-slate-300',
-                    selectedTier === tier.id && 'border-primary bg-white ring-4 ring-primary/5',
-                  )}
-                  onClick={() => setSelectedTier(tier.id)}
-                >
-                  <input type="radio" checked={selectedTier === tier.id} className="sr-only" readOnly />
-                  <span className="font-bold text-slate-900">{tier.label}</span>
-                  <span className="mt-1 text-xs text-slate-500">{tier.desc}</span>
-                  {selectedTier === tier.id && (
-                    <CheckCircle2 className="absolute right-5 top-5 h-5 w-5 fill-current text-primary" />
-                  )}
-                </label>
-              ))}
-            </div>
-          </div>
-
           <div className="mb-12 rounded-2xl border border-slate-100 bg-slate-50 p-6 shadow-inner">
-            <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-slate-800">包含服务</h3>
+            <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-slate-800">购买与交付</h3>
             <ul className="flex flex-col gap-5">
               {[
-                { icon: Database, label: '商品基础信息、库存、分类等都来自真实后端接口。' },
-                { icon: LineChart, label: '后续会继续接入订单、支付状态和用户钱包等真实数据。' },
-                { icon: Headphones, label: '当前页面结构已为后续接单、支付和详情联动预留。' },
+                { icon: PackageCheck, title: inventory.label, label: inventory.description },
+                { icon: Truck, title: fulfillment.label, label: fulfillment.description },
+                { icon: ShieldCheck, title: '购买限制', label: purchaseLimitNote },
+                { icon: RotateCcw, title: '售后说明', label: afterSalesNote },
+                {
+                  icon: Store,
+                  title: '商户信息',
+                  label: resolvedTenantId ? `当前商品归属商户 #${resolvedTenantId}` : '缺少商户信息时不可加入购物车。',
+                },
               ].map((item) => (
-                <li key={item.label} className="flex items-start gap-4">
+                <li key={item.title} className="flex items-start gap-4">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm">
                     <item.icon className="h-5 w-5 text-primary" />
                   </div>
-                  <span className="text-[15px] leading-relaxed text-slate-600">{item.label}</span>
+                  <div>
+                    <div className="text-sm font-bold text-slate-900">{item.title}</div>
+                    <div className="mt-1 text-[15px] leading-relaxed text-slate-600">{item.label}</div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -341,8 +342,8 @@ export default function ProductDetails() {
               <p>{product?.description || '后端真实数据接入后，这里优先展示商品描述、用途、规格和补充说明。'}</p>
               <p>
                 {product?.category
-                  ? `当前商品分类为「${product.category}」，后续还可以继续扩展商户、订单、支付、钱包等完整链路。`
-                  : '当前页面已经切换到真实商品接口，后续会继续接入订单与支付链路。'}
+                  ? `当前商品分类为「${product.category}」，${fulfillment.description}`
+                  : fulfillment.description}
               </p>
             </div>
             <button className="group mt-6 flex items-center gap-1.5 text-sm font-bold text-primary">

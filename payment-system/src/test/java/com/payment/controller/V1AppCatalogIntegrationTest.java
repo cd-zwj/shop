@@ -208,6 +208,9 @@ class V1AppCatalogIntegrationTest {
         @DisplayName("获取商品详情成功应返回完整商品信息")
         void getProduct_返回商品详情() throws Exception {
             // service 层使用专用查询过滤 status=1 / deleted=0
+            product1.setProductType("CARD_KEY");
+            product1.setFulfillmentMode("ONLINE_VIRTUAL");
+            product1.setStock(8);
             when(productMapper.selectVisibleAppProductById(1L)).thenReturn(product1);
 
             mockMvc.perform(get("/v1/app/products/1")
@@ -219,6 +222,10 @@ class V1AppCatalogIntegrationTest {
                     .andExpect(jsonPath("$.data.price").value(2800))
                     .andExpect(jsonPath("$.data.unit").value("杯"))
                     .andExpect(jsonPath("$.data.category").value("饮品"))
+                    .andExpect(jsonPath("$.data.tenantId").value(1))
+                    .andExpect(jsonPath("$.data.stock").value(8))
+                    .andExpect(jsonPath("$.data.productType").value("CARD_KEY"))
+                    .andExpect(jsonPath("$.data.fulfillmentMode").value("ONLINE_VIRTUAL"))
                     .andExpect(jsonPath("$.data.status").value(1))
                     .andExpect(jsonPath("$.timestamp").isNumber());
         }

@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 用户端商品视图对象，隐藏 tenantId、deleted 等内部字段。
+ * 用户端商品视图对象，隐藏 deleted 等内部字段。
  */
 @Data
 @Builder
@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 public class ProductVO {
 
     private Long id;
+    private Long tenantId;
     private String productCode;
     private String name;
     private Long price;
@@ -23,6 +24,9 @@ public class ProductVO {
     private String category;
     private String imageUrl;
     private String description;
+    private Integer stock;
+    private String fulfillmentMode;
+    private String productType;
     private Integer status;
     private String createTime;
 
@@ -32,6 +36,7 @@ public class ProductVO {
         }
         return ProductVO.builder()
                 .id(product.getId())
+                .tenantId(product.getTenantId())
                 .productCode(product.getProductCode())
                 .name(product.getName())
                 .price(VoConverterUtil.toFen(product.getPrice()))
@@ -39,6 +44,9 @@ public class ProductVO {
                 .category(product.getCategory())
                 .imageUrl(product.getImageUrl())
                 .description(product.getDescription())
+                .stock(product.getStock())
+                .fulfillmentMode(product.getFulfillmentMode())
+                .productType(product.getProductType())
                 .status(product.getStatus())
                 .createTime(VoConverterUtil.formatTime(product.getCreateTime()))
                 .build();

@@ -15,13 +15,17 @@ public interface ProductMapper extends BaseMapper<Product> {
 
     @InterceptorIgnore(tenantLine = "true")
     @Select("""
-            SELECT id, tenant_id, product_code, name, price, unit, category, image_url, description,
-                   store_id, virtual_type_id, virtual_category_id, fulfillment_mode,
-                   product_type, delivery_config, status, deleted, create_time, update_time
-            FROM product
-            WHERE id = #{productId}
-              AND status = 1
-              AND deleted = 0
+            SELECT p.id, p.tenant_id, p.product_code, p.name, p.price, p.unit, p.category, p.image_url,
+                   p.description, p.store_id, p.virtual_type_id, p.virtual_category_id, p.fulfillment_mode,
+                   p.product_type, p.delivery_config, p.status, p.deleted, p.create_time, p.update_time,
+                   COALESCE(ps.quantity, 0) AS stock
+            FROM product p
+            LEFT JOIN product_stock ps
+              ON ps.product_id = p.id
+             AND ps.tenant_id = p.tenant_id
+            WHERE p.id = #{productId}
+              AND p.status = 1
+              AND p.deleted = 0
             """)
     Product selectVisibleAppProductById(@Param("productId") Long productId);
 }

@@ -1,13 +1,7 @@
 import type { SalesOrder, SalesOrderDetail } from './order';
+import type { FulfillmentMode, ProductType } from './catalog';
 
-export type ProductType =
-  | 'PHYSICAL'
-  | 'VIRTUAL'
-  | 'CARD_KEY'
-  | 'SERVICE'
-  | 'SUBSCRIPTION';
-
-export type FulfillmentMode = 'ONLINE_VIRTUAL' | 'OFFLINE_SERVICE' | 'EXPRESS_DELIVERY';
+export type { FulfillmentMode, ProductType };
 
 export interface MerchantProduct {
   id: number;
