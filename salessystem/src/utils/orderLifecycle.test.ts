@@ -33,10 +33,10 @@ describe('orderLifecycle', () => {
 
     expect(detail.order.orderNo).toBe('SO001');
     expect(detail.order.tenantId).toBe(2);
-      expect(detail.items).toHaveLength(1);
-      expect(detail.paymentBillNo).toBe('PB001');
-      expect(detail.paymentBillStatus).toBeNull();
-    });
+    expect(detail.items).toHaveLength(1);
+    expect(detail.paymentBillNo).toBe('PB001');
+    expect(detail.paymentBillStatus).toBeNull();
+  });
 
   it('keeps flat payment bill status context on order detail top level', () => {
     const detail = normalizeSalesOrderDetail({
@@ -81,9 +81,45 @@ describe('orderLifecycle', () => {
 
   it('describes user-visible lifecycle states and next actions', () => {
     expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'WAIT_PAY' }).label).toBe('待支付');
+    expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'PAYING' }).label).toBe('支付中');
     expect(getOrderLifecyclePresentation({ orderStatus: 'PAID', payStatus: 'SUCCESS' }).nextActions.map((item) => item.key)).toContain('refund');
     expect(getOrderLifecyclePresentation({ orderStatus: 'CANCELLED', payStatus: 'CLOSED' }).nextActions.map((item) => item.key)).toContain('repurchase');
-    expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }).label).toBe('已关闭');
+    expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }).label).toBe('支付失败');
+    expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }, {
+      paymentBillStatusRemark: '渠道返回：余额不足',
+    }).failureReason).toContain('余额不足');
+  });
+
+  it('uses delivery records to distinguish paid fulfillment states', () => {
+    const baseOrder = { orderStatus: 'PAID', payStatus: 'SUCCESS' };
+
+    expect(getOrderLifecyclePresentation(baseOrder).label).toBe('已支付');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      items: [{ deliveryStatus: 'PENDING' }],
+    }).label).toBe('待发货');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      items: [{ deliveryStatus: 'DELIVERING' }],
+    }).label).toBe('发货中');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      items: [{ deliveryStatus: 'DELIVERED' }],
+    }).label).toBe('已发货');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      items: [{ deliveryStatus: 'CONFIRMED' }],
+    }).label).toBe('已完成');
+  });
+
+  it('uses refund status as the highest priority lifecycle signal', () => {
+    const baseOrder = { orderStatus: 'PAID', payStatus: 'SUCCESS' };
+
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      refunds: [{ refundStatus: 'PROCESSING', refundSuggestion: '等待内部退款单完成' }],
+    }).label).toBe('退款中');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      refunds: [{ refundStatus: 'COMPLETED' }],
+    }).label).toBe('已退款');
+    expect(getOrderLifecyclePresentation(baseOrder, {
+      refunds: [{ refundStatus: 'FAILED', rejectReason: '交付撤销失败' }],
+    }).failureReason).toContain('交付撤销失败');
   });
 
   it('builds actionable merchant work items from orders and stock', () => {

@@ -77,7 +77,11 @@ export default function UserOrderDetail() {
   const shippingAddressText = order
     ? [order.shippingProvince, order.shippingCity, order.shippingDistrict, order.shippingDetail].filter(Boolean).join('')
     : '';
-  const lifecycle = getOrderLifecyclePresentation(order);
+  const lifecycleWithContext = getOrderLifecyclePresentation(order, {
+    items: detail?.items,
+    paymentBillStatus: detail?.paymentBillStatus,
+    paymentBillStatusRemark: detail?.paymentBillStatusRemark,
+  });
   const latestPaymentPresentation = getPaymentStatusPresentation(
     detail?.paymentBillStatus
       ? {
@@ -94,8 +98,8 @@ export default function UserOrderDetail() {
         : null,
   );
   const canRepurchase = canRepurchaseOrder(order);
-  const canContinuePay = lifecycle.nextActions.some((action) => action.key === 'pay');
-  const canApplyRefund = lifecycle.nextActions.some((action) => action.key === 'refund');
+  const canContinuePay = lifecycleWithContext.nextActions.some((action) => action.key === 'pay');
+  const canApplyRefund = lifecycleWithContext.nextActions.some((action) => action.key === 'refund');
   const canCancel =
     Boolean(order?.orderNo) &&
     order?.orderStatus !== 'PAID' &&
@@ -210,8 +214,8 @@ export default function UserOrderDetail() {
         <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
           <div className="mb-8 flex items-center justify-between">
             <span className="text-sm font-black uppercase tracking-widest text-slate-900">订单进度</span>
-            <span className={cn('rounded-lg border px-3 py-1 text-xs font-bold', getOrderToneClass(lifecycle.tone))}>
-              {lifecycle.label}
+            <span className={cn('rounded-lg border px-3 py-1 text-xs font-bold', getOrderToneClass(lifecycleWithContext.tone))}>
+              {lifecycleWithContext.label}
             </span>
           </div>
           <div className="relative flex justify-between">
@@ -234,8 +238,16 @@ export default function UserOrderDetail() {
             ))}
           </div>
           <p className="mt-8 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
-            {lifecycle.description}
+            {lifecycleWithContext.description}
           </p>
+          <p className="mt-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700">
+            {lifecycleWithContext.nextStep}
+          </p>
+          {lifecycleWithContext.failureReason && (
+            <p className="mt-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              失败原因：{lifecycleWithContext.failureReason}
+            </p>
+          )}
         </section>
 
         {error && (
@@ -254,7 +266,8 @@ export default function UserOrderDetail() {
             <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
               <h3 className="mb-6 text-sm font-black uppercase tracking-widest text-slate-400">商品清单</h3>
               <div className="flex flex-col gap-6">
-                {(isLoading ? Array.from<SalesOrderItem | undefined>({ length: 2 }) : detail?.items || []).map((item, index) => {                  return (
+                {(isLoading ? Array.from<SalesOrderItem | undefined>({ length: 2 }) : detail?.items || []).map((item, index) => {
+                  return (
                     <div key={item ? item.id : index} className="group flex gap-4">
                       <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
                         <Package className="h-8 w-8 text-slate-300" />
@@ -350,7 +363,7 @@ export default function UserOrderDetail() {
                 disabled={!order?.orderNo || isCancelling || !canContinuePay}
                 className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isCancelling ? '处理中...' : canContinuePay ? '继续支付 / 查看支付状态' : lifecycle.label}
+                {isCancelling ? '处理中...' : canContinuePay ? '继续支付 / 查看支付状态' : lifecycleWithContext.label}
               </button>
               <p className="relative z-10 mt-3 text-xs font-medium leading-relaxed text-slate-300">
                 继续支付时会先尝试复用仍有效的支付单，若支付单已关闭、失败或过期，则自动新建。

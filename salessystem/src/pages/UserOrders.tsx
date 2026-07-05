@@ -10,7 +10,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { appOrderService } from '../services/modules/appOrder';
 import { ApiError } from '../types/api';
-import type { SalesOrder } from '../types/order';
+import type { SalesOrder, SalesOrderDetail } from '../types/order';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
@@ -19,9 +19,6 @@ import { canRepurchaseOrder } from '../utils/orderActions';
 import {
   getOrderLifecyclePresentation,
   getOrderToneClass,
-  isClosedOrder,
-  isPaidOrder,
-  isPendingPayment,
 } from '../utils/orderLifecycle';
 
 type OrderTabKey = 'all' | 'pending' | 'processing' | 'completed' | 'closed';
@@ -34,25 +31,22 @@ const ORDER_TABS: Array<{ key: OrderTabKey; label: string }> = [
   { key: 'closed', label: '已关闭' },
 ];
 
-function resolveOrderTab(order: SalesOrder): OrderTabKey {
-  if (isPendingPayment(order)) {
-    return 'pending';
-  }
+function getOrderLifecycleForList(order: SalesOrder, detail?: SalesOrderDetail) {
+  return getOrderLifecyclePresentation(order, {
+    items: detail?.items,
+    paymentBillStatus: detail?.paymentBillStatus,
+    paymentBillStatusRemark: detail?.paymentBillStatusRemark,
+  });
+}
 
-  if (isClosedOrder(order)) {
-    return 'closed';
-  }
-
-  if (isPaidOrder(order)) {
-    return 'processing';
-  }
-
-  return 'all';
+function resolveOrderTab(order: SalesOrder, detail?: SalesOrderDetail): OrderTabKey {
+  return getOrderLifecycleForList(order, detail).tab;
 }
 
 export default function UserOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
+  const [orderDetailMap, setOrderDetailMap] = useState<Record<string, SalesOrderDetail>>({});
   const [paymentBillMap, setPaymentBillMap] = useState<Record<string, string>>({});
   const [selectedTab, setSelectedTab] = useState<OrderTabKey>('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -70,23 +64,29 @@ export default function UserOrders() {
         const nextOrders = result.records ?? [];
         setOrders(nextOrders);
 
-        const pendingOrders = nextOrders.filter((order) => isPendingPayment(order));
-        if (pendingOrders.length > 0) {
+        if (nextOrders.length > 0) {
           const details = await Promise.allSettled(
-            pendingOrders.map((order) => appOrderService.getOrder(order.orderNo)),
+            nextOrders.map((order) => appOrderService.getOrder(order.orderNo)),
           );
 
           if (!isMounted) return;
 
-          const nextMap = details.reduce<Record<string, string>>((acc, detail, index) => {
-            if (detail.status === 'fulfilled' && detail.value.paymentBillNo) {
-              acc[pendingOrders[index].orderNo] = detail.value.paymentBillNo;
+          const nextDetailMap = details.reduce<Record<string, SalesOrderDetail>>((acc, detail, index) => {
+            if (detail.status === 'fulfilled') {
+              acc[nextOrders[index].orderNo] = detail.value;
             }
             return acc;
           }, {});
+          const nextPaymentBillMap = Object.fromEntries(
+            Object.entries(nextDetailMap)
+              .filter(([, detail]) => Boolean(detail.paymentBillNo))
+              .map(([orderNo, detail]) => [orderNo, detail.paymentBillNo as string]),
+          );
 
-          setPaymentBillMap(nextMap);
+          setOrderDetailMap(nextDetailMap);
+          setPaymentBillMap(nextPaymentBillMap);
         } else {
+          setOrderDetailMap({});
           setPaymentBillMap({});
         }
         setError('');
@@ -111,8 +111,8 @@ export default function UserOrders() {
       return orders;
     }
 
-    return orders.filter((order) => resolveOrderTab(order) === selectedTab);
-  }, [orders, selectedTab]);
+    return orders.filter((order) => resolveOrderTab(order, orderDetailMap[order.orderNo]) === selectedTab);
+  }, [orderDetailMap, orders, selectedTab]);
 
   async function handleCancelOrder(orderNo: string) {
     if (isActionLoading) {
@@ -130,6 +130,10 @@ export default function UserOrders() {
       setOrders((currentOrders) =>
         currentOrders.map((order) => (order.orderNo === orderNo ? refreshed.order : order)),
       );
+      setOrderDetailMap((currentMap) => ({
+        ...currentMap,
+        [orderNo]: refreshed,
+      }));
       setPaymentBillMap((currentMap) => {
         const nextMap = { ...currentMap };
         delete nextMap[orderNo];
@@ -251,7 +255,8 @@ export default function UserOrders() {
               );
             }
 
-            const status = getOrderLifecyclePresentation(order);
+            const detail = orderDetailMap[order.orderNo];
+            const status = getOrderLifecycleForList(order, detail);
             const canCancel = status.nextActions.some((action) => action.key === 'cancel');
             const canContinuePay = status.nextActions.some((action) => action.key === 'pay') && Boolean(paymentBillMap[order.orderNo] || order.externalPayAmount);
             const canRepurchase = canRepurchaseOrder(order);
@@ -299,6 +304,14 @@ export default function UserOrders() {
                       <p className="mt-1 text-xs font-medium text-slate-400">
                         {status.description}
                       </p>
+                      <p className="mt-1 text-xs font-semibold text-blue-600">
+                        {status.nextStep}
+                      </p>
+                      {status.failureReason && (
+                        <p className="mt-1 text-xs font-semibold text-red-600">
+                          失败原因：{status.failureReason}
+                        </p>
+                      )}
                     </div>
                     <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                       <span className="text-xs font-medium text-slate-400">
