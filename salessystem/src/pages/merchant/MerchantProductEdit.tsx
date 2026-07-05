@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
   ChevronRight,
@@ -29,6 +29,7 @@ import type {
   VirtualProductType,
 } from '../../types/merchant';
 import { ApiError } from '../../types/api';
+import { buildProductEditImpacts, type ProductEditImpactTone } from '../../utils/productEditImpact';
 
 const EMPTY_FORM: MerchantProductUpsertPayload = {
   productCode: '',
@@ -81,6 +82,7 @@ export default function MerchantProductEdit() {
   const [stores, setStores] = useState<MerchantStore[]>([]);
   const [virtualTypes, setVirtualTypes] = useState<VirtualProductType[]>([]);
   const [virtualCategories, setVirtualCategories] = useState<VirtualProductCategory[]>([]);
+  const fieldImpacts = useMemo(() => buildProductEditImpacts(formData), [formData]);
 
   useEffect(() => {
     let isMounted = true;
@@ -762,6 +764,18 @@ export default function MerchantProductEdit() {
               </p>
             </div>
           </section>
+
+          <section className="flex flex-col gap-4 rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">字段影响提示</h3>
+            {fieldImpacts.map((impact) => (
+              <div key={impact.key} className={`rounded-[24px] border px-5 py-4 ${getImpactToneClass(impact.tone)}`}>
+                <div className="text-xs font-black">{impact.label}</div>
+                <p className="mt-2 text-xs font-medium leading-relaxed opacity-80">
+                  {impact.description}
+                </p>
+              </div>
+            ))}
+          </section>
         </div>
       </div>
     </div>
@@ -855,4 +869,14 @@ function isProductTypeAllowed(mode: FulfillmentMode, productType: ProductType) {
     return productType === 'SERVICE';
   }
   return ONLINE_PRODUCT_TYPES.includes(productType);
+}
+
+function getImpactToneClass(tone: ProductEditImpactTone) {
+  const classes: Record<ProductEditImpactTone, string> = {
+    blue: 'border-blue-100 bg-blue-50 text-blue-700',
+    amber: 'border-amber-100 bg-amber-50 text-amber-700',
+    emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+    slate: 'border-slate-200 bg-slate-50 text-slate-600',
+  };
+  return classes[tone];
 }

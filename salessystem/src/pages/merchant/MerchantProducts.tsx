@@ -9,21 +9,42 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { merchantProductService } from '../../services/modules/merchantProduct';
 import type { MerchantProduct } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency, getImageUrl } from '../../utils/display';
+import {
+  buildProductStockUpdatePayload,
+  buildProductStatusUpdatePayload,
+  normalizeProductStatusFilter,
+  PRODUCT_STATUS_FILTERS,
+  type ProductEditableStatus,
+  type ProductStatusFilter,
+} from '../../utils/productBulkEdit';
 
 export default function MerchantProducts() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { merchantSession } = useAuth();
   const tenantId = merchantSession?.tenantId;
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ProductStatusFilter>(() => normalizeProductStatusFilter(searchParams.get('status')));
   const [products, setProducts] = useState<MerchantProduct[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [isBatchUpdating, setIsBatchUpdating] = useState(false);
+  const [isStockUpdating, setIsStockUpdating] = useState(false);
+  const [stockEditingProduct, setStockEditingProduct] = useState<MerchantProduct | null>(null);
+  const [stockDraft, setStockDraft] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    const nextStatus = normalizeProductStatusFilter(searchParams.get('status'));
+    setStatusFilter((current) => current === nextStatus ? current : nextStatus);
+  }, [searchParams]);
 
   useEffect(() => {
     let isMounted = true;
@@ -40,9 +61,11 @@ export default function MerchantProducts() {
           current: 1,
           size: 100,
           search: search.trim() || undefined,
+          status: statusFilter === 'ALL' ? undefined : statusFilter,
         });
         if (!isMounted) return;
         setProducts(result.records ?? []);
+        setSelectedIds(new Set());
         setError('');
       } catch {
         if (!isMounted) return;
@@ -59,7 +82,7 @@ export default function MerchantProducts() {
     return () => {
       isMounted = false;
     };
-  }, [tenantId, search]);
+  }, [tenantId, search, statusFilter]);
 
   const lowStockCount = useMemo(
     () => products.filter((product) => Number(product.stock || 0) <= 5).length,
@@ -69,12 +92,120 @@ export default function MerchantProducts() {
     () => products.filter((product) => product.status === 'active').length,
     [products],
   );
+  const selectedProducts = useMemo(
+    () => products.filter((product) => selectedIds.has(product.id)),
+    [products, selectedIds],
+  );
+  const allVisibleSelected = products.length > 0 && products.every((product) => selectedIds.has(product.id));
+
+  function handleStatusFilterChange(nextStatus: ProductStatusFilter) {
+    setStatusFilter(nextStatus);
+    if (nextStatus === 'ALL') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ status: nextStatus });
+  }
+
+  function toggleProductSelection(productId: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((prev) => {
+      if (products.length === 0) {
+        return prev;
+      }
+      if (products.every((product) => prev.has(product.id))) {
+        return new Set();
+      }
+      return new Set(products.map((product) => product.id));
+    });
+  }
+
+  async function handleBatchStatusUpdate(status: ProductEditableStatus) {
+    if (!tenantId || selectedProducts.length === 0) return;
+
+    setIsBatchUpdating(true);
+    setError('');
+    setSuccess('');
+    try {
+      await Promise.all(
+        selectedProducts.map((product) =>
+          merchantProductService.updateProduct(
+            tenantId,
+            product.id,
+            buildProductStatusUpdatePayload(product, status),
+          ),
+        ),
+      );
+      const selectedIdSet = new Set(selectedProducts.map((product) => product.id));
+      setProducts((prev) => prev.map((product) => selectedIdSet.has(product.id) ? { ...product, status } : product));
+      setSelectedIds(new Set());
+      setSuccess(`已批量${status === 'active' ? '上架' : status === 'inactive' ? '下架' : '标记售罄'} ${selectedProducts.length} 个商品`);
+    } catch {
+      setError('批量更新商品状态失败，请稍后重试');
+    } finally {
+      setIsBatchUpdating(false);
+    }
+  }
+
+  function openStockEditor(product: MerchantProduct) {
+    setStockEditingProduct(product);
+    setStockDraft(String(product.stock ?? 0));
+    setError('');
+    setSuccess('');
+  }
+
+  async function handleStockUpdate() {
+    if (!tenantId || !stockEditingProduct) return;
+
+    const nextStock = Number(stockDraft);
+    if (!Number.isInteger(nextStock) || nextStock < 0) {
+      setError('库存必须是大于等于 0 的整数');
+      return;
+    }
+
+    setIsStockUpdating(true);
+    setError('');
+    setSuccess('');
+    try {
+      await merchantProductService.updateProduct(
+        tenantId,
+        stockEditingProduct.id,
+        buildProductStockUpdatePayload(stockEditingProduct, nextStock),
+      );
+      setProducts((prev) => prev.map((product) =>
+        product.id === stockEditingProduct.id ? { ...product, stock: nextStock } : product,
+      ));
+      setStockEditingProduct(null);
+      setStockDraft('');
+      setSuccess(`已调整「${stockEditingProduct.name}」库存为 ${nextStock}`);
+    } catch {
+      setError('库存调整失败，请稍后重试');
+    } finally {
+      setIsStockUpdating(false);
+    }
+  }
 
   async function handleDelete(productId: number) {
     if (!tenantId) return;
     try {
       await merchantProductService.deleteProduct(tenantId, productId);
       setProducts((prev) => prev.filter((product) => product.id !== productId));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
     } catch {
       setError('商品删除失败，请稍后重试');
     }
@@ -102,6 +233,11 @@ export default function MerchantProducts() {
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
           {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          {success}
         </div>
       )}
 
@@ -138,9 +274,56 @@ export default function MerchantProducts() {
               className="w-full rounded-2xl border border-transparent bg-slate-50 py-3 pl-11 pr-4 text-sm outline-none transition-all focus:border-primary/20 focus:bg-white"
             />
           </div>
-          <div className="shrink-0">
-            <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-widest text-slate-500 shadow-sm transition-all hover:bg-slate-50">
-              <Filter className="h-3.5 w-3.5" /> 筛选
+          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+            <span className="flex items-center gap-1.5 px-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <Filter className="h-3.5 w-3.5" /> 状态
+            </span>
+            {PRODUCT_STATUS_FILTERS.map((filter) => (
+              <button
+                key={filter.id}
+                type="button"
+                onClick={() => handleStatusFilterChange(filter.id)}
+                className={cn(
+                  'rounded-xl border px-3 py-2 text-xs font-black transition-all',
+                  statusFilter === filter.id
+                    ? 'border-primary bg-primary text-white shadow-sm'
+                    : 'border-slate-100 bg-white text-slate-500 hover:border-primary/30 hover:text-primary',
+                )}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-b border-slate-50 bg-slate-50/50 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-xs font-bold text-slate-500">
+            已选择 <span className="font-black text-slate-900">{selectedProducts.length}</span> 个商品
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void handleBatchStatusUpdate('active')}
+              disabled={selectedProducts.length === 0 || isBatchUpdating}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              批量上架
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleBatchStatusUpdate('inactive')}
+              disabled={selectedProducts.length === 0 || isBatchUpdating}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              批量下架
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleBatchStatusUpdate('out_of_stock')}
+              disabled={selectedProducts.length === 0 || isBatchUpdating}
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs font-black text-amber-700 transition-all hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              标记售罄
             </button>
           </div>
         </div>
@@ -149,6 +332,15 @@ export default function MerchantProducts() {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/50">
+                <th className="px-8 py-5">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleAllVisible}
+                    className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                    aria-label="选择当前页全部商品"
+                  />
+                </th>
                 <th className="px-8 py-5 text-[10px] font-black uppercase tracking-widest italic text-slate-400">
                   商品详情
                 </th>
@@ -172,6 +364,21 @@ export default function MerchantProducts() {
                     className="group cursor-pointer transition-colors"
                     onClick={() => product && navigate(`/merchant/product/${product.id}`)}
                   >
+                    <td className="px-8 py-6">
+                      {product && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(product.id)}
+                          onChange={(event) => {
+                            event.stopPropagation();
+                            toggleProductSelection(product.id);
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                          aria-label={`选择商品 ${product.name}`}
+                        />
+                      )}
+                    </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
                         <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50">
@@ -224,6 +431,16 @@ export default function MerchantProducts() {
                           <button
                             onClick={(event) => {
                               event.stopPropagation();
+                              openStockEditor(product);
+                            }}
+                            className="rounded-xl p-2 text-slate-400 shadow-sm transition-all hover:bg-amber-50 hover:text-amber-600"
+                            title="调整库存"
+                          >
+                            <Package size={18} />
+                          </button>
+                          <button
+                            onClick={(event) => {
+                              event.stopPropagation();
                               navigate(`/merchant/product/edit/${product.id}`);
                             }}
                             className="rounded-xl p-2 text-slate-400 shadow-sm transition-all hover:bg-primary/5 hover:text-primary"
@@ -249,6 +466,61 @@ export default function MerchantProducts() {
           </table>
         </div>
       </div>
+
+      {stockEditingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[32px] border border-slate-100 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">调整库存</h3>
+                <p className="mt-1 text-xs font-bold text-slate-400">
+                  {stockEditingProduct.name} / 当前 {stockEditingProduct.stock}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockEditingProduct(null)}
+                className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-500 hover:bg-slate-100"
+              >
+                关闭
+              </button>
+            </div>
+
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-slate-400">
+              新库存数量
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={stockDraft}
+              onChange={(event) => setStockDraft(event.target.value)}
+              className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50 px-5 py-4 text-xl font-black text-slate-900 outline-none transition-all focus:border-primary focus:bg-white"
+            />
+            <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold leading-relaxed text-amber-700">
+              库存会参与用户下单前校验。调低库存后，购物车结算可能提示用户刷新库存。
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setStockEditingProduct(null)}
+                className="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-500 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleStockUpdate()}
+                disabled={isStockUpdating}
+                className="rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isStockUpdating ? '保存中...' : '保存库存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

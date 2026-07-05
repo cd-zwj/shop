@@ -91,14 +91,24 @@ describe('orderLifecycle', () => {
       orders: [
         { orderNo: 'SO1', orderStatus: 'CREATED', payStatus: 'WAIT_PAY', totalAmount: 100 },
         { orderNo: 'SO2', orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 200 },
+        { orderNo: 'SO3', orderStatus: 'CREATED', payStatus: 'FAILED', totalAmount: 300 },
       ],
       products: [
         { stock: 3, status: 'active' },
         { stock: 20, status: 'active' },
       ],
+      refunds: [
+        { refundNo: 'R1', refundStatus: 'PENDING' },
+        { refundNo: 'R2', refundStatus: 'FAILED' },
+        { refundNo: 'R3', refundStatus: 'COMPLETED' },
+      ],
     });
 
-    expect(items.map((item) => item.count)).toEqual([1, 1, 1]);
-    expect(items[1].path).toBe('/merchant/orders');
+    expect(items.map((item) => item.count)).toEqual([1, 1, 1, 1, 1, 1]);
+    expect(items[0].path).toBe('/merchant/orders?tab=pending');
+    expect(items[1].path).toBe('/merchant/orders?tab=shipping');
+    expect(items[2].path).toBe('/merchant/orders?tab=abnormal');
+    expect(items[3].path).toBe('/merchant/refunds?status=PENDING');
+    expect(items[4].path).toBe('/merchant/refunds?status=FAILED');
   });
 });

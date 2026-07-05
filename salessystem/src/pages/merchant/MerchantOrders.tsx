@@ -10,7 +10,7 @@ import {
   Truck,
   XCircle,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrder } from '../../types/merchant';
@@ -18,11 +18,26 @@ import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { getOrderLifecyclePresentation, getOrderToneClass } from '../../utils/orderLifecycle';
 
+const ORDER_TABS = [
+  { id: 'all', label: '全部订单' },
+  { id: 'pending', label: '待付款' },
+  { id: 'shipping', label: '待履约' },
+  { id: 'completed', label: '已完成' },
+  { id: 'abnormal', label: '异常订单' },
+] as const;
+
+type MerchantOrderTab = typeof ORDER_TABS[number]['id'];
+
+function normalizeOrderTab(tab: string | null): MerchantOrderTab {
+  return ORDER_TABS.some((item) => item.id === tab) ? tab as MerchantOrderTab : 'all';
+}
+
 export default function MerchantOrders() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { merchantSession } = useAuth();
   const tenantId = merchantSession?.tenantId;
-  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'shipping' | 'completed'>('all');
+  const [activeTab, setActiveTab] = useState<MerchantOrderTab>(() => normalizeOrderTab(searchParams.get('tab')));
   const [keyword, setKeyword] = useState('');
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,9 +49,24 @@ export default function MerchantOrders() {
       pending: { orderStatus: 'CREATED' },
       shipping: { payStatus: 'SUCCESS' },
       completed: { orderStatus: 'CLOSED' },
+      abnormal: { payStatus: 'FAILED' },
     }),
     [],
   );
+
+  useEffect(() => {
+    const nextTab = normalizeOrderTab(searchParams.get('tab'));
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: MerchantOrderTab) => {
+    setActiveTab(tabId);
+    if (tabId === 'all') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ tab: tabId });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -75,13 +105,6 @@ export default function MerchantOrders() {
     };
   }, [activeTab, keyword, tabFilters, tenantId]);
 
-  const tabs = [
-    { id: 'all', label: '全部订单' },
-    { id: 'pending', label: '待处理' },
-    { id: 'shipping', label: '进行中' },
-    { id: 'completed', label: '已完成' },
-  ] as const;
-
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
       <header className="flex flex-col justify-between gap-6 md:flex-row md:items-center">
@@ -103,10 +126,10 @@ export default function MerchantOrders() {
       )}
 
       <div className="w-fit rounded-2xl bg-slate-100 p-1">
-        {tabs.map((tab) => (
+        {ORDER_TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className={cn(
               'rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-widest transition-all',
               activeTab === tab.id ? 'bg-white text-primary shadow-sm' : 'text-slate-400 hover:text-slate-600',

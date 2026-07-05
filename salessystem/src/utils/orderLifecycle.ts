@@ -1,4 +1,5 @@
 import type { SalesOrder, SalesOrderDetail, SalesOrderItem } from '../types/order';
+import type { Refund } from '../types/refund';
 
 export type OrderLifecycleTone = 'orange' | 'blue' | 'green' | 'red' | 'slate';
 
@@ -28,10 +29,11 @@ type RawSalesOrderDetail = SalesOrderDetail | FlatSalesOrderDetail;
 interface MerchantWorkInput {
   orders: Array<Partial<SalesOrder>>;
   products: Array<{ stock?: number | null; status?: string | number | null }>;
+  refunds?: Array<Partial<Refund>>;
 }
 
 export interface MerchantWorkItem {
-  key: 'payment' | 'fulfillment' | 'stock';
+  key: 'payment' | 'fulfillment' | 'abnormalOrder' | 'refund' | 'refundFailed' | 'stock';
   label: string;
   description: string;
   count: number;
@@ -159,6 +161,9 @@ export function getOrderToneClass(tone: OrderLifecycleTone) {
 export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkItem[] {
   const unpaidOrders = input.orders.filter(isPendingPayment).length;
   const fulfillmentOrders = input.orders.filter((order) => isPaidOrder(order) && !isClosedOrder(order)).length;
+  const abnormalOrders = input.orders.filter((order) => order.payStatus === 'FAILED').length;
+  const pendingRefunds = (input.refunds ?? []).filter((refund) => refund.refundStatus === 'PENDING').length;
+  const failedRefunds = (input.refunds ?? []).filter((refund) => refund.refundStatus === 'FAILED').length;
   const lowStockProducts = input.products.filter((product) => {
     const stock = Number(product.stock ?? 0);
     return product.status !== 'inactive' && stock <= 5;
@@ -170,7 +175,7 @@ export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkIt
       label: '待付款订单',
       description: '用户已下单但尚未完成支付，可关注是否需要催付或备货。',
       count: unpaidOrders,
-      path: '/merchant/orders',
+      path: '/merchant/orders?tab=pending',
       tone: 'orange',
     },
     {
@@ -178,8 +183,32 @@ export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkIt
       label: '待履约订单',
       description: '用户已支付，需要商家发货、卡密交付或服务核销。',
       count: fulfillmentOrders,
-      path: '/merchant/orders',
+      path: '/merchant/orders?tab=shipping',
       tone: 'blue',
+    },
+    {
+      key: 'abnormalOrder',
+      label: '异常订单',
+      description: '支付失败或内部状态异常的订单，需要确认失败原因并协助用户重试。',
+      count: abnormalOrders,
+      path: '/merchant/orders?tab=abnormal',
+      tone: 'red',
+    },
+    {
+      key: 'refund',
+      label: '待审核退款',
+      description: '用户已提交售后申请，需要商家审核通过或给出驳回原因。',
+      count: pendingRefunds,
+      path: '/merchant/refunds?status=PENDING',
+      tone: 'orange',
+    },
+    {
+      key: 'refundFailed',
+      label: '退款失败单',
+      description: '内部退款处理失败，需要检查失败原因并继续跟进用户。',
+      count: failedRefunds,
+      path: '/merchant/refunds?status=FAILED',
+      tone: 'red',
     },
     {
       key: 'stock',

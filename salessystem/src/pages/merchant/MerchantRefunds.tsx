@@ -1,20 +1,38 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ClipboardList, Check, X, ShieldAlert } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
 import type { Refund } from '../../types/refund';
 import { formatCurrency } from '../../utils/display';
 
+const REFUND_TABS = [
+  { id: 'ALL', label: '全部' },
+  { id: 'PENDING', label: '待审核' },
+  { id: 'APPROVED', label: '已通过' },
+  { id: 'PROCESSING', label: '退款中' },
+  { id: 'COMPLETED', label: '已退款' },
+  { id: 'FAILED', label: '退款失败' },
+  { id: 'REJECTED', label: '已驳回' },
+] as const;
+
+type RefundTabId = typeof REFUND_TABS[number]['id'];
+
+function normalizeRefundTab(status: string | null): RefundTabId {
+  return REFUND_TABS.some((tab) => tab.id === status) ? status as RefundTabId : 'ALL';
+}
+
 export default function MerchantRefunds() {
   const { merchantSession } = useAuth();
   const { showToast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const tenantId = merchantSession?.tenantId;
 
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [activeTab, setActiveTab] = useState<RefundTabId>(() => normalizeRefundTab(searchParams.get('status')));
   
   // Audit Modal States
   const [auditingRefund, setAuditingRefund] = useState<Refund | null>(null);
@@ -22,15 +40,19 @@ export default function MerchantRefunds() {
   const [rejectReason, setRejectReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const tabs = [
-    { id: 'ALL', label: '全部' },
-    { id: 'PENDING', label: '待审核' },
-    { id: 'APPROVED', label: '已通过' },
-    { id: 'PROCESSING', label: '退款中' },
-    { id: 'COMPLETED', label: '已退款' },
-    { id: 'FAILED', label: '退款失败' },
-    { id: 'REJECTED', label: '已驳回' },
-  ];
+  useEffect(() => {
+    const nextTab = normalizeRefundTab(searchParams.get('status'));
+    setActiveTab((current) => current === nextTab ? current : nextTab);
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: RefundTabId) => {
+    setActiveTab(tabId);
+    if (tabId === 'ALL') {
+      setSearchParams({});
+      return;
+    }
+    setSearchParams({ status: tabId });
+  };
 
   const loadRefunds = useCallback(async () => {
     if (!tenantId) return;
@@ -136,10 +158,10 @@ export default function MerchantRefunds() {
 
       {/* Tabs */}
       <div className="flex border-b border-slate-100 overflow-x-auto hide-scrollbar">
-        {tabs.map((tab) => (
+        {REFUND_TABS.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabChange(tab.id)}
             className={`whitespace-nowrap px-6 pb-4 text-sm font-bold border-b-2 transition-all ${
               activeTab === tab.id
                 ? 'border-primary text-primary font-black scale-[1.02]'
