@@ -42,6 +42,9 @@ public class SalesOrderDetailVO {
 
     private List<SalesOrderItemVO> items;
     private String paymentBillNo;
+    private String paymentBillStatus;
+    private String paymentBillStatusRemark;
+    private String paymentBillExpireTime;
 
     @Data
     @Builder
@@ -86,6 +89,9 @@ public class SalesOrderDetailVO {
                 .createTime(VoConverterUtil.formatTime(order.getCreateTime()))
                 .updateTime(VoConverterUtil.formatTime(order.getUpdateTime()))
                 .paymentBillNo(detailVO.getPaymentBillNo())
+                .paymentBillStatus(detailVO.getPaymentBillStatus())
+                .paymentBillStatusRemark(detailVO.getPaymentBillStatusRemark())
+                .paymentBillExpireTime(VoConverterUtil.formatTime(detailVO.getPaymentBillExpireTime()))
                 .build();
 
         if (detailVO.getItems() != null) {

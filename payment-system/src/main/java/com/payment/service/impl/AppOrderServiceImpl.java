@@ -1036,7 +1036,12 @@ public class AppOrderServiceImpl implements AppOrderService {
                 PaymentBizTypeEnum.SALES_ORDER.name(),
                 salesOrder.getOrderNo()
         );
-        detailVO.setPaymentBillNo(paymentBill != null ? paymentBill.getBillNo() : null);
+        if (paymentBill != null) {
+            detailVO.setPaymentBillNo(paymentBill.getBillNo());
+            detailVO.setPaymentBillStatus(paymentBill.getPayStatus());
+            detailVO.setPaymentBillStatusRemark(paymentBill.getStatusRemark());
+            detailVO.setPaymentBillExpireTime(paymentBill.getExpireTime());
+        }
         return detailVO;
     }
 

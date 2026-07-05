@@ -28,6 +28,9 @@ class SalesOrderVoTest {
         com.payment.dto.SalesOrderDetailVO detail = new com.payment.dto.SalesOrderDetailVO();
         detail.setOrder(order);
         detail.setPaymentBillNo("PB202607050001");
+        detail.setPaymentBillStatus("FAILED");
+        detail.setPaymentBillStatusRemark("渠道返回：用户取消支付");
+        detail.setPaymentBillExpireTime(LocalDateTime.of(2026, 7, 5, 10, 30));
 
         SalesOrderDetailVO vo = SalesOrderDetailVO.from(detail);
 
@@ -35,6 +38,9 @@ class SalesOrderVoTest {
         assertThat(vo.getTenantId()).isEqualTo(22L);
         assertThat(vo.getPlatformUserId()).isEqualTo(33L);
         assertThat(vo.getPaymentBillNo()).isEqualTo("PB202607050001");
+        assertThat(vo.getPaymentBillStatus()).isEqualTo("FAILED");
+        assertThat(vo.getPaymentBillStatusRemark()).isEqualTo("渠道返回：用户取消支付");
+        assertThat(vo.getPaymentBillExpireTime()).isEqualTo("2026-07-05T10:30");
     }
 
     private SalesOrder buildOrder() {

@@ -85,4 +85,7 @@ export interface SalesOrderDetail {
   order: SalesOrder;
   items: SalesOrderItem[];
   paymentBillNo?: string | null;
+  paymentBillStatus?: string | null;
+  paymentBillStatusRemark?: string | null;
+  paymentBillExpireTime?: string | null;
 }

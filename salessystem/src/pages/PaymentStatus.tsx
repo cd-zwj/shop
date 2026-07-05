@@ -251,6 +251,12 @@ export default function PaymentStatus() {
               {paymentBill?.statusRemark || statusPresentation.description}
             </span>
           </div>
+          <div className="flex items-start justify-between gap-4 border-t border-white px-2 pt-4">
+            <span className="pt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">下一步</span>
+            <span className="max-w-[220px] text-right text-xs font-medium leading-relaxed text-slate-500">
+              {statusPresentation.nextStep}
+            </span>
+          </div>
         </div>
 
         <div className="flex w-full flex-col gap-4">

@@ -20,6 +20,7 @@ import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { getPaymentBillReuseHint } from '../utils/paymentStatus';
+import { getPaymentStatusPresentation } from '../utils/paymentStatus';
 import {
   buildRepurchaseCartItems,
   canRepurchaseOrder,
@@ -74,6 +75,21 @@ export default function UserOrderDetail() {
 
   const order = detail?.order;
   const lifecycle = getOrderLifecyclePresentation(order);
+  const latestPaymentPresentation = getPaymentStatusPresentation(
+    detail?.paymentBillStatus
+      ? {
+          payStatus: detail.paymentBillStatus,
+          expireTime: detail.paymentBillExpireTime,
+          statusRemark: detail.paymentBillStatusRemark,
+        }
+      : order
+        ? {
+            payStatus: order.payStatus,
+            expireTime: order.expireTime,
+            statusRemark: null,
+          }
+        : null,
+  );
   const canRepurchase = canRepurchaseOrder(order);
   const canContinuePay = lifecycle.nextActions.some((action) => action.key === 'pay');
   const canApplyRefund = lifecycle.nextActions.some((action) => action.key === 'refund');
@@ -267,6 +283,25 @@ export default function UserOrderDetail() {
                 <p className="font-medium text-slate-500">创建时间：{order?.createTime || '--'}</p>
                 <p className="font-medium text-slate-500">订单来源：{order?.source || '--'}</p>
                 <p className="font-medium text-slate-500">支付策略：{order?.walletStrategy || '--'}</p>
+                {detail?.paymentBillNo && (
+                  <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">最近支付单</span>
+                      <span className="font-mono text-xs font-black text-slate-700">{detail.paymentBillNo}</span>
+                    </div>
+                    <p className="text-sm font-bold text-slate-900">{latestPaymentPresentation.badgeLabel}</p>
+                    <p className="mt-1 text-xs font-medium leading-relaxed text-slate-500">
+                      {detail.paymentBillStatusRemark || latestPaymentPresentation.description}
+                    </p>
+                    {(latestPaymentPresentation.state === 'failed'
+                      || latestPaymentPresentation.state === 'closed'
+                      || latestPaymentPresentation.state === 'expired') && (
+                      <p className="mt-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold leading-relaxed text-red-600">
+                        {latestPaymentPresentation.nextStep}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </section>
           </div>

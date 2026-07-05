@@ -316,6 +316,74 @@ class AppOrderServiceImplTest {
     }
 
     @Test
+    void getOrderDetailShouldExposeLatestPaymentBillFailureContext() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService
+        );
+
+        SalesOrder salesOrder = new SalesOrder();
+        salesOrder.setId(103L);
+        salesOrder.setOrderNo("SO1003");
+        salesOrder.setTenantId(9L);
+        salesOrder.setPlatformUserId(100L);
+        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
+        salesOrder.setPayStatus(PayStatusEnum.FAILED.name());
+        salesOrder.setTotalAmount(new BigDecimal("20.00"));
+
+        PaymentBill failedBill = new PaymentBill();
+        failedBill.setBillNo("PB_FAILED");
+        failedBill.setPayStatus(PayStatusEnum.FAILED.name());
+        failedBill.setStatusRemark("渠道返回：余额不足");
+        failedBill.setExpireTime(LocalDateTime.of(2026, 7, 5, 10, 30));
+
+        when(salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(salesOrderItemMapper.selectByOrderId(103L)).thenReturn(List.of());
+        when(paymentBillV1Service.getLatestByBizTypeAndBizNo("SALES_ORDER", "SO1003"))
+                .thenReturn(failedBill);
+
+        com.payment.dto.SalesOrderDetailVO detail = service.getOrderDetail(100L, "SO1003");
+
+        assertEquals("PB_FAILED", detail.getPaymentBillNo());
+        assertEquals("FAILED", detail.getPaymentBillStatus());
+        assertEquals("渠道返回：余额不足", detail.getPaymentBillStatusRemark());
+        assertEquals(LocalDateTime.of(2026, 7, 5, 10, 30), detail.getPaymentBillExpireTime());
+    }
+
+    @Test
     void repayOrderShouldReuseExistingActivePaymentBillBeforeCreatingNewOne() {
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);

@@ -18,6 +18,9 @@ export interface OrderLifecyclePresentation {
 type FlatSalesOrderDetail = SalesOrder & {
   items?: SalesOrderItem[];
   paymentBillNo?: string | null;
+  paymentBillStatus?: string | null;
+  paymentBillStatusRemark?: string | null;
+  paymentBillExpireTime?: string | null;
 };
 
 type RawSalesOrderDetail = SalesOrderDetail | FlatSalesOrderDetail;
@@ -41,11 +44,21 @@ export function normalizeSalesOrderDetail(raw: RawSalesOrderDetail): SalesOrderD
     return raw;
   }
 
-  const { items = [], paymentBillNo = null, ...order } = raw;
+  const {
+    items = [],
+    paymentBillNo = null,
+    paymentBillStatus = null,
+    paymentBillStatusRemark = null,
+    paymentBillExpireTime = null,
+    ...order
+  } = raw;
   return {
     order: order as SalesOrder,
     items,
     paymentBillNo,
+    paymentBillStatus,
+    paymentBillStatusRemark,
+    paymentBillExpireTime,
   };
 }
 

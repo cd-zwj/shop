@@ -33,8 +33,32 @@ describe('orderLifecycle', () => {
 
     expect(detail.order.orderNo).toBe('SO001');
     expect(detail.order.tenantId).toBe(2);
-    expect(detail.items).toHaveLength(1);
-    expect(detail.paymentBillNo).toBe('PB001');
+      expect(detail.items).toHaveLength(1);
+      expect(detail.paymentBillNo).toBe('PB001');
+      expect(detail.paymentBillStatus).toBeNull();
+    });
+
+  it('keeps flat payment bill status context on order detail top level', () => {
+    const detail = normalizeSalesOrderDetail({
+      id: 1,
+      tenantId: 2,
+      platformUserId: 3,
+      orderNo: 'SO003',
+      orderStatus: 'CREATED',
+      payStatus: 'FAILED',
+      totalAmount: 1200,
+      items: [],
+      paymentBillNo: 'PB003',
+      paymentBillStatus: 'FAILED',
+      paymentBillStatusRemark: '渠道返回：余额不足',
+      paymentBillExpireTime: '2026-07-05 10:30:00',
+    });
+
+    expect(detail.paymentBillNo).toBe('PB003');
+    expect(detail.paymentBillStatus).toBe('FAILED');
+    expect(detail.paymentBillStatusRemark).toBe('渠道返回：余额不足');
+    expect(detail.paymentBillExpireTime).toBe('2026-07-05 10:30:00');
+    expect('paymentBillStatus' in detail.order).toBe(false);
   });
 
   it('keeps already nested order detail unchanged', () => {

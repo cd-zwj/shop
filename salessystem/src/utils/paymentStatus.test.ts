@@ -137,6 +137,17 @@ describe('getPaymentStatusPresentation', () => {
     expect(presentation.badgeLabel).toBe('支付失败');
   });
 
+  it('failed 状态应优先展示后端失败原因和重新支付提示', () => {
+    const presentation = getPaymentStatusPresentation({
+      payStatus: 'FAILED',
+      expireTime: null,
+      statusRemark: '渠道返回：余额不足',
+    });
+
+    expect(presentation.description).toContain('渠道返回：余额不足');
+    expect(presentation.nextStep).toContain('重新发起支付');
+  });
+
   it('pending 状态应返回等待中的描述', () => {
     // Arrange
     const bill = { payStatus: 'WAIT_PAY', expireTime: '2026-12-31T00:00:00Z', statusRemark: null };
