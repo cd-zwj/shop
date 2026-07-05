@@ -8,8 +8,8 @@
 # MinIO配置
 minio:
   endpoint: http://localhost:9000  # MinIO服务地址
-  access-key: minioadmin           # 访问密钥
-  secret-key: minioadmin           # 密钥
+  access-key: ${MINIO_ROOT_USER}   # 访问密钥
+  secret-key: ${MINIO_ROOT_PASSWORD} # 密钥
   bucket-name: payment-system      # 存储桶名称
   domain: http://localhost:9000/payment-system  # 文件访问域名
   path-prefix: uploads/            # 文件路径前缀
@@ -185,16 +185,16 @@ docker run -d \
   -p 9000:9000 \
   -p 9001:9001 \
   --name minio \
-  -e "MINIO_ROOT_USER=minioadmin" \
-  -e "MINIO_ROOT_PASSWORD=minioadmin" \
+  -e "MINIO_ROOT_USER=<your-minio-user>" \
+  -e "MINIO_ROOT_PASSWORD=<your-minio-password>" \
   -v /data/minio:/data \
   minio/minio server /data --console-address ":9001"
 ```
 
 ### 访问MinIO控制台
 - 地址：http://localhost:9001
-- 用户名：minioadmin
-- 密码：minioadmin
+- 用户名：使用 `MINIO_ROOT_USER` 中配置的值
+- 密码：使用 `MINIO_ROOT_PASSWORD` 中配置的值
 
 ## 注意事项
 
