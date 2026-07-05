@@ -26,6 +26,7 @@ import type { MerchantOrder, MerchantProduct } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { getErrorMessage } from '../../utils/errorMessage';
+import { buildMerchantWorkItems, getOrderToneClass } from '../../utils/orderLifecycle';
 
 export default function MerchantDashboard() {
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ export default function MerchantDashboard() {
     [orders],
   );
   const pendingOrders = useMemo(
-    () => orders.filter((order) => order.orderStatus === 'CREATED').length,
+    () => orders.filter((order) => order.orderStatus === 'CREATED' || (order.orderStatus === 'PAID' && order.payStatus === 'SUCCESS')).length,
     [orders],
   );
   const activeProducts = useMemo(
@@ -103,6 +104,10 @@ export default function MerchantDashboard() {
       .slice(-7)
       .map(([day, sales]) => ({ day, sales }));
   }, [orders]);
+  const workItems = useMemo(
+    () => buildMerchantWorkItems({ orders, products }),
+    [orders, products],
+  );
 
   return (
     <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
@@ -275,27 +280,34 @@ export default function MerchantDashboard() {
               <div className="h-2 w-2 rounded-full bg-red-500" />
             </div>
             <div className="flex flex-col gap-4">
-              {[
-                { label: `${pendingOrders} 个待处理订单`, type: 'order' },
-                { label: `${lowStockProducts} 个商品库存偏低`, type: 'stock' },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="overflow-hidden rounded-2xl border border-transparent bg-slate-50 p-5 transition-all hover:border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100"
+              {workItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => navigate(item.path)}
+                  className="overflow-hidden rounded-2xl border border-transparent bg-slate-50 p-5 text-left transition-all hover:border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 pr-2">
                       <div
                         className={cn(
                           'h-2 w-2 shrink-0 rounded-full',
-                          item.type === 'order' ? 'bg-green-500' : 'bg-orange-500',
+                          item.tone === 'blue' ? 'bg-blue-500' : item.tone === 'red' ? 'bg-red-500' : 'bg-orange-500',
                         )}
                       />
-                      <span className="line-clamp-1 text-xs font-bold text-slate-800">{item.label}</span>
+                      <span className="line-clamp-1 text-xs font-bold text-slate-800">
+                        {item.count} 个{item.label}
+                      </span>
                     </div>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-slate-300 transition-colors" />
+                    <span className={cn('rounded-lg border px-2 py-1 text-[10px] font-black', getOrderToneClass(item.tone))}>
+                      处理
+                    </span>
                   </div>
-                </div>
+                  <p className="mt-2 line-clamp-2 text-xs font-medium leading-relaxed text-slate-400">
+                    {item.description}
+                  </p>
+                  <ArrowUpRight className="mt-3 h-4 w-4 shrink-0 text-slate-300 transition-colors" />
+                </button>
               ))}
             </div>
             <button

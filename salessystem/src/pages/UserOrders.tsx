@@ -16,6 +16,13 @@ import { formatCurrency } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { getPaymentBillReuseHint } from '../utils/paymentStatus';
 import { canRepurchaseOrder } from '../utils/orderActions';
+import {
+  getOrderLifecyclePresentation,
+  getOrderToneClass,
+  isClosedOrder,
+  isPaidOrder,
+  isPendingPayment,
+} from '../utils/orderLifecycle';
 
 type OrderTabKey = 'all' | 'pending' | 'processing' | 'completed' | 'closed';
 
@@ -27,20 +34,8 @@ const ORDER_TABS: Array<{ key: OrderTabKey; label: string }> = [
   { key: 'closed', label: '已关闭' },
 ];
 
-function isPendingOrder(order: SalesOrder) {
-  return order.payStatus === 'WAIT_PAY' || order.payStatus === 'PAYING';
-}
-
-function isCompletedOrder(order: SalesOrder) {
-  return order.payStatus === 'SUCCESS' || order.orderStatus === 'PAID';
-}
-
-function isClosedOrder(order: SalesOrder) {
-  return order.orderStatus === 'CANCELLED' || order.orderStatus === 'CLOSED' || order.payStatus === 'CLOSED';
-}
-
 function resolveOrderTab(order: SalesOrder): OrderTabKey {
-  if (isPendingOrder(order)) {
+  if (isPendingPayment(order)) {
     return 'pending';
   }
 
@@ -48,11 +43,7 @@ function resolveOrderTab(order: SalesOrder): OrderTabKey {
     return 'closed';
   }
 
-  if (order.orderStatus === 'CLOSED') {
-    return 'completed';
-  }
-
-  if (isCompletedOrder(order)) {
+  if (isPaidOrder(order)) {
     return 'processing';
   }
 
@@ -79,7 +70,7 @@ export default function UserOrders() {
         const nextOrders = result.records ?? [];
         setOrders(nextOrders);
 
-        const pendingOrders = nextOrders.filter((order) => isPendingOrder(order));
+        const pendingOrders = nextOrders.filter((order) => isPendingPayment(order));
         if (pendingOrders.length > 0) {
           const details = await Promise.allSettled(
             pendingOrders.map((order) => appOrderService.getOrder(order.orderNo)),
@@ -199,41 +190,6 @@ export default function UserOrders() {
     }
   }
 
-  function renderStatus(order: SalesOrder) {
-    if (isPendingOrder(order)) {
-      return {
-        label: '待支付',
-        className: 'bg-orange-50 text-orange-600',
-      };
-    }
-
-    if (order.orderStatus === 'CLOSED') {
-      return {
-        label: '已完成',
-        className: 'bg-green-50 text-green-600',
-      };
-    }
-
-    if (isClosedOrder(order)) {
-      return {
-        label: order.orderStatus === 'CANCELLED' ? '已取消' : '已关闭',
-        className: 'bg-slate-100 text-slate-500',
-      };
-    }
-
-    if (isCompletedOrder(order)) {
-      return {
-        label: '处理中',
-        className: 'bg-blue-50 text-blue-600',
-      };
-    }
-
-    return {
-      label: `${order.orderStatus} / ${order.payStatus}`,
-      className: 'bg-slate-100 text-slate-500',
-    };
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 pb-32">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:p-8">
@@ -295,9 +251,9 @@ export default function UserOrders() {
               );
             }
 
-            const status = renderStatus(order);
-            const canCancel = isPendingOrder(order);
-            const canContinuePay = isPendingOrder(order) && Boolean(paymentBillMap[order.orderNo] || order.externalPayAmount);
+            const status = getOrderLifecyclePresentation(order);
+            const canCancel = status.nextActions.some((action) => action.key === 'cancel');
+            const canContinuePay = status.nextActions.some((action) => action.key === 'pay') && Boolean(paymentBillMap[order.orderNo] || order.externalPayAmount);
             const canRepurchase = canRepurchaseOrder(order);
             const isActing = isActionLoading === order.orderNo;
 
@@ -317,8 +273,8 @@ export default function UserOrders() {
                   </div>
                   <span
                     className={cn(
-                      'rounded-lg px-2.5 py-1 text-[10px] font-black uppercase tracking-wider',
-                      status.className,
+                      'rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider',
+                      getOrderToneClass(status.tone),
                     )}
                   >
                     {status.label}
@@ -339,6 +295,9 @@ export default function UserOrders() {
                       </p>
                       <p className="mt-2 text-sm font-medium text-slate-500">
                         {order.subject || `tenant ${order.tenantId}`}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-slate-400">
+                        {status.description}
                       </p>
                     </div>
                     <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

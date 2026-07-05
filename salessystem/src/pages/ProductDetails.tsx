@@ -98,6 +98,10 @@ export default function ProductDetails() {
     if (!product) {
       return;
     }
+    if (!tenantId) {
+      setActionMessage('当前商品缺少商户信息，请从商户店铺或商品列表重新进入');
+      return;
+    }
 
     if (isOutOfStock) {
       setActionMessage('该商品暂时无库存，暂不能加入购物车');
@@ -110,6 +114,10 @@ export default function ProductDetails() {
 
   async function handleBuyNow() {
     if (!product) {
+      return;
+    }
+    if (!tenantId) {
+      setActionMessage('当前商品缺少商户信息，请从商户店铺或商品列表重新进入');
       return;
     }
 

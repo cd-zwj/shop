@@ -5,6 +5,7 @@ import type {
   MerchantOrderDetail,
   MerchantOrderFilters,
 } from '../../types/merchant';
+import { normalizeSalesOrderDetail } from '../../utils/orderLifecycle';
 
 export const merchantOrderService = {
   listOrders(tenantId: number, filters: MerchantOrderFilters = {}) {
@@ -22,12 +23,13 @@ export const merchantOrderService = {
     });
   },
 
-  getOrderDetail(tenantId: number, orderNo: string) {
-    return request<MerchantOrderDetail>({
+  async getOrderDetail(tenantId: number, orderNo: string) {
+    const result = await request<MerchantOrderDetail>({
       url: `/v1/merchant/tenants/${tenantId}/orders/${orderNo}`,
       method: 'get',
       authRole: 'merchant',
     });
+    return normalizeSalesOrderDetail(result);
   },
 
   /**

@@ -37,6 +37,19 @@ const calculateDiscount = (coupon: { couponType: 'FIXED' | 'RATE'; discountAmoun
   }
 };
 
+function getStockValidationMessage(item: { name: string; stock?: number | null; quantity: number }) {
+  if (typeof item.stock !== 'number') {
+    return '';
+  }
+  if (item.stock <= 0) {
+    return `${item.name} 当前无库存，请先移出购物车`;
+  }
+  if (item.quantity > item.stock) {
+    return `${item.name} 当前库存仅剩 ${item.stock} 件，请调整购买数量`;
+  }
+  return '';
+}
+
 export default function Cart() {
   const navigate = useNavigate();
   const { currentRole } = useAuth();
@@ -305,6 +318,14 @@ export default function Cart() {
       return;
     }
 
+    const stockError = tenantItems
+      .map(getStockValidationMessage)
+      .find((message) => message.length > 0);
+    if (stockError) {
+      setError(stockError);
+      return;
+    }
+
     if (currentRole !== 'user') {
       navigate('/login');
       return;
@@ -489,7 +510,7 @@ export default function Cart() {
                               }
                               disabled={
                                 typeof item.stock === 'number' &&
-                                item.stock > 0 &&
+                                item.stock >= 0 &&
                                 item.quantity >= item.stock
                               }
                               className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-600 transition-all active:scale-90 hover:bg-white hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40"

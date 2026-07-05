@@ -24,6 +24,12 @@ import {
   buildRepurchaseCartItems,
   canRepurchaseOrder,
 } from '../utils/orderActions';
+import {
+  getOrderLifecyclePresentation,
+  getOrderToneClass,
+  isClosedOrder,
+  isPaidOrder,
+} from '../utils/orderLifecycle';
 
 export default function UserOrderDetail() {
   const navigate = useNavigate();
@@ -67,7 +73,10 @@ export default function UserOrderDetail() {
   }, [id]);
 
   const order = detail?.order;
+  const lifecycle = getOrderLifecyclePresentation(order);
   const canRepurchase = canRepurchaseOrder(order);
+  const canContinuePay = lifecycle.nextActions.some((action) => action.key === 'pay');
+  const canApplyRefund = lifecycle.nextActions.some((action) => action.key === 'refund');
   const canCancel =
     Boolean(order?.orderNo) &&
     order?.orderStatus !== 'PAID' &&
@@ -79,9 +88,9 @@ export default function UserOrderDetail() {
   const steps = useMemo(
     () => [
       { icon: CreditCard, label: '已创建', active: Boolean(order) },
-      { icon: Package, label: '已支付', active: order?.payStatus === 'SUCCESS' || order?.orderStatus === 'PAID' },
-      { icon: Truck, label: '处理中', active: order?.orderStatus === 'PAID' || order?.orderStatus === 'CREATED' },
-      { icon: CheckCircle2, label: '已完成', active: order?.orderStatus === 'CLOSED' },
+      { icon: Package, label: '已支付', active: isPaidOrder(order) },
+      { icon: Truck, label: '履约中', active: isPaidOrder(order) && !isClosedOrder(order) },
+      { icon: CheckCircle2, label: '已结束', active: isClosedOrder(order) },
     ],
     [order],
   );
@@ -182,8 +191,8 @@ export default function UserOrderDetail() {
         <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
           <div className="mb-8 flex items-center justify-between">
             <span className="text-sm font-black uppercase tracking-widest text-slate-900">订单进度</span>
-            <span className="rounded-lg bg-primary/5 px-3 py-1 text-xs font-bold text-primary">
-              {order ? `${order.orderStatus} / ${order.payStatus}` : '加载中'}
+            <span className={cn('rounded-lg border px-3 py-1 text-xs font-bold', getOrderToneClass(lifecycle.tone))}>
+              {lifecycle.label}
             </span>
           </div>
           <div className="relative flex justify-between">
@@ -205,6 +214,9 @@ export default function UserOrderDetail() {
               </div>
             ))}
           </div>
+          <p className="mt-8 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
+            {lifecycle.description}
+          </p>
         </section>
 
         {error && (
@@ -281,10 +293,10 @@ export default function UserOrderDetail() {
               </div>
               <button
                 onClick={handleContinuePay}
-                disabled={!order?.orderNo || isCancelling}
+                disabled={!order?.orderNo || isCancelling || !canContinuePay}
                 className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isCancelling ? '处理中...' : '继续支付 / 查看支付状态'}
+                {isCancelling ? '处理中...' : canContinuePay ? '继续支付 / 查看支付状态' : lifecycle.label}
               </button>
               <p className="relative z-10 mt-3 text-xs font-medium leading-relaxed text-slate-300">
                 继续支付时会先尝试复用仍有效的支付单，若支付单已关闭、失败或过期，则自动新建。
@@ -321,7 +333,11 @@ export default function UserOrderDetail() {
               <button className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-slate-100 py-4 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:border-primary hover:text-primary">
                 <MessageCircle size={16} /> 联系商户
               </button>
-              <button className="flex w-full items-center justify-center gap-2 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:text-slate-600">
+              <button
+                onClick={() => order?.orderNo && navigate(`/orders/${order.orderNo}/refund`)}
+                disabled={!canApplyRefund || !order?.orderNo}
+                className="flex w-full items-center justify-center gap-2 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400 transition-all hover:text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+              >
                 <HelpCircle size={14} /> 申请售后
               </button>
             </div>

@@ -6,6 +6,7 @@ import type {
   SalesOrder,
   SalesOrderDetail,
 } from '../../types/order';
+import { normalizeSalesOrderDetail } from '../../utils/orderLifecycle';
 
 export const appOrderService = {
   createOrder(payload: AppCreateOrderPayload) {
@@ -26,12 +27,13 @@ export const appOrderService = {
     });
   },
 
-  getOrder(orderNo: string) {
-    return request<SalesOrderDetail>({
+  async getOrder(orderNo: string) {
+    const result = await request<SalesOrderDetail>({
       url: `/v1/app/orders/${orderNo}`,
       method: 'get',
       authRole: 'user',
     });
+    return normalizeSalesOrderDetail(result);
   },
 
   repayOrder(orderNo: string, paymentChannelCode: 'ALIPAY_PAGE' | 'EXT_PROVIDER' = 'ALIPAY_PAGE') {

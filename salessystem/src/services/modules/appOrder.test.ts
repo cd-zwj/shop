@@ -67,9 +67,18 @@ describe('appOrderService', () => {
   });
 
   describe('getOrder', () => {
-    it('应调用 GET /v1/app/orders/:orderNo', async () => {
+    it('应调用 GET /v1/app/orders/:orderNo 并适配扁平详情响应', async () => {
       // Arrange
-      const orderDetail = { orderNo: 'ORD001', status: 'PAID' };
+      const orderDetail = {
+        orderNo: 'ORD001',
+        tenantId: 1,
+        platformUserId: 2,
+        orderStatus: 'PAID',
+        payStatus: 'SUCCESS',
+        totalAmount: 1000,
+        items: [],
+        paymentBillNo: 'PB001',
+      };
       mockRequest.mockResolvedValue(orderDetail);
 
       // Act
@@ -81,7 +90,10 @@ describe('appOrderService', () => {
         method: 'get',
         authRole: 'user',
       });
-      expect(result).toEqual(orderDetail);
+      expect(result.order.orderNo).toBe('ORD001');
+      expect(result.order.tenantId).toBe(1);
+      expect(result.items).toEqual([]);
+      expect(result.paymentBillNo).toBe('PB001');
     });
   });
 

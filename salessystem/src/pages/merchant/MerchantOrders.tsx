@@ -16,6 +16,7 @@ import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrder } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
+import { getOrderLifecyclePresentation, getOrderToneClass } from '../../utils/orderLifecycle';
 
 export default function MerchantOrders() {
   const navigate = useNavigate();
@@ -153,7 +154,7 @@ export default function MerchantOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from<MerchantOrder | undefined>({ length: 4 }) : orders).map((order, index) => {                const orderLabel = order ? `${order.orderStatus}/${order.payStatus}` : '加载中';
+              {(isLoading ? Array.from<MerchantOrder | undefined>({ length: 4 }) : orders).map((order, index) => {                const lifecycle = getOrderLifecyclePresentation(order);
                 return (
                   <tr
                     key={order ? order.orderNo : index}
@@ -193,20 +194,14 @@ export default function MerchantOrders() {
                         <span
                           className={cn(
                             'flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest shadow-sm',
-                            order && order.orderStatus === 'CREATED'
-                              ? 'border-orange-100 bg-orange-50 text-orange-600'
-                              : order && order.payStatus === 'SUCCESS'
-                                ? 'border-blue-100 bg-blue-50 text-blue-600'
-                                : order && order.orderStatus === 'CLOSED'
-                                  ? 'border-green-100 bg-green-50 text-green-600'
-                                  : 'border-slate-200 bg-slate-100 text-slate-400',
+                            getOrderToneClass(lifecycle.tone),
                           )}
                         >
                           {order && order.orderStatus === 'CREATED' && <Clock size={10} />}
                           {order && order.payStatus === 'SUCCESS' && <Truck size={10} />}
                           {order && order.orderStatus === 'CLOSED' && <CheckCircle2 size={10} />}
                           {order && order.orderStatus === 'CANCELLED' && <XCircle size={10} />}
-                          {orderLabel}
+                          {lifecycle.label}
                         </span>
                       </div>
                     </td>

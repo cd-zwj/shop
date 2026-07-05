@@ -19,7 +19,10 @@ import java.util.stream.Collectors;
 @AllArgsConstructor
 public class SalesOrderDetailVO {
 
+    private Long id;
     private String orderNo;
+    private Long tenantId;
+    private Long platformUserId;
     private String orderStatus;
     private String payStatus;
     private Long totalAmount;
@@ -62,7 +65,10 @@ public class SalesOrderDetailVO {
         }
         SalesOrder order = detailVO.getOrder();
         SalesOrderDetailVO vo = SalesOrderDetailVO.builder()
+                .id(order.getId())
                 .orderNo(order.getOrderNo())
+                .tenantId(order.getTenantId())
+                .platformUserId(order.getPlatformUserId())
                 .orderStatus(order.getOrderStatus())
                 .payStatus(order.getPayStatus())
                 .totalAmount(VoConverterUtil.toFen(order.getTotalAmount()))
