@@ -405,3 +405,27 @@ export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkIt
     },
   ];
 }
+
+export function prioritizeMerchantWorkItems(items: MerchantWorkItem[]) {
+  const tonePriority: Record<OrderLifecycleTone, number> = {
+    red: 0,
+    orange: 1,
+    blue: 2,
+    green: 3,
+    slate: 4,
+  };
+
+  return [...items].sort((left, right) => {
+    const activeDiff = Number(right.count > 0) - Number(left.count > 0);
+    if (activeDiff !== 0) {
+      return activeDiff;
+    }
+
+    const toneDiff = tonePriority[left.tone] - tonePriority[right.tone];
+    if (toneDiff !== 0) {
+      return toneDiff;
+    }
+
+    return right.count - left.count;
+  });
+}

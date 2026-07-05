@@ -4,6 +4,7 @@ import {
   buildMerchantWorkItems,
   getOrderLifecyclePresentation,
   normalizeSalesOrderDetail,
+  prioritizeMerchantWorkItems,
 } from './orderLifecycle';
 
 describe('orderLifecycle', () => {
@@ -160,5 +161,29 @@ describe('orderLifecycle', () => {
     expect(items[2].path).toBe('/merchant/orders?tab=abnormal');
     expect(items[3].path).toBe('/merchant/refunds?status=PENDING');
     expect(items[4].path).toBe('/merchant/refunds?status=FAILED');
+  });
+
+  it('prioritizes actionable merchant work items before empty informational items', () => {
+    const items = buildMerchantWorkItems({
+      orders: [
+        { orderNo: 'SO2', orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 200 },
+        { orderNo: 'SO3', orderStatus: 'CREATED', payStatus: 'FAILED', totalAmount: 300 },
+      ],
+      products: [
+        { stock: 20, status: 'active' },
+      ],
+      refunds: [
+        { refundNo: 'R1', refundStatus: 'PENDING' },
+      ],
+    });
+
+    const prioritized = prioritizeMerchantWorkItems(items);
+
+    expect(prioritized.slice(0, 3).map((item) => item.key)).toEqual([
+      'abnormalOrder',
+      'refund',
+      'fulfillment',
+    ]);
+    expect(prioritized.at(-1)?.count).toBe(0);
   });
 });

@@ -28,7 +28,7 @@ import type { Refund } from '../../types/refund';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { getErrorMessage } from '../../utils/errorMessage';
-import { buildMerchantWorkItems, getOrderToneClass } from '../../utils/orderLifecycle';
+import { buildMerchantWorkItems, getOrderToneClass, prioritizeMerchantWorkItems } from '../../utils/orderLifecycle';
 
 export default function MerchantDashboard() {
   const navigate = useNavigate();
@@ -111,8 +111,12 @@ export default function MerchantDashboard() {
       .map(([day, sales]) => ({ day, sales }));
   }, [orders]);
   const workItems = useMemo(
-    () => buildMerchantWorkItems({ orders, products, refunds }),
+    () => prioritizeMerchantWorkItems(buildMerchantWorkItems({ orders, products, refunds })),
     [orders, products, refunds],
+  );
+  const totalWorkItemCount = useMemo(
+    () => workItems.reduce((sum, item) => sum + item.count, 0),
+    [workItems],
   );
 
   return (
@@ -281,9 +285,11 @@ export default function MerchantDashboard() {
           <div className="flex flex-col gap-6 rounded-[32px] border border-slate-100 bg-white p-6 shadow-sm md:rounded-[40px] md:p-8">
             <div className="flex items-center justify-between">
               <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                真实待办摘要
+                今日待办中心
               </h3>
-              <div className="h-2 w-2 rounded-full bg-red-500" />
+              <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[10px] font-black text-white">
+                {isLoading ? '...' : `${totalWorkItemCount} 项`}
+              </span>
             </div>
             <div className="flex flex-col gap-4">
               {workItems.map((item) => (
@@ -291,7 +297,12 @@ export default function MerchantDashboard() {
                   key={item.key}
                   type="button"
                   onClick={() => navigate(item.path)}
-                  className="overflow-hidden rounded-2xl border border-transparent bg-slate-50 p-5 text-left transition-all hover:border-slate-100 hover:bg-white hover:shadow-xl hover:shadow-slate-100"
+                  className={cn(
+                    'overflow-hidden rounded-2xl border p-5 text-left transition-all hover:bg-white hover:shadow-xl hover:shadow-slate-100',
+                    item.count > 0
+                      ? 'border-transparent bg-slate-50'
+                      : 'border-slate-100 bg-white opacity-70',
+                  )}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 pr-2">
@@ -302,11 +313,11 @@ export default function MerchantDashboard() {
                         )}
                       />
                       <span className="line-clamp-1 text-xs font-bold text-slate-800">
-                        {item.count} 个{item.label}
+                        {isLoading ? '...' : item.count} 个{item.label}
                       </span>
                     </div>
-                    <span className={cn('rounded-lg border px-2 py-1 text-[10px] font-black', getOrderToneClass(item.tone))}>
-                      处理
+                    <span className={cn('rounded-lg border px-2 py-1 text-[10px] font-black', item.count > 0 ? getOrderToneClass(item.tone) : 'border-slate-200 bg-slate-50 text-slate-400')}>
+                      {item.count > 0 ? '处理' : '查看'}
                     </span>
                   </div>
                   <p className="mt-2 line-clamp-2 text-xs font-medium leading-relaxed text-slate-400">
