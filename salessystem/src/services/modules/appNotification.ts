@@ -21,6 +21,22 @@ export const appNotificationService = {
       authRole: 'user',
     });
   },
+
+  markAllRead() {
+    return request<void>({
+      url: '/v1/app/notifications/read-all',
+      method: 'put',
+      authRole: 'user',
+    });
+  },
+
+  getUnreadCount() {
+    return request<{ count: number }>({
+      url: '/v1/app/notifications/unread-count',
+      method: 'get',
+      authRole: 'user',
+    });
+  },
 };
 
 export default appNotificationService;

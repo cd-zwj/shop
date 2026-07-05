@@ -144,7 +144,8 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
             notificationService.send(
                     platformUserId,
                     "退款申请已提交",
-                    "您的退款申请 " + app.getRefundNo() + " 已提交，金额 ¥" + app.getRefundAmount() + "，等待审核",
+                    "订单 " + app.getOrderNo() + " 的退款申请 " + app.getRefundNo()
+                            + " 已提交，金额 ¥" + app.getRefundAmount() + "，等待审核",
                     "REFUND");
         } catch (Exception e) {
             log.warn("发送退款申请通知失败, refundNo={}", app.getRefundNo(), e);

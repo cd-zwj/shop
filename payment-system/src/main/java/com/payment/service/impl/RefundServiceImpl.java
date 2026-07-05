@@ -466,7 +466,7 @@ public class RefundServiceImpl implements RefundService {
         }
 
         // 通知用户：退款已到账
-        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
+        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getOrderNo(), refundOrder.getRefundNo(),
                 "退款已到账", "退款成功", refundOrder.getRefundAmount());
 
         completeRefundApplication(refundOrder.getRefundNo());
@@ -484,7 +484,7 @@ public class RefundServiceImpl implements RefundService {
         }
 
         // 通知用户：退款失败
-        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getRefundNo(),
+        sendRefundNotification(refundOrder.getPlatformUserId(), refundOrder.getOrderNo(), refundOrder.getRefundNo(),
                 "退款失败: " + message, "退款失败", refundOrder.getRefundAmount());
 
         syncRefundApplicationStatus(refundOrder.getRefundNo(), RefundApplicationStatus.FAILED.name(), message, false);
@@ -515,10 +515,13 @@ public class RefundServiceImpl implements RefundService {
         refundApplicationService.completeRefund(app.getTenantId(), app.getId());
     }
 
-    private void sendRefundNotification(Long platformUserId, String refundNo, String content, String title, BigDecimal amount) {
+    private void sendRefundNotification(Long platformUserId, String orderNo, String refundNo, String content, String title, BigDecimal amount) {
         if (platformUserId == null) return;
         try {
-            notificationService.send(platformUserId, title, content, "REFUND");
+            String detail = (orderNo == null || orderNo.isBlank())
+                    ? content + "，退款单号 " + refundNo
+                    : "订单 " + orderNo + " 的退款单 " + refundNo + "：" + content;
+            notificationService.send(platformUserId, title, detail, "REFUND");
         } catch (Exception e) {
             log.warn("发送退款通知失败, refundNo={}", refundNo, e);
         }

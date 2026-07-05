@@ -41,4 +41,7 @@ export interface AppNotification {
   readTime: string | null;
   createTime: string | null;
   updateTime: string | null;
+  actionType?: 'ORDER_DETAIL' | 'REFUND_DETAIL' | 'ORDER_LIST' | 'COUPON_CENTER' | null;
+  actionLabel?: string | null;
+  actionUrl?: string | null;
 }

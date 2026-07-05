@@ -6,6 +6,7 @@ import {
   CheckCheck,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
   Package,
   CreditCard,
   Sparkles,
@@ -17,6 +18,7 @@ import { appNotificationService } from '../services/modules/appNotification';
 import type { AppNotification } from '../types/addressNotification';
 import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
+import { getNotificationAction } from '../utils/notificationAction';
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -83,12 +85,13 @@ export default function Notifications() {
     async (page: number) => {
       setIsLoading(true);
       try {
-        const data = await appNotificationService.list(page, 20);
+        const [data, unread] = await Promise.all([
+          appNotificationService.list(page, 20),
+          appNotificationService.getUnreadCount(),
+        ]);
         setNotifications(data.records ?? []);
         setTotalPages(data.pages ?? 1);
-        setUnreadCount(
-          (data.records ?? []).filter((n) => n.readStatus === 0).length
-        );
+        setUnreadCount(unread.count ?? 0);
       } catch (err) {
         showToast(err instanceof Error ? err.message : '加载通知失败', 'error');
       } finally {
@@ -123,7 +126,7 @@ export default function Notifications() {
       return;
     }
     try {
-      await Promise.all(unread.map((n) => appNotificationService.markRead(n.id)));
+      await appNotificationService.markAllRead();
       setNotifications((prev) =>
         prev.map((n) => ({ ...n, readStatus: 1, readTime: new Date().toISOString() }))
       );
@@ -196,6 +199,7 @@ export default function Notifications() {
             {notifications.map((notification) => {
               const Icon = getCategoryIcon(notification.category);
               const isUnread = notification.readStatus === 0;
+              const action = getNotificationAction(notification);
 
               return (
                 <motion.div
@@ -256,6 +260,19 @@ export default function Notifications() {
                           {formatDate(notification.createTime)}
                         </span>
                       </div>
+                      {action && (
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (isUnread) void handleMarkRead(notification.id);
+                            navigate(action.path);
+                          }}
+                          className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-all hover:border-primary hover:text-primary"
+                        >
+                          {action.label}
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     {/* Mark Read Button */}
