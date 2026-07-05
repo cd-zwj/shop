@@ -4,11 +4,11 @@ import type { PageResult } from '../../types/api';
 
 export const appNotificationService = {
   /** 获取当前用户通知列表（分页） */
-  list(pageNum = 1, pageSize = 20) {
+  list(pageNum = 1, pageSize = 20, readStatus?: 0 | 1) {
     return request<PageResult<AppNotification>>({
       url: '/v1/app/notifications',
       method: 'get',
-      params: { current: pageNum, size: pageSize },
+      params: { current: pageNum, size: pageSize, readStatus },
       authRole: 'user',
     });
   },

@@ -32,7 +32,7 @@ public interface UserNotificationService {
      * @param size           每页条数
      * @return 通知分页结果（按创建时间倒序）
      */
-    Page<UserNotification> list(Long platformUserId, Integer current, Integer size);
+    Page<UserNotification> list(Long platformUserId, Integer current, Integer size, Integer readStatus);
 
     /**
      * 统计当前用户未读通知数量。

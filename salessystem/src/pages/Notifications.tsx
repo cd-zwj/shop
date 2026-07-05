@@ -17,6 +17,14 @@ import { cn } from '../lib/utils';
 import { getNotificationAction } from '../utils/notificationAction';
 import { getNotificationPresentation } from '../utils/notificationPresentation';
 
+const NOTIFICATION_FILTERS = [
+  { id: 'ALL', label: '全部', readStatus: undefined },
+  { id: 'UNREAD', label: '未读', readStatus: 0 },
+  { id: 'READ', label: '已读', readStatus: 1 },
+] as const;
+
+type NotificationFilterId = typeof NOTIFICATION_FILTERS[number]['id'];
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
@@ -49,13 +57,15 @@ export default function Notifications() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeFilter, setActiveFilter] = useState<NotificationFilterId>('ALL');
 
   const loadNotifications = useCallback(
-    async (page: number) => {
+    async (page: number, filterId: NotificationFilterId) => {
+      const readStatus = NOTIFICATION_FILTERS.find((filter) => filter.id === filterId)?.readStatus;
       setIsLoading(true);
       try {
         const [data, unread] = await Promise.all([
-          appNotificationService.list(page, 20),
+          appNotificationService.list(page, 20, readStatus),
           appNotificationService.getUnreadCount(),
         ]);
         setNotifications(data.records ?? []);
@@ -71,8 +81,8 @@ export default function Notifications() {
   );
 
   useEffect(() => {
-    void loadNotifications(currentPage);
-  }, [currentPage, loadNotifications]);
+    void loadNotifications(currentPage, activeFilter);
+  }, [activeFilter, currentPage, loadNotifications]);
 
   const handleMarkRead = async (id: number) => {
     try {
@@ -111,6 +121,11 @@ export default function Notifications() {
     setCurrentPage(page);
   };
 
+  const handleFilterChange = (filterId: NotificationFilterId) => {
+    setActiveFilter(filterId);
+    setCurrentPage(1);
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 md:mt-8">
       {/* Header */}
@@ -142,6 +157,33 @@ export default function Notifications() {
           全部已读
         </button>
       </header>
+
+      <div className="flex gap-2 overflow-x-auto border-b border-slate-100 pb-3">
+        {NOTIFICATION_FILTERS.map((filter) => (
+          <button
+            key={filter.id}
+            onClick={() => handleFilterChange(filter.id)}
+            className={cn(
+              'whitespace-nowrap rounded-2xl border px-4 py-2 text-xs font-black transition-all',
+              activeFilter === filter.id
+                ? 'border-primary bg-primary text-white shadow-sm'
+                : 'border-slate-200 bg-white text-slate-500 hover:border-primary/40 hover:text-primary',
+            )}
+          >
+            {filter.label}
+            {filter.id === 'UNREAD' && unreadCount > 0 && (
+              <span
+                className={cn(
+                  'ml-2 rounded-lg px-1.5 py-0.5 text-[10px]',
+                  activeFilter === filter.id ? 'bg-white/20 text-white' : 'bg-red-50 text-red-500',
+                )}
+              >
+                {unreadCount}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
       {/* Content */}
       {isLoading ? (

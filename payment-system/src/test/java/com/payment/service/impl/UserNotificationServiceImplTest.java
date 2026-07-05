@@ -8,6 +8,7 @@ import com.payment.service.OutboxPublisher;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,7 +34,7 @@ class UserNotificationServiceImplTest {
         page.setTotal(1);
         when(notificationMapper.selectPage(any(), any())).thenReturn(page);
 
-        Page<UserNotification> result = service.list(100L, 1, 20);
+        Page<UserNotification> result = service.list(100L, 1, 20, null);
 
         assertEquals(1, result.getRecords().size());
         assertEquals("订单状态更新", result.getRecords().get(0).getTitle());
@@ -134,7 +135,37 @@ class UserNotificationServiceImplTest {
         return notification;
     }
 
+    @Test
+    void listShouldFilterByReadStatusWhenProvided() {
+        UserNotificationMapper notificationMapper = mock(UserNotificationMapper.class);
+        UserNotificationServiceImpl service = service(notificationMapper);
+        Page<UserNotification> page = new Page<>(1, 20);
+        page.setRecords(java.util.List.of(buildNotification(1L, 100L, 0)));
+        page.setTotal(1);
+        when(notificationMapper.selectPage(any(), any())).thenReturn(page);
+
+        service.list(100L, 1, 20, 0);
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper> captor =
+                ArgumentCaptor.forClass(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper.class);
+        verify(notificationMapper).selectPage(any(), captor.capture());
+
+        assertThat(countOccurrences(captor.getValue().getExpression().getNormal().toString(), "EQ"))
+                .isEqualTo(3);
+    }
+
     private UserNotificationServiceImpl service(UserNotificationMapper notificationMapper) {
         return new UserNotificationServiceImpl(notificationMapper, mock(OutboxPublisher.class));
+    }
+
+    private int countOccurrences(String text, String pattern) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(pattern, index)) >= 0) {
+            count++;
+            index += pattern.length();
+        }
+        return count;
     }
 }

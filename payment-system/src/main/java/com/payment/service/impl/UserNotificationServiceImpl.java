@@ -107,15 +107,19 @@ public class UserNotificationServiceImpl implements UserNotificationService {
      * 查询通知列表。
      */
     @Override
-    public Page<UserNotification> list(Long platformUserId, Integer current, Integer size) {
+    public Page<UserNotification> list(Long platformUserId, Integer current, Integer size, Integer readStatus) {
         int pageNo = current == null || current < 1 ? 1 : current;
         int pageSize = size == null || size < 1 ? 20 : Math.min(size, 50);
-        return notificationMapper.selectPage(new Page<>(pageNo, pageSize), new LambdaQueryWrapper<UserNotification>()
+        LambdaQueryWrapper<UserNotification> wrapper = new LambdaQueryWrapper<UserNotification>()
                 .eq(UserNotification::getPlatformUserId, platformUserId)
-                .eq(UserNotification::getDeleted, 0)
-                .orderByAsc(UserNotification::getReadStatus)
+                .eq(UserNotification::getDeleted, 0);
+        if (readStatus != null) {
+            wrapper.eq(UserNotification::getReadStatus, readStatus);
+        }
+        wrapper.orderByAsc(UserNotification::getReadStatus)
                 .orderByDesc(UserNotification::getCreateTime)
-                .orderByDesc(UserNotification::getId));
+                .orderByDesc(UserNotification::getId);
+        return notificationMapper.selectPage(new Page<>(pageNo, pageSize), wrapper);
     }
 
     /**

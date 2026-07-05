@@ -8,8 +8,10 @@ import com.payment.entity.UserNotification;
 import com.payment.service.UserNotificationService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.NotificationVO;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -20,6 +22,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/v1/app/notifications")
 @RequiredArgsConstructor
+@Validated
 public class V1AppNotificationController {
 
     private final UserNotificationService notificationService;
@@ -27,8 +30,13 @@ public class V1AppNotificationController {
     @SaCheckLogin(type = "platform")
     @GetMapping
     public Result<PageResult<NotificationVO>> listNotifications(@RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
-                                                                @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
-        Page<UserNotification> page = notificationService.list(PlatformSessionHelper.getPlatformUserId(), current, size);
+                                                                @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
+                                                                @RequestParam(required = false) @Min(value = 0, message = "已读状态只能是0或1") @Max(value = 1, message = "已读状态只能是0或1") Integer readStatus) {
+        Page<UserNotification> page = notificationService.list(
+                PlatformSessionHelper.getPlatformUserId(),
+                current,
+                size,
+                readStatus);
         return Result.success(PageResult.from(page, NotificationVO::from));
     }
 
