@@ -23,6 +23,7 @@ import { ApiError } from '../types/api';
 import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
+import { validateCartItemsAgainstCatalog } from '../utils/cartValidation';
 
 const calculateDiscount = (coupon: { couponType: 'FIXED' | 'RATE'; discountAmount: number | null; discountRate: number | null; maxDiscountAmount: number | null }, subtotal: number) => {
   if (coupon.couponType === 'FIXED') {
@@ -60,6 +61,7 @@ export default function Cart() {
     updateQuantity,
     removeItem,
     clearTenantItems,
+    replaceTenantItems,
   } = useCart();
   const [tenantNames, setTenantNames] = useState<Record<number, string>>({});
   const [isSubmittingTenantId, setIsSubmittingTenantId] = useState<number | null>(
@@ -323,6 +325,17 @@ export default function Cart() {
       .find((message) => message.length > 0);
     if (stockError) {
       setError(stockError);
+      return;
+    }
+
+    const validation = await validateCartItemsAgainstCatalog(
+      tenantItems,
+      (productId) => appCatalogService.getProduct(productId),
+    );
+    if (validation.hasIssues) {
+      replaceTenantItems(tenantId, validation.refreshedItems);
+      setSelectedCouponByTenant((prev) => ({ ...prev, [tenantId]: null }));
+      setError(`购物车已刷新：${validation.issues.map((issue) => issue.message).join('；')}。请确认后重新结算。`);
       return;
     }
 

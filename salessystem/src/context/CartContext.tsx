@@ -16,6 +16,7 @@ interface CartContextValue {
   totalItems: number;
   addItem: (product: Product & { tenantId?: number }, quantity?: number) => void;
   addCartItems: (nextItems: CartItem[]) => void;
+  replaceTenantItems: (tenantId: number, nextItems: CartItem[]) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   removeItem: (productId: number) => void;
   clearCart: () => void;
@@ -150,6 +151,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function replaceTenantItems(tenantId: number, nextItems: CartItem[]) {
+    setItems((currentItems) => [
+      ...currentItems.filter((item) => item.tenantId !== tenantId),
+      ...nextItems.map((item) => ({
+        ...item,
+        quantity: clampQuantity(item.quantity, item.stock),
+      })),
+    ]);
+  }
+
   function updateQuantity(productId: number, quantity: number) {
     setItems((currentItems) =>
       currentItems.map((item) =>
@@ -181,6 +192,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       totalItems: items.reduce((sum, item) => sum + item.quantity, 0),
       addItem,
       addCartItems,
+      replaceTenantItems,
       updateQuantity,
       removeItem,
       clearCart,

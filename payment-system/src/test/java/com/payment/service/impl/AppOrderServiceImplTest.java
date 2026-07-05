@@ -9,6 +9,7 @@ import com.payment.dto.WalletAccountVO;
 import com.payment.dto.pricing.OrderPricingResultVO;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.Product;
+import com.payment.entity.ProductStock;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
@@ -98,6 +99,10 @@ class AppOrderServiceImplTest {
         when(productMapper.selectBatchIds(any())).thenReturn(List.of(
                 buildProduct(1L, 9L, "可乐", "3.50"),
                 buildProduct(2L, 9L, "雪碧", "4.00")
+        ));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(
+                buildStock(1L, 10),
+                buildStock(2L, 10)
         ));
         when(unifiedWalletService.getWallet(100L)).thenReturn(buildWallet("0.00"));
         when(merchantWalletService.getWallet(9L, 100L)).thenReturn(buildWallet("0.00"));
@@ -191,6 +196,7 @@ class AppOrderServiceImplTest {
 
         when(tenantMemberMapper.selectOne(any())).thenReturn(new TenantMember());
         when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(3L, 9L, "奶茶", "12.00")));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(buildStock(3L, 5)));
         when(unifiedWalletService.getWallet(100L)).thenReturn(buildWallet("20.00"));
         when(merchantWalletService.getWallet(9L, 100L)).thenReturn(buildWallet("0.00"));
         when(orderPricingService.calculate(any())).thenReturn(buildPricingResult("12.00", "12.00"));
@@ -216,6 +222,116 @@ class AppOrderServiceImplTest {
         assertEquals("PAID", result.getOrderStatus());
         // 回归 H1：钱包支付分支(无外部回调)也必须入队交付事件,否则用户付钱永远收不到商品
         verify(orderDeliveryService, times(1)).enqueueDelivery(result.getOrderNo());
+    }
+
+    @Test
+    void createOrderShouldRejectInsufficientStockBeforePricing() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService
+        );
+
+        when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(1L, 9L, "可乐", "3.50")));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(buildStock(1L, 1)));
+
+        AppCreateOrderDTO dto = new AppCreateOrderDTO();
+        dto.setTenantId(9L);
+        dto.setWalletStrategy(com.payment.enums.WalletStrategyEnum.NO_WALLET);
+        dto.setItems(List.of(buildItem(1L, 2)));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
+
+        assertEquals("商品库存不足, productId=1", exception.getMessage());
+        verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
+        verify(orderPricingService, never()).calculate(any());
+    }
+
+    @Test
+    void createOrderShouldRejectStaleClientPriceBeforePricing() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService
+        );
+
+        when(productMapper.selectBatchIds(any())).thenReturn(List.of(buildProduct(1L, 9L, "可乐", "3.50")));
+        when(productMapper.selectStockByTenantAndProductIds(eq(9L), any())).thenReturn(List.of(buildStock(1L, 10)));
+
+        AppCreateOrderDTO dto = new AppCreateOrderDTO();
+        dto.setTenantId(9L);
+        dto.setWalletStrategy(com.payment.enums.WalletStrategyEnum.NO_WALLET);
+        dto.setItems(List.of(buildItemWithPrice(1L, 1, "300")));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
+
+        assertEquals("商品价格已变化, productId=1", exception.getMessage());
+        verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
+        verify(orderPricingService, never()).calculate(any());
     }
 
     @Test
@@ -586,6 +702,19 @@ class AppOrderServiceImplTest {
         item.setProductId(productId);
         item.setQuantity(quantity);
         return item;
+    }
+
+    private AppCreateOrderItemDTO buildItemWithPrice(Long productId, Integer quantity, String price) {
+        AppCreateOrderItemDTO item = buildItem(productId, quantity);
+        item.setPrice(new BigDecimal(price));
+        return item;
+    }
+
+    private ProductStock buildStock(Long productId, Integer quantity) {
+        ProductStock stock = new ProductStock();
+        stock.setProductId(productId);
+        stock.setQuantity(quantity);
+        return stock;
     }
 
     private OrderPricingResultVO buildPricingResult(String totalAmount, String payableAmount) {

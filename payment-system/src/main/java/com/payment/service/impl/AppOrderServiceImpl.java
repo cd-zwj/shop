@@ -17,6 +17,7 @@ import com.payment.entity.OrderDiscountSnapshot;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PointsRule;
 import com.payment.entity.Product;
+import com.payment.entity.ProductStock;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
@@ -46,6 +47,7 @@ import com.payment.service.UserBehaviorLogService;
 import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.TenantContextHolder;
+import com.payment.vo.VoConverterUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -459,6 +461,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
 
         LinkedHashMap<Long, Integer> mergedQuantities = new LinkedHashMap<>();
+        Map<Long, BigDecimal> submittedPriceMap = new LinkedHashMap<>();
         for (AppCreateOrderItemDTO item : dto.getItems()) {
             if (item.getProductId() == null) {
                 throw new BusinessException("商品ID不能为空");
@@ -466,12 +469,28 @@ public class AppOrderServiceImpl implements AppOrderService {
             if (item.getQuantity() == null || item.getQuantity() <= 0) {
                 throw new BusinessException("商品数量必须大于0");
             }
+            if (item.getPrice() != null && item.getPrice().compareTo(BigDecimal.ZERO) < 0) {
+                throw new BusinessException("商品价格非法, productId=" + item.getProductId());
+            }
+            if (item.getPrice() != null) {
+                BigDecimal existingPrice = submittedPriceMap.putIfAbsent(item.getProductId(), item.getPrice());
+                if (existingPrice != null && existingPrice.compareTo(item.getPrice()) != 0) {
+                    throw new BusinessException("同一商品提交价格不一致, productId=" + item.getProductId());
+                }
+            }
             mergedQuantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
         }
 
         Set<Long> productIds = mergedQuantities.keySet();
         Map<Long, Product> productMap = productMapper.selectBatchIds(productIds).stream()
                 .collect(Collectors.toMap(Product::getId, Function.identity()));
+        List<ProductStock> stockRows = productMapper.selectStockByTenantAndProductIds(dto.getTenantId(), productIds);
+        Map<Long, Integer> stockMap = (stockRows == null ? List.<ProductStock>of() : stockRows).stream()
+                .collect(Collectors.toMap(
+                        ProductStock::getProductId,
+                        stock -> stock.getQuantity() == null ? 0 : stock.getQuantity(),
+                        (left, right) -> left
+                ));
 
         List<OrderLine> orderLines = new ArrayList<>();
         for (Map.Entry<Long, Integer> entry : mergedQuantities.entrySet()) {
@@ -493,6 +512,17 @@ public class AppOrderServiceImpl implements AppOrderService {
             }
             if (product.getPrice() == null || product.getPrice().compareTo(BigDecimal.ZERO) < 0) {
                 throw new BusinessException("商品价格非法, productId=" + productId);
+            }
+            BigDecimal submittedPrice = submittedPriceMap.get(productId);
+            if (submittedPrice != null) {
+                BigDecimal currentPrice = BigDecimal.valueOf(VoConverterUtil.toFen(product.getPrice()));
+                if (currentPrice.compareTo(submittedPrice) != 0) {
+                    throw new BusinessException("商品价格已变化, productId=" + productId);
+                }
+            }
+            Integer stockQuantity = stockMap.get(productId);
+            if (stockQuantity == null || stockQuantity < quantity) {
+                throw new BusinessException("商品库存不足, productId=" + productId);
             }
 
             BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));

@@ -3,15 +3,34 @@ package com.payment.mapper;
 import com.baomidou.mybatisplus.annotation.InterceptorIgnore;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.payment.entity.Product;
+import com.payment.entity.ProductStock;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+import java.util.Set;
 
 /**
  * 商品数据访问接口，提供商品表（product）的增删改查操作。
  */
 @Mapper
 public interface ProductMapper extends BaseMapper<Product> {
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("""
+            <script>
+            SELECT product_id AS productId, tenant_id AS tenantId, quantity
+            FROM product_stock
+            WHERE tenant_id = #{tenantId}
+              AND product_id IN
+              <foreach collection="productIds" item="productId" open="(" separator="," close=")">
+                #{productId}
+              </foreach>
+            </script>
+            """)
+    List<ProductStock> selectStockByTenantAndProductIds(@Param("tenantId") Long tenantId,
+                                                        @Param("productIds") Set<Long> productIds);
 
     @InterceptorIgnore(tenantLine = "true")
     @Select("""

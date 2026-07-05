@@ -4,6 +4,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 /**
  * 用户端下单商品项数据传输对象，用于指定订单中的单个商品及购买数量。
  */
@@ -18,4 +20,7 @@ public class AppCreateOrderItemDTO {
     @NotNull(message = "购买数量不能为空")
     @Min(value = 1, message = "购买数量必须大于0")
     private Integer quantity;
+
+    /** 用户提交时购物车中的单价快照，单位为分；用于下单前发现价格变化。 */
+    private BigDecimal price;
 }
