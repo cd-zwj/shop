@@ -7,6 +7,11 @@ import { useToast } from '../../context/ToastContext';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
 import type { Refund } from '../../types/refund';
 import { formatCurrency } from '../../utils/display';
+import {
+  getMerchantRefundPresentation,
+  getMerchantRefundRiskItems,
+  getMerchantRefundToneClass,
+} from '../../utils/merchantRefundPresentation';
 
 const REFUND_TABS = [
   { id: 'ALL', label: '全部' },
@@ -104,23 +109,13 @@ export default function MerchantRefunds() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PENDING':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-black text-yellow-600 border border-yellow-100">待审核</span>;
-      case 'APPROVED':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-black text-green-600 border border-green-100">已同意</span>;
-      case 'PROCESSING':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-600 border border-blue-100">退款中</span>;
-      case 'COMPLETED':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-xs font-black text-green-600 border border-green-100">已退款</span>;
-      case 'FAILED':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-black text-orange-600 border border-orange-100">退款失败</span>;
-      case 'REJECTED':
-        return <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-600 border border-red-100">已驳回</span>;
-      default:
-        return <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-500 border border-slate-200">已取消</span>;
-    }
+  const getStatusBadge = (refund: Refund) => {
+    const presentation = getMerchantRefundPresentation(refund);
+    return (
+      <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${getMerchantRefundToneClass(presentation.tone)}`}>
+        {presentation.statusLabel}
+      </span>
+    );
   };
 
   const getDeliveryLabel = (status?: string | null) => {
@@ -145,7 +140,10 @@ export default function MerchantRefunds() {
   };
 
   const getRefundSuggestionLabel = (refund: Refund) =>
-    refund.refundSuggestion || (refund.quickRefundSuggested ? '建议同意后快速退款' : '同意后需先撤销交付再退款');
+    refund.refundSuggestion || (refund.quickRefundSuggested ? '建议同意后快速退款' : '同意前需核对交付状态');
+
+  const auditingPresentation = auditingRefund ? getMerchantRefundPresentation(auditingRefund) : null;
+  const auditingRiskItems = auditingRefund ? getMerchantRefundRiskItems(auditingRefund) : [];
 
   return (
     <div className="flex flex-col gap-6 p-6 pb-20">
@@ -185,87 +183,100 @@ export default function MerchantRefunds() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {refunds.map((refund) => (
-            <motion.article
-              key={refund.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm transition-all hover:shadow-md"
-            >
-              <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 p-5">
-                <span className="font-mono text-xs font-bold text-slate-400">单号: {refund.refundNo}</span>
-                {getStatusBadge(refund.refundStatus)}
-              </div>
+          {refunds.map((refund) => {
+            const presentation = getMerchantRefundPresentation(refund);
+            const riskItems = getMerchantRefundRiskItems(refund);
 
-              <div className="flex-1 p-5 space-y-4">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-2xl font-black text-slate-900">{formatCurrency(refund.refundAmount)}</span>
-                  <span className="text-xs font-semibold text-slate-400">{refund.refundType === 'REFUND_ONLY' ? '仅退款' : '退货退款'}</span>
+            return (
+              <motion.article
+                key={refund.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-sm transition-all hover:shadow-md"
+              >
+                <div className="flex items-center justify-between border-b border-slate-50 bg-slate-50/50 p-5">
+                  <span className="font-mono text-xs font-bold text-slate-400">单号: {refund.refundNo}</span>
+                  {getStatusBadge(refund)}
                 </div>
 
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">订单号</span>
-                    <span className="font-mono font-medium text-slate-700">{refund.orderNo}</span>
+                <div className="flex-1 p-5 space-y-4">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-2xl font-black text-slate-900">{formatCurrency(refund.refundAmount)}</span>
+                    <span className="text-xs font-semibold text-slate-400">{refund.refundType === 'REFUND_ONLY' ? '仅退款' : '退货退款'}</span>
                   </div>
-                  {refund.orderItemId && (
+
+                  <div className={`rounded-2xl border px-3 py-3 text-xs ${getMerchantRefundToneClass(presentation.tone)}`}>
+                    <p className="font-black">{presentation.statusDescription}</p>
+                    <p className="mt-1 font-semibold opacity-90">{presentation.nextAction}</p>
+                  </div>
+
+                  {riskItems.length > 0 && (
+                    <div className="rounded-2xl border border-red-100 bg-red-50 px-3 py-3 text-xs text-red-700">
+                      <p className="mb-1 font-black">需人工关注</p>
+                      {riskItems.map((risk) => (
+                        <p key={risk} className="font-semibold">{risk}</p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-400">订单项</span>
-                      <span className="font-mono font-medium text-slate-700">#{refund.orderItemId}</span>
+                      <span className="text-slate-400">订单号</span>
+                      <span className="font-mono font-medium text-slate-700">{refund.orderNo}</span>
                     </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">交付状态</span>
-                    <span className="font-semibold text-slate-800">{getDeliveryLabel(refund.deliveryStatus)}</span>
-                  </div>
-                  {refund.refundableAmount !== null && refund.refundableAmount !== undefined && (
+                    {refund.orderItemId && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">订单项</span>
+                        <span className="font-mono font-medium text-slate-700">#{refund.orderItemId}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
-                      <span className="text-slate-400">可退余额</span>
-                      <span className="font-semibold text-slate-800">{formatCurrency(refund.refundableAmount)}</span>
+                      <span className="text-slate-400">交付状态</span>
+                      <span className="font-semibold text-slate-800">{getDeliveryLabel(refund.deliveryStatus)}</span>
                     </div>
-                  )}
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                    <span className={`text-xs font-black ${
-                      refund.quickRefundSuggested ? 'text-green-600' : 'text-blue-600'
-                    }`}>
-                      {getRefundSuggestionLabel(refund)}
-                    </span>
+                    {refund.refundableAmount !== null && refund.refundableAmount !== undefined && (
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">可退余额</span>
+                        <span className="font-semibold text-slate-800">{formatCurrency(refund.refundableAmount)}</span>
+                      </div>
+                    )}
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                      <span className={`text-xs font-black ${
+                        refund.quickRefundSuggested ? 'text-green-600' : 'text-blue-600'
+                      }`}>
+                        {getRefundSuggestionLabel(refund)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">申请原因</span>
+                      <span className="font-medium text-slate-800">{refund.reason}</span>
+                    </div>
+                    {refund.description && (
+                      <div className="flex flex-col gap-1 border-t border-slate-50 pt-2">
+                        <span className="text-slate-400">详细描述</span>
+                        <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg">{refund.description}</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">申请原因</span>
-                    <span className="font-medium text-slate-800">{refund.reason}</span>
-                  </div>
-                  {refund.description && (
-                    <div className="flex flex-col gap-1 border-t border-slate-50 pt-2">
-                      <span className="text-slate-400">详细描述</span>
-                      <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg">{refund.description}</p>
-                    </div>
-                  )}
-                  {refund.rejectReason && (
-                    <div className="flex flex-col gap-1 border-t border-red-50 pt-2 text-red-600">
-                      <span className="font-bold">驳回原因</span>
-                      <p className="text-xs font-semibold bg-red-50/50 p-2 rounded-lg">{refund.rejectReason}</p>
-                    </div>
-                  )}
                 </div>
-              </div>
 
-              {refund.refundStatus === 'PENDING' && (
-                <div className="border-t border-slate-50 p-4 bg-slate-50/30">
-                  <button
-                    onClick={() => {
-                      setAuditingRefund(refund);
-                      setAuditApproved(true);
-                    }}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
-                  >
-                    <ShieldAlert size={16} />
-                    审核处理
-                  </button>
-                </div>
-              )}
-            </motion.article>
-          ))}
+                {refund.refundStatus === 'PENDING' && (
+                  <div className="border-t border-slate-50 p-4 bg-slate-50/30">
+                    <button
+                      onClick={() => {
+                        setAuditingRefund(refund);
+                        setAuditApproved(true);
+                      }}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-bold text-white transition-opacity hover:opacity-90"
+                    >
+                      <ShieldAlert size={16} />
+                      {presentation.primaryActionLabel}
+                    </button>
+                  </div>
+                )}
+              </motion.article>
+            );
+          })}
         </div>
       )}
 
@@ -296,6 +307,22 @@ export default function MerchantRefunds() {
                   </span></p>
                   <p>退款原因：<span className="font-semibold text-slate-800">{auditingRefund.reason}</span></p>
                 </div>
+
+                {auditingPresentation && (
+                  <div className={`rounded-2xl border px-4 py-3 text-sm ${getMerchantRefundToneClass(auditingPresentation.tone)}`}>
+                    <p className="font-black">{auditingPresentation.statusDescription}</p>
+                    <p className="mt-1 text-xs font-semibold opacity-90">{auditingPresentation.nextAction}</p>
+                  </div>
+                )}
+
+                {auditingRiskItems.length > 0 && (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-xs text-red-700">
+                    <p className="mb-1 font-black">提交前需确认</p>
+                    {auditingRiskItems.map((risk) => (
+                      <p key={risk} className="font-semibold">{risk}</p>
+                    ))}
+                  </div>
+                )}
 
                 {/* Audit Choice */}
                 <div className="flex flex-col gap-2">
