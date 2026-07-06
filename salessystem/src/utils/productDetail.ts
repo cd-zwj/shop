@@ -18,6 +18,13 @@ export interface DeliveryAccessPresentation {
   actionLabel: string;
 }
 
+export interface SaleStatusPresentation {
+  label: string;
+  description: string;
+  toneClass: string;
+  isPurchasable: boolean;
+}
+
 export interface MerchantInfoPresentation {
   title: string;
   description: string;
@@ -110,6 +117,33 @@ export function getPurchaseLimitNote(product: InventoryInput) {
 
   const unit = product.unit?.trim() || '件';
   return `单次立即购买 1 ${unit}，购物车最多不超过当前库存 ${product.stock} ${unit}。`;
+}
+
+export function getSaleStatusPresentation(status?: number | string | null): SaleStatusPresentation {
+  if (status === undefined || status === null || status === 1 || status === '1' || status === 'active') {
+    return {
+      label: '商品可购买',
+      description: '该商品当前处于上架状态，下单前仍会校验价格、库存和履约方式。',
+      toneClass: 'border-green-100 bg-green-50 text-green-700',
+      isPurchasable: true,
+    };
+  }
+
+  if (status === 'out_of_stock') {
+    return {
+      label: '商品已售罄',
+      description: '商家已将该商品标记为售罄，暂不可购买。',
+      toneClass: 'border-red-100 bg-red-50 text-red-600',
+      isPurchasable: false,
+    };
+  }
+
+  return {
+    label: '商品已下架',
+    description: '该商品当前未上架，暂不可购买。可进入商户店铺查看其他在售商品。',
+    toneClass: 'border-slate-200 bg-slate-100 text-slate-600',
+    isPurchasable: false,
+  };
 }
 
 export function getDeliveryAccessPresentation(

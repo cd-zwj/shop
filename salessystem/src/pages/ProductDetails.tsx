@@ -34,6 +34,7 @@ import {
   getInventoryPresentation,
   getMerchantInfoPresentation,
   getPurchaseLimitNote,
+  getSaleStatusPresentation,
 } from '../utils/productDetail';
 
 export default function ProductDetails() {
@@ -115,7 +116,9 @@ export default function ProductDetails() {
     stock: product?.stock,
     unit: product?.unit,
   });
+  const saleStatus = getSaleStatusPresentation(product?.status);
   const isOutOfStock = inventory.isOutOfStock;
+  const isPurchaseBlocked = isOutOfStock || !saleStatus.isPurchasable;
 
   function toCheckoutItem(detail: Product): CartItem {
     return {
@@ -141,6 +144,11 @@ export default function ProductDetails() {
       return;
     }
 
+    if (!saleStatus.isPurchasable) {
+      setActionMessage(saleStatus.description);
+      return;
+    }
+
     if (isOutOfStock) {
       setActionMessage('该商品暂时无库存，暂不能加入购物车');
       return;
@@ -156,6 +164,11 @@ export default function ProductDetails() {
     }
     if (!resolvedTenantId) {
       setActionMessage('当前商品缺少商户信息，请从商户店铺或商品列表重新进入');
+      return;
+    }
+
+    if (!saleStatus.isPurchasable) {
+      setActionMessage(saleStatus.description);
       return;
     }
 
@@ -305,6 +318,11 @@ export default function ProductDetails() {
                 {inventory.label}
               </span>
             )}
+            {product && (
+              <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', saleStatus.toneClass)}>
+                {saleStatus.label}
+              </span>
+            )}
           </div>
 
           {actionMessage && (
@@ -345,6 +363,7 @@ export default function ProductDetails() {
             <ul className="flex flex-col gap-5">
               {[
                 { icon: PackageCheck, title: inventory.label, label: inventory.description },
+                { icon: CheckCircle2, title: saleStatus.label, label: saleStatus.description },
                 { icon: Truck, title: fulfillment.label, label: fulfillment.description },
                 { icon: CheckCircle2, title: deliveryAccess.label, label: deliveryAccess.description },
                 { icon: ShieldCheck, title: '购买限制', label: purchaseLimitNote },
@@ -435,7 +454,7 @@ export default function ProductDetails() {
           <div className="mt-auto hidden flex-col gap-4 md:flex">
             <button
               onClick={handleAddToCart}
-              disabled={!product || isOutOfStock || isSubmittingOrder}
+              disabled={!product || isPurchaseBlocked || isSubmittingOrder}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-6 py-4 font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-container hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-60"
             >
               <ShoppingCart className="h-5 w-5" />
@@ -443,7 +462,7 @@ export default function ProductDetails() {
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={!product || isOutOfStock || isSubmittingOrder}
+              disabled={!product || isPurchaseBlocked || isSubmittingOrder}
               className="w-full rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-900 shadow-sm transition-all hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmittingOrder ? '创建订单中...' : '立即购买'}
@@ -455,14 +474,14 @@ export default function ProductDetails() {
       <div className="fixed bottom-16 z-50 flex w-full gap-3 border-t border-slate-100 bg-white/95 p-4 pb-10 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur-xl md:hidden">
         <button
           onClick={handleBuyNow}
-          disabled={!product || isOutOfStock || isSubmittingOrder}
+          disabled={!product || isPurchaseBlocked || isSubmittingOrder}
           className="flex-1 rounded-2xl border border-slate-200 bg-white px-2 py-4 font-bold text-slate-900 shadow-sm transition-colors active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmittingOrder ? '创建订单中...' : '立即购买'}
         </button>
         <button
           onClick={handleAddToCart}
-          disabled={!product || isOutOfStock || isSubmittingOrder}
+          disabled={!product || isPurchaseBlocked || isSubmittingOrder}
           className="flex-[1.5] rounded-2xl bg-primary px-4 py-4 font-bold text-white shadow-xl shadow-primary/20 transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <div className="flex items-center justify-center gap-2">

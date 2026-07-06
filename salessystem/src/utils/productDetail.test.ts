@@ -6,6 +6,7 @@ import {
   getInventoryPresentation,
   getMerchantInfoPresentation,
   getPurchaseLimitNote,
+  getSaleStatusPresentation,
 } from './productDetail';
 
 describe('productDetail helpers', () => {
@@ -84,5 +85,13 @@ describe('productDetail helpers', () => {
     expect(presentation.title).toBe('商户 #9');
     expect(presentation.description).toContain('商户店铺');
     expect(presentation.actionPath).toBe('/merchant-store/9');
+  });
+
+  it('marks inactive products as not purchasable', () => {
+    const presentation = getSaleStatusPresentation(0);
+
+    expect(presentation.label).toBe('商品已下架');
+    expect(presentation.description).toContain('暂不可购买');
+    expect(presentation.isPurchasable).toBe(false);
   });
 });
