@@ -136,11 +136,11 @@ function getTemplateUnavailableReason(template: CouponTemplate, subtotal: number
   if (subtotal < template.thresholdAmount) {
     return getThresholdReason(template.thresholdAmount, subtotal);
   }
-  if (!template.receivable) {
-    return '已领超限';
-  }
   if (template.remainingStock <= 0) {
     return '无库存';
+  }
+  if (!template.receivable) {
+    return '已领超限';
   }
   return undefined;
 }

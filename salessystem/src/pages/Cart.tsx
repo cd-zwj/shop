@@ -284,6 +284,7 @@ export default function Cart() {
 
   async function handleCheckoutByTenant(tenantId: number) {
     const tenantItems = items.filter((item) => item.tenantId === tenantId);
+    const selectedCoupon = selectedCouponByTenant[tenantId];
 
     if (tenantItems.length === 0) {
       return;
@@ -320,6 +321,37 @@ export default function Cart() {
       return;
     }
 
+    let latestCouponData = couponsByTenant[tenantId];
+    if (selectedCoupon) {
+      try {
+        const [availableTemplates, myUsableCoupons] = await Promise.all([
+          appCouponService.getAvailableCoupons(tenantId),
+          appCouponService.getMyCoupons(tenantId, 'USABLE'),
+        ]);
+        latestCouponData = { availableTemplates, myUsableCoupons, isLoading: false };
+        setCouponsByTenant((prev) => ({
+          ...prev,
+          [tenantId]: {
+            availableTemplates,
+            myUsableCoupons,
+            isLoading: false,
+          },
+        }));
+      } catch {
+        setError('优惠券可用性校验失败，请稍后重试或取消优惠券后再结算。');
+        return;
+      }
+
+      const refreshedSubtotal = validation.refreshedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const couponResolution = resolveSelectedCartCoupon(latestCouponData, selectedCoupon, refreshedSubtotal);
+
+      if (!couponResolution.isUsable) {
+        setSelectedCouponByTenant((prev) => ({ ...prev, [tenantId]: null }));
+        setError(`所选优惠券已取消：${couponResolution.reason ?? '所选优惠券已不可用，请重新选择'}。请确认后重新结算。`);
+        return;
+      }
+    }
+
     if (currentRole !== 'user') {
       navigate('/login');
       return;
@@ -337,11 +369,10 @@ export default function Cart() {
 
     try {
       let finalCouponId: number | undefined = undefined;
-      const selectedCoupon = selectedCouponByTenant[tenantId];
       
       if (selectedCoupon) {
         const tenantSubtotal = validation.refreshedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const couponResolution = resolveSelectedCartCoupon(couponsByTenant[tenantId], selectedCoupon, tenantSubtotal);
+        const couponResolution = resolveSelectedCartCoupon(latestCouponData, selectedCoupon, tenantSubtotal);
         
         if (couponResolution.isUsable && couponResolution.discountAmount > 0) {
           if (selectedCoupon.type === 'OWNED') {
