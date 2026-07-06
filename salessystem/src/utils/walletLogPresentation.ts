@@ -15,6 +15,11 @@ export interface WalletLogPresentation {
   actionPath?: string;
 }
 
+export interface WalletRecentEntry extends WalletLogPresentation {
+  percent: string;
+  color: string;
+}
+
 const BIZ_TYPE_LABELS: Record<string, string> = {
   SALES_ORDER: '订单支付',
   ORDER_DEDUCT: '积分抵扣',
@@ -46,6 +51,22 @@ export function getWalletLogPresentation(log: WalletLog): WalletLogPresentation 
     actionLabel: action?.label,
     actionPath: action?.path,
   };
+}
+
+export function buildWalletRecentEntries(logs: WalletLog[]): WalletRecentEntry[] {
+  if (logs.length === 0) {
+    return [];
+  }
+
+  const totalChange = logs.reduce((sum, log) => sum + Math.abs(Number(log.changeAmount || 0)), 0) || 1;
+  return logs.slice(0, 3).map((log, index) => {
+    const presentation = getWalletLogPresentation(log);
+    return {
+      ...presentation,
+      percent: `${Math.round((Math.abs(Number(log.changeAmount || 0)) / totalChange) * 100)}%`,
+      color: index === 0 ? 'bg-primary/10 text-primary' : presentation.badgeClass,
+    };
+  });
 }
 
 function getDirection(amount: number): WalletLogDirection {

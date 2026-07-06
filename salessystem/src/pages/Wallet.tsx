@@ -17,7 +17,7 @@ import type { Tenant } from '../types/catalog';
 import type { WalletAccount, WalletLog } from '../types/wallet';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
-import { getWalletLogPresentation } from '../utils/walletLogPresentation';
+import { buildWalletRecentEntries } from '../utils/walletLogPresentation';
 
 export default function UserWallet() {
   const navigate = useNavigate();
@@ -68,19 +68,7 @@ export default function UserWallet() {
   }, []);
 
   const recentDistribution = useMemo(() => {
-    if (logs.length === 0) {
-      return [];
-    }
-
-    const totalChange = logs.reduce((sum, log) => sum + Math.abs(Number(log.changeAmount || 0)), 0) || 1;
-    return logs.slice(0, 3).map((log, index) => {
-      const presentation = getWalletLogPresentation(log);
-      return {
-        ...presentation,
-        percent: `${Math.round((Math.abs(Number(log.changeAmount || 0)) / totalChange) * 100)}%`,
-        color: index === 0 ? 'bg-primary/10 text-primary' : presentation.badgeClass,
-      };
-    });
+    return buildWalletRecentEntries(logs);
   }, [logs]);
 
   return (
@@ -204,6 +192,15 @@ export default function UserWallet() {
                 <div>
                   <div className="font-black text-slate-900">{entry.title}</div>
                   <div className="mt-0.5 text-xs font-semibold text-slate-400">{entry.source}</div>
+                  {'actionPath' in entry && entry.actionPath && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(entry.actionPath!)}
+                      className="mt-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                    >
+                      {entry.actionLabel}
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="text-right">

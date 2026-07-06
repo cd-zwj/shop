@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WalletLog } from '../types/wallet';
-import { getWalletLogPresentation } from './walletLogPresentation';
+import { buildWalletRecentEntries, getWalletLogPresentation } from './walletLogPresentation';
 
 const baseLog: WalletLog = {
   walletType: 'UNIFIED',
@@ -73,5 +73,23 @@ describe('walletLogPresentation', () => {
     expect(presentation.direction).toBe('neutral');
     expect(presentation.source).toContain('客服调账');
     expect(presentation.actionPath).toBeUndefined();
+  });
+
+  it('keeps trace actions when building recent wallet entries for the wallet dashboard', () => {
+    const entries = buildWalletRecentEntries([
+      baseLog,
+      {
+        ...baseLog,
+        bizType: 'UNIFIED_RECHARGE',
+        bizNo: 'WR202607060001',
+        changeAmount: 2000,
+      },
+    ]);
+
+    expect(entries[0].actionLabel).toBe('查看订单');
+    expect(entries[0].actionPath).toBe('/order/SO202607060001');
+    expect(entries[0].percent).toBe('38%');
+    expect(entries[1].actionLabel).toBe('查看支付状态');
+    expect(entries[1].actionPath).toBe('/payment/status?bizNo=WR202607060001&source=recharge');
   });
 });
