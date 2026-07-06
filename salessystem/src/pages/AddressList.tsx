@@ -11,6 +11,8 @@ import {
   Check,
   Phone,
   User,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +20,7 @@ import { appAddressService } from '../services/modules/appAddress';
 import type { Address, AddressPayload } from '../types/addressNotification';
 import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
+import { getErrorMessage } from '../utils/errorMessage';
 
 /* ------------------------------------------------------------------ */
 /*  Address Form Modal                                                 */
@@ -240,17 +243,23 @@ export default function AddressList() {
 
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Address | null>(null);
 
   const loadAddresses = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
     try {
       const data = await appAddressService.list();
       setAddresses(data ?? []);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '加载地址失败', 'error');
+      const message = getErrorMessage(err, '加载地址失败，请稍后重试');
+      setAddresses([]);
+      setLoadError(message);
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -330,11 +339,30 @@ export default function AddressList() {
           <span className="text-sm font-medium">加载地址中...</span>
         </div>
       ) : addresses.length === 0 ? (
+        loadError ? (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-red-100 bg-red-50/60 px-4 py-20 text-center">
+            <div className="mb-4 rounded-full bg-white p-4 text-red-500 shadow-sm">
+              <AlertCircle className="h-12 w-12" />
+            </div>
+            <h3 className="text-base font-extrabold text-slate-900">地址加载失败</h3>
+            <p className="mt-1.5 max-w-xs text-xs font-semibold leading-relaxed text-slate-500">
+              {loadError}
+            </p>
+            <button
+              onClick={() => void loadAddresses()}
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-xs font-black text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重试
+            </button>
+          </div>
+        ) : (
         <EmptyState
           icon={<MapPin className="w-12 h-12" />}
           title="暂无收货地址"
           subtitle="点击右上角「新增」按钮添加您的第一个收货地址"
         />
+        )
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
