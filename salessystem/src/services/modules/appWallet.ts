@@ -6,6 +6,7 @@ import type {
   RechargePayment,
   UnifiedRechargeRule,
   UnifiedWalletRechargePayload,
+  TenantAssetSummary,
   WalletAccount,
   WalletLog,
 } from '../../types/wallet';
@@ -25,6 +26,14 @@ export const appWalletService = {
       url: '/v1/app/wallets/unified/logs',
       method: 'get',
       params: { current, size },
+      authRole: 'user',
+    });
+  },
+
+  listTenantAssetSummaries() {
+    return request<TenantAssetSummary[]>({
+      url: '/v1/app/assets/tenant-summaries',
+      method: 'get',
       authRole: 'user',
     });
   },

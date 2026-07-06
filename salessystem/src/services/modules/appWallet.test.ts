@@ -51,6 +51,25 @@ describe('appWalletService', () => {
     });
   });
 
+  describe('listTenantAssetSummaries', () => {
+    it('应调用 GET /v1/app/assets/tenant-summaries', async () => {
+      // Arrange
+      const summaries = [{ tenantId: 1, tenantName: '咖啡店', points: 120 }];
+      mockRequest.mockResolvedValue(summaries);
+
+      // Act
+      const result = await appWalletService.listTenantAssetSummaries();
+
+      // Assert
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/assets/tenant-summaries',
+        method: 'get',
+        authRole: 'user',
+      });
+      expect(result).toEqual(summaries);
+    });
+  });
+
   describe('createUnifiedRecharge', () => {
     it('应调用 POST /v1/app/wallets/unified/recharges', async () => {
       // Arrange

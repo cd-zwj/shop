@@ -12,6 +12,7 @@ import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantRechargeRuleService;
 import com.payment.service.MerchantWalletService;
 import com.payment.service.PointsService;
+import com.payment.service.AppAssetSummaryService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.WalletRechargeService;
 import com.payment.util.PlatformSessionHelper;
@@ -56,6 +57,7 @@ public class V1AppWalletController {
     private final MerchantRechargeRuleService merchantRechargeRuleService;
     private final MemberPointsAccountService memberPointsAccountService;
     private final PointsService pointsService;
+    private final AppAssetSummaryService appAssetSummaryService;
 
     /**
      * 查询统一钱包余额。
@@ -85,6 +87,19 @@ public class V1AppWalletController {
                                                                  @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
         Page<WalletLogVO> page = unifiedWalletService.listLogs(PlatformSessionHelper.getPlatformUserId(), current, size);
         return Result.success(PageResult.from(page));
+    }
+
+    /**
+     * 查询当前用户在各商户下已有资产概览。
+     *
+     * <p>该接口只读取已有会员/钱包/积分账户，不会因为概览展示创建空账户。</p>
+     *
+     * @return 商户资产概览列表
+     */
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/assets/tenant-summaries")
+    public Result<List<AppTenantAssetSummaryVO>> listTenantAssetSummaries() {
+        return Result.success(appAssetSummaryService.listTenantAssetSummaries(PlatformSessionHelper.getPlatformUserId()));
     }
 
     /**

@@ -21,6 +21,16 @@ export interface WalletLog {
   createTime?: string | null;
 }
 
+export interface TenantAssetSummary {
+  tenantId: number;
+  tenantName: string;
+  memberStatus?: number | null;
+  walletAvailableAmount: number;
+  walletFrozenAmount: number;
+  points: number;
+  expiringSoonPoints: number;
+}
+
 export interface RechargePayment {
   rechargeNo: string;
   walletType: string;
