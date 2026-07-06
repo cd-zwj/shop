@@ -29,9 +29,8 @@ import {
 } from '../utils/orderActions';
 import {
   getOrderLifecyclePresentation,
+  getOrderProgressPresentation,
   getOrderToneClass,
-  isClosedOrder,
-  isPaidOrder,
 } from '../utils/orderLifecycle';
 import { getOrderItemFulfillmentPresentation } from '../utils/orderFulfillment';
 
@@ -124,14 +123,16 @@ export default function UserOrderDetail() {
     order?.payStatus !== 'SUCCESS' &&
     order?.payStatus !== 'CLOSED';
 
+  const progress = getOrderProgressPresentation(order, lifecycleWithContext);
   const steps = useMemo(
-    () => [
-      { icon: CreditCard, label: '已创建', active: Boolean(order) },
-      { icon: Package, label: '已支付', active: isPaidOrder(order) },
-      { icon: Truck, label: '履约中', active: isPaidOrder(order) && !isClosedOrder(order) },
-      { icon: CheckCircle2, label: '已结束', active: isClosedOrder(order) },
-    ],
-    [order],
+    () => {
+      const icons = [CreditCard, Package, Truck, CheckCircle2];
+      return progress.steps.map((step, index) => ({
+        ...step,
+        icon: icons[index],
+      }));
+    },
+    [progress.steps],
   );
 
   function handleRepurchase() {
@@ -243,7 +244,10 @@ export default function UserOrderDetail() {
           </div>
           <div className="relative flex justify-between">
             <div className="absolute left-0 right-0 top-5 z-0 h-0.5 bg-slate-100" />
-            <div className="absolute left-0 top-5 z-0 h-0.5 w-2/3 bg-primary" />
+            <div
+              className="absolute left-0 top-5 z-0 h-0.5 bg-primary transition-all"
+              style={{ width: `${progress.progressPercent}%` }}
+            />
             {steps.map((step) => (
               <div key={step.label} className="relative z-10 flex flex-col items-center gap-3">
                 <div

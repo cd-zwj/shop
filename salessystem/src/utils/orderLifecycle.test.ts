@@ -3,6 +3,7 @@ import type { SalesOrderDetail } from '../types/order';
 import {
   buildMerchantWorkItems,
   getOrderLifecyclePresentation,
+  getOrderProgressPresentation,
   normalizeSalesOrderDetail,
   prioritizeMerchantWorkItems,
 } from './orderLifecycle';
@@ -121,6 +122,39 @@ describe('orderLifecycle', () => {
     expect(getOrderLifecyclePresentation(baseOrder, {
       refunds: [{ refundStatus: 'FAILED', rejectReason: '交付撤销失败' }],
     }).failureReason).toContain('交付撤销失败');
+  });
+
+  it('calculates order progress from the visible lifecycle state', () => {
+    const pending = getOrderProgressPresentation(
+      { orderStatus: 'CREATED', payStatus: 'WAIT_PAY' },
+      getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'WAIT_PAY' }),
+    );
+    expect(pending.steps.map((step) => step.active)).toEqual([true, false, false, false]);
+    expect(pending.progressPercent).toBe(0);
+
+    const paid = getOrderProgressPresentation(
+      { orderStatus: 'PAID', payStatus: 'SUCCESS' },
+      getOrderLifecyclePresentation({ orderStatus: 'PAID', payStatus: 'SUCCESS' }),
+    );
+    expect(paid.steps.map((step) => step.active)).toEqual([true, true, false, false]);
+    expect(paid.progressPercent).toBeCloseTo(33.33, 1);
+
+    const fulfilled = getOrderProgressPresentation(
+      { orderStatus: 'PAID', payStatus: 'SUCCESS' },
+      getOrderLifecyclePresentation(
+        { orderStatus: 'PAID', payStatus: 'SUCCESS' },
+        { items: [{ deliveryStatus: 'CONFIRMED' }] },
+      ),
+    );
+    expect(fulfilled.steps.map((step) => step.active)).toEqual([true, true, true, true]);
+    expect(fulfilled.progressPercent).toBe(100);
+
+    const failed = getOrderProgressPresentation(
+      { orderStatus: 'CREATED', payStatus: 'FAILED' },
+      getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }),
+    );
+    expect(failed.steps.map((step) => step.active)).toEqual([true, false, false, true]);
+    expect(failed.progressPercent).toBe(100);
   });
 
   it('keeps refund lifecycle visible when an order already has delivery records', () => {

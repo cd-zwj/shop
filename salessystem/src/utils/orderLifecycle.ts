@@ -25,6 +25,16 @@ export interface OrderLifecycleContext {
   paymentBillStatusRemark?: string | null;
 }
 
+export interface OrderProgressStep {
+  label: '已创建' | '已支付' | '履约中' | '已结束';
+  active: boolean;
+}
+
+export interface OrderProgressPresentation {
+  steps: OrderProgressStep[];
+  progressPercent: number;
+}
+
 type FlatSalesOrderDetail = SalesOrder & {
   items?: SalesOrderItem[];
   paymentBillNo?: string | null;
@@ -341,6 +351,62 @@ export function getOrderToneClass(tone: OrderLifecycleTone) {
     slate: 'border-slate-200 bg-slate-100 text-slate-500',
   };
   return classes[tone];
+}
+
+export function getOrderProgressPresentation(
+  order: Partial<SalesOrder> | null | undefined,
+  lifecycle: OrderLifecyclePresentation,
+): OrderProgressPresentation {
+  const hasOrder = Boolean(order);
+  const isPaid = hasOrder && isPaidOrder(order);
+  const isTerminal = isTerminalLifecycle(lifecycle.label) || Boolean(order && isClosedOrder(order));
+  const isFulfillment = isFulfillmentLifecycle(lifecycle.label)
+    || lifecycle.label === '已完成'
+    || lifecycle.label === '已退款';
+  const activeFlags = [
+    hasOrder,
+    isPaid || isFulfillment || isTerminalLifecycleAfterPayment(lifecycle.label),
+    isFulfillment,
+    isTerminal,
+  ];
+
+  const lastActiveIndex = activeFlags.reduce(
+    (lastIndex, isActive, index) => isActive ? index : lastIndex,
+    -1,
+  );
+
+  return {
+    steps: (['已创建', '已支付', '履约中', '已结束'] as const).map((label, index) => ({
+      label,
+      active: activeFlags[index],
+    })),
+    progressPercent: lastActiveIndex <= 0 ? 0 : (lastActiveIndex / 3) * 100,
+  };
+}
+
+function isFulfillmentLifecycle(label: string) {
+  return label === '待发货'
+    || label === '发货中'
+    || label === '已发货'
+    || label === '履约失败'
+    || label === '退款中';
+}
+
+function isTerminalLifecycle(label: string) {
+  return label === '已完成'
+    || label === '已退款'
+    || label === '支付失败'
+    || label === '退款失败'
+    || label === '退款驳回'
+    || label === '已取消'
+    || label === '已关闭';
+}
+
+function isTerminalLifecycleAfterPayment(label: string) {
+  return label === '已完成'
+    || label === '已退款'
+    || label === '退款失败'
+    || label === '退款驳回';
 }
 
 export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkItem[] {
