@@ -8,6 +8,7 @@ import {
   RefreshCcw,
   RotateCcw,
   ShieldCheck,
+  MessageCircle,
   XCircle,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -179,6 +180,9 @@ export default function PaymentStatus() {
     [orderNo, statusPresentation.state],
   );
   const primaryActionLabel = source === 'order' ? failureActions.primaryLabel : content.primaryAction;
+  const canContactMerchant = source === 'order'
+    && statusKey === 'failed'
+    && Boolean(paymentBill?.tenantId);
 
   async function handleRepurchase() {
     if (!orderNo || isRepurchasing) {
@@ -355,6 +359,15 @@ export default function PaymentStatus() {
             >
               {isRepurchasing ? '加入购物车中...' : '重新购买同款商品'}
               <RotateCcw size={20} />
+            </button>
+          )}
+          {canContactMerchant && (
+            <button
+              onClick={() => navigate(`/merchant-store/${paymentBill?.tenantId}`)}
+              className="flex w-full items-center justify-center gap-3 rounded-[24px] border border-blue-100 bg-blue-50 py-5 text-lg font-black text-blue-700 transition-all hover:scale-[1.02] hover:bg-blue-100 active:scale-95"
+            >
+              联系商户
+              <MessageCircle size={20} />
             </button>
           )}
           {source === 'order' && orderNo && statusKey === 'failed' && (
