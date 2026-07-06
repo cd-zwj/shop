@@ -148,7 +148,7 @@ function buildPurchaseAction(
     actionLabel: VIRTUAL_TYPES.has(productType) && (status === 'DELIVERED' || status === 'CONFIRMED')
       ? '查看交付内容'
       : '查看履约记录',
-    actionPath: `/purchases?orderNo=${encodeURIComponent(orderNo)}`,
+    actionPath: `/my-purchases?orderNo=${encodeURIComponent(orderNo)}`,
   };
 }
 

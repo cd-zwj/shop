@@ -36,7 +36,7 @@ describe('orderFulfillment', () => {
       description: '物流信息已生成，可前往我的已购查看物流单号并确认收货。',
       tone: 'success',
       actionLabel: '查看履约记录',
-      actionPath: '/purchases?orderNo=SO20260706001',
+      actionPath: '/my-purchases?orderNo=SO20260706001',
     });
   });
 
@@ -50,7 +50,7 @@ describe('orderFulfillment', () => {
       description: '虚拟内容已发放，可在我的已购中重新查看文件、链接或账号信息。',
       tone: 'success',
       actionLabel: '查看交付内容',
-      actionPath: '/purchases?orderNo=SO20260706001',
+      actionPath: '/my-purchases?orderNo=SO20260706001',
     });
   });
 
