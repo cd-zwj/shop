@@ -20,6 +20,7 @@ import { formatCurrency } from '../utils/display';
 import {
   getPaymentBillReuseHint,
   getPaymentStatusPresentation,
+  resolvePaymentBizTypeFromSource,
 } from '../utils/paymentStatus';
 import {
   buildRepurchaseCartItems,
@@ -36,6 +37,7 @@ export default function PaymentStatus() {
   const { addCartItems } = useCart();
   const [searchParams] = useSearchParams();
   const billNo = searchParams.get('billNo');
+  const bizNo = searchParams.get('bizNo');
   const orderNo = searchParams.get('orderNo');
   const source = searchParams.get('source');
   const reusedFlag = searchParams.get('reused');
@@ -45,22 +47,26 @@ export default function PaymentStatus() {
   const [isRepurchasing, setIsRepurchasing] = useState(false);
   const [error, setError] = useState('');
 
-  const savedPayload = readAlipayPaymentPayload(billNo);
+  const effectiveBillNo = paymentBill?.billNo ?? billNo;
+  const savedPayload = readAlipayPaymentPayload(effectiveBillNo);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadBill(sync = false) {
-      if (!billNo) {
-        setError('缺少支付单号，无法查询支付状态');
+      if (!billNo && !bizNo) {
+        setError('缺少支付单号或业务单号，无法查询支付状态');
         setIsLoading(false);
         return;
       }
 
       try {
-        const bill = sync
-          ? await appPaymentBillService.syncPaymentBill(billNo)
-          : await appPaymentBillService.getPaymentBill(billNo);
+        const syncBillNo = paymentBill?.billNo ?? billNo;
+        const bill = sync && syncBillNo
+          ? await appPaymentBillService.syncPaymentBill(syncBillNo)
+          : billNo
+            ? await appPaymentBillService.getPaymentBill(billNo)
+            : await appPaymentBillService.getLatestPaymentBillByBiz(resolvePaymentBizTypeFromSource(source), bizNo as string);
         if (!isMounted) return;
         setPaymentBill(bill);
         setError('');
@@ -79,7 +85,7 @@ export default function PaymentStatus() {
 
     let timer: number | undefined;
     timer = window.setInterval(() => {
-      if (isMounted && billNo && paymentBill?.payStatus !== 'SUCCESS' && paymentBill?.payStatus !== 'FAILED' && paymentBill?.payStatus !== 'CLOSED') {
+      if (isMounted && (billNo || paymentBill?.billNo || bizNo) && paymentBill?.payStatus !== 'SUCCESS' && paymentBill?.payStatus !== 'FAILED' && paymentBill?.payStatus !== 'CLOSED') {
         void loadBill(true);
       }
     }, 10000);
@@ -90,15 +96,18 @@ export default function PaymentStatus() {
         window.clearInterval(timer);
       }
     };
-  }, [billNo, paymentBill?.payStatus]);
+  }, [billNo, bizNo, paymentBill?.billNo, paymentBill?.payStatus, source]);
 
   async function handleRefresh() {
-    if (!billNo) {
+    const syncBillNo = paymentBill?.billNo ?? billNo;
+    if (!syncBillNo && !bizNo) {
       return;
     }
     setIsRefreshing(true);
     try {
-      const bill = await appPaymentBillService.syncPaymentBill(billNo);
+      const bill = syncBillNo
+        ? await appPaymentBillService.syncPaymentBill(syncBillNo)
+        : await appPaymentBillService.getLatestPaymentBillByBiz(resolvePaymentBizTypeFromSource(source), bizNo as string);
       setPaymentBill(bill);
       setError('');
     } catch {
@@ -227,9 +236,17 @@ export default function PaymentStatus() {
           <div className="flex items-center justify-between px-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">支付单号</span>
             <span className="font-mono text-xs font-black tracking-tight text-slate-900 underline decoration-primary/20">
-              {billNo || '--'}
+              {effectiveBillNo || '--'}
             </span>
           </div>
+          {bizNo && (
+            <div className="flex items-center justify-between px-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">业务单号</span>
+              <span className="font-mono text-xs font-black tracking-tight text-slate-900">
+                {bizNo}
+              </span>
+            </div>
+          )}
           <div className="flex items-center justify-between px-2">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">支付渠道</span>
             <div className="flex items-center gap-2">
@@ -264,7 +281,7 @@ export default function PaymentStatus() {
             <button
               onClick={() => {
                 openAlipayPaymentWindow(savedPayload.payHtml);
-                clearAlipayPaymentPayload(billNo);
+                clearAlipayPaymentPayload(effectiveBillNo);
               }}
               className="flex w-full items-center justify-center gap-3 rounded-[24px] bg-blue-500 py-5 text-lg font-black text-white shadow-2xl shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-95"
             >

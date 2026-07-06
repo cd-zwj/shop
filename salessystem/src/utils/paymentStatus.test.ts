@@ -3,6 +3,7 @@ import {
   resolvePaymentFlowState,
   getPaymentStatusPresentation,
   getPaymentBillReuseHint,
+  resolvePaymentBizTypeFromSource,
 } from './paymentStatus';
 
 describe('resolvePaymentFlowState', () => {
@@ -191,5 +192,18 @@ describe('getPaymentBillReuseHint', () => {
     // Arrange & Act & Assert
     expect(getPaymentBillReuseHint(null)).toBe('');
     expect(getPaymentBillReuseHint(undefined)).toBe('');
+  });
+});
+
+describe('resolvePaymentBizTypeFromSource', () => {
+  it('maps recharge status links to RECHARGE payment bills', () => {
+    expect(resolvePaymentBizTypeFromSource('recharge')).toBe('RECHARGE');
+    expect(resolvePaymentBizTypeFromSource('merchant-recharge')).toBe('RECHARGE');
+  });
+
+  it('defaults order and unknown links to ORDER payment bills', () => {
+    expect(resolvePaymentBizTypeFromSource('order')).toBe('ORDER');
+    expect(resolvePaymentBizTypeFromSource(null)).toBe('ORDER');
+    expect(resolvePaymentBizTypeFromSource('unknown')).toBe('ORDER');
   });
 });

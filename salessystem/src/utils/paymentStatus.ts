@@ -109,3 +109,11 @@ export function getPaymentBillReuseHint(reusedPaymentBill?: boolean | null) {
 
   return '';
 }
+
+export function resolvePaymentBizTypeFromSource(source?: string | null) {
+  if (source === 'recharge' || source === 'merchant-recharge') {
+    return 'RECHARGE';
+  }
+
+  return 'ORDER';
+}

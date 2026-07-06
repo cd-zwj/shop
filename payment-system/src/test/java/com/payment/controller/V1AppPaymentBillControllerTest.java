@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @DisplayName("V1AppPaymentBillController - 水平越权防护")
@@ -154,7 +155,70 @@ class V1AppPaymentBillControllerTest {
     }
 
     // ============================================================
-    // 2. syncPaymentBill
+    // 2. getLatestPaymentBillByBiz - 按业务单号查询最近支付单
+    // ============================================================
+    @Nested
+    @DisplayName("getLatestPaymentBillByBiz - 按业务单号查询最近支付单")
+    class GetLatestPaymentBillByBiz {
+
+        @Test
+        @DisplayName("查询自己的充值业务支付单应正常返回")
+        void 查询自己的充值业务支付单应正常返回() {
+            // Arrange
+            PaymentBill myBill = buildBill("BILL-RECHARGE-001", 100L);
+            myBill.setBizType("RECHARGE");
+            myBill.setBizNo("WR202607060001");
+            when(paymentBillV1Service.getLatestByBizTypeAndBizNo("RECHARGE", "WR202607060001"))
+                    .thenReturn(myBill);
+
+            // Act
+            var result = controller.getLatestPaymentBillByBiz("RECHARGE", "WR202607060001");
+
+            // Assert
+            assertThat(result.getData()).isNotNull();
+            assertThat(result.getData().getBillNo()).isEqualTo("BILL-RECHARGE-001");
+            assertThat(result.getData().getBizNo()).isEqualTo("WR202607060001");
+            verify(paymentBillV1Service).getLatestByBizTypeAndBizNo("RECHARGE", "WR202607060001");
+        }
+
+        @Test
+        @DisplayName("业务单号为空应抛出 BusinessException")
+        void 业务单号为空应抛出异常() {
+            assertThatThrownBy(() -> controller.getLatestPaymentBillByBiz("RECHARGE", " "))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("业务类型和业务单号不能为空");
+        }
+
+        @Test
+        @DisplayName("查询别人的业务支付单应抛出 BusinessException")
+        void 查询别人的业务支付单应抛出异常() {
+            // Arrange
+            PaymentBill otherBill = buildBill("BILL-RECHARGE-002", 200L);
+            when(paymentBillV1Service.getLatestByBizTypeAndBizNo("RECHARGE", "WR202607060002"))
+                    .thenReturn(otherBill);
+
+            // Act & Assert
+            assertThatThrownBy(() -> controller.getLatestPaymentBillByBiz("RECHARGE", "WR202607060002"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("无权访问该支付单");
+        }
+
+        @Test
+        @DisplayName("业务支付单不存在应抛出 BusinessException")
+        void 业务支付单不存在应抛出异常() {
+            // Arrange
+            when(paymentBillV1Service.getLatestByBizTypeAndBizNo("RECHARGE", "WR-NOT-FOUND"))
+                    .thenReturn(null);
+
+            // Act & Assert
+            assertThatThrownBy(() -> controller.getLatestPaymentBillByBiz("RECHARGE", "WR-NOT-FOUND"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage("支付单不存在");
+        }
+    }
+
+    // ============================================================
+    // 3. syncPaymentBill
     // ============================================================
     @Nested
     @DisplayName("syncPaymentBill - 同步支付单状态")
@@ -200,7 +264,7 @@ class V1AppPaymentBillControllerTest {
     }
 
     // ============================================================
-    // 3. 不同用户场景
+    // 4. 不同用户场景
     // ============================================================
     @Nested
     @DisplayName("不同用户 ID 场景")

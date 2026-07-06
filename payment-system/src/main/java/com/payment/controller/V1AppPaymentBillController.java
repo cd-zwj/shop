@@ -30,6 +30,33 @@ public class V1AppPaymentBillController {
     private final PaymentBillV1Service paymentBillV1Service;
 
     /**
+     * 按业务单据查询最近一张支付单。
+     * <p>
+     * 用于通知中心、钱包流水等只持有业务单号（如充值单号）的本地跳转场景。
+     * 仍复用支付单归属校验，避免通过业务单号枚举他人支付单。
+     *
+     * @param bizType 业务类型，如 RECHARGE、ORDER
+     * @param bizNo   业务单号
+     * @return 最近创建的支付单
+     */
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/latest")
+    public Result<PaymentBillVO> getLatestPaymentBillByBiz(@RequestParam String bizType,
+                                                            @RequestParam String bizNo) {
+        if (bizType == null || bizType.isBlank() || bizNo == null || bizNo.isBlank()) {
+            throw new BusinessException("业务类型和业务单号不能为空");
+        }
+
+        PaymentBill bill = paymentBillV1Service.getLatestByBizTypeAndBizNo(bizType.trim(), bizNo.trim());
+        if (bill == null) {
+            throw new BusinessException("支付单不存在");
+        }
+
+        checkOwnership(bill);
+        return Result.success(PaymentBillVO.from(bill));
+    }
+
+    /**
      * 查询支付单详情。
      * <p>
      * 根据支付单号获取支付单的完整信息，包括金额、支付状态、支付渠道等。
