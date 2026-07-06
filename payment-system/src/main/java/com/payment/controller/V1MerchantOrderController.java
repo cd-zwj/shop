@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.OrderDeliveryRecord;
 import com.payment.entity.SalesOrder;
@@ -52,7 +53,7 @@ public class V1MerchantOrderController {
                                                       @RequestParam(required = false) String payStatus,
                                                       @RequestParam(required = false) String keyword) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
 
         Page<SalesOrder> result = appOrderService.listMerchantOrders(tenantId, current, size, orderStatus, payStatus, keyword);
         return Result.success(PageResult.from(result, SalesOrderListVO::from));
@@ -79,7 +80,7 @@ public class V1MerchantOrderController {
     public Result<OrderDeliveryVO> shipItem(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                             @PathVariable @Min(value = 1, message = "ID必须大于0") Long orderItemId,
                                             @RequestBody ShipRequest request) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.ORDER_MANAGE);
         OrderDeliveryRecord record = orderDeliveryService.markShipped(
                 tenantId, orderItemId, request.getShippingNo(), request.getLogisticsCompany());
         return Result.success(OrderDeliveryVO.from(record));
@@ -92,7 +93,7 @@ public class V1MerchantOrderController {
     @PostMapping("/services/verify")
     public Result<OrderDeliveryVO> verifyService(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                  @RequestBody VerifyServiceRequest request) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.ORDER_MANAGE);
         OrderDeliveryRecord record = orderDeliveryService.verifyService(tenantId, request.getVerifyCode());
         return Result.success(OrderDeliveryVO.from(record));
     }

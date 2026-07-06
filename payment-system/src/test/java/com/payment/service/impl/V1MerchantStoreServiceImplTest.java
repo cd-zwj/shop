@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantStoreUpsertDTO;
 import com.payment.dto.V1MerchantStoreVO;
 import com.payment.entity.Store;
@@ -35,7 +36,7 @@ class V1MerchantStoreServiceImplTest {
     }
 
     @Test
-    void listStoresShouldRequireEmployeeAndReturnPagedVOs() {
+    void listStoresShouldRequireStorePermissionAndReturnPagedVOs() {
         Store store = buildStore(10L, 1L, "ST001", "人民广场店", 1);
         Page<Store> page = new Page<>(1, 10);
         page.setRecords(List.of(store));
@@ -44,7 +45,7 @@ class V1MerchantStoreServiceImplTest {
 
         Page<V1MerchantStoreVO> result = service.listStores(1L, 100L, 1, 10, "人民", 1);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.STORE_MANAGE);
         assertEquals(1L, result.getTotal());
         assertEquals("人民广场店", result.getRecords().get(0).getStoreName());
     }

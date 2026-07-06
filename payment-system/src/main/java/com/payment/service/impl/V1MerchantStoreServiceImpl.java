@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantStoreUpsertDTO;
 import com.payment.dto.V1MerchantStoreVO;
 import com.payment.entity.Store;
@@ -42,7 +43,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     @Override
     public Page<V1MerchantStoreVO> listStores(Long tenantId, Long platformUserId, Integer current, Integer size,
                                               String keyword, Integer status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
 
         Page<Store> page = storeMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<Store>()
                 .eq(Store::getTenantId, tenantId)
@@ -71,7 +72,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
      */
     @Override
     public V1MerchantStoreVO getStore(Long tenantId, Long platformUserId, Long storeId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
         return toStoreVO(getTenantStore(tenantId, storeId));
     }
 
@@ -87,7 +88,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO createStore(Long tenantId, Long platformUserId, V1MerchantStoreUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
 
         String storeNo = resolveStoreNo(dto.getStoreNo());
         ensureStoreNoAvailable(tenantId, storeNo, null);
@@ -115,7 +116,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO updateStore(Long tenantId, Long platformUserId, Long storeId, V1MerchantStoreUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
 
         Store store = getTenantStore(tenantId, storeId);
         String storeNo = resolveStoreNo(dto.getStoreNo(), store.getStoreNo());
@@ -143,7 +144,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreVO updateStoreStatus(Long tenantId, Long platformUserId, Long storeId, Integer status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
         if (status == null || (status != 0 && status != 1)) {
             throw new BusinessException("状态只能为0或1");
         }
@@ -165,7 +166,7 @@ public class V1MerchantStoreServiceImpl implements V1MerchantStoreService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteStore(Long tenantId, Long platformUserId, Long storeId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.STORE_MANAGE);
         Store store = getTenantStore(tenantId, storeId);
         store.setDeleted(1);
         store.setStatus(0);

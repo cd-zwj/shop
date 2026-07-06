@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.CardKeyDeliveryDTO;
 import com.payment.dto.V1MerchantCardKeySummaryVO;
 import com.payment.dto.V1MerchantCardKeyUploadDTO;
@@ -69,7 +70,7 @@ class CardKeyPoolServiceImplTest {
 
         V1MerchantCardKeySummaryVO summary = service.uploadMerchantCardKeys(1L, 100L, 10L, dto);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.PRODUCT_MANAGE);
         ArgumentCaptor<CardKeyPool> captor = ArgumentCaptor.forClass(CardKeyPool.class);
         verify(cardKeyPoolMapper, org.mockito.Mockito.times(2)).insert(captor.capture());
         assertEquals(List.of("VIP-2026-0001", "VIP-2026-0002"),

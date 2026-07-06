@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.service.TenantConfigService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
@@ -30,7 +31,7 @@ public class V1MerchantConfigController {
     @GetMapping
     public Result<List<TenantConfigVO>> listConfigs(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireRulePermission(tenantId);
         return Result.success(tenantConfigService.listByTenant(tenantId));
     }
 
@@ -38,7 +39,7 @@ public class V1MerchantConfigController {
     public Result<TenantConfigVO> getConfig(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable String key) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireRulePermission(tenantId);
         return Result.success(tenantConfigService.getByKey(tenantId, key));
     }
 
@@ -47,8 +48,12 @@ public class V1MerchantConfigController {
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable String key,
             @RequestBody ConfigUpdateDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireRulePermission(tenantId);
         return Result.success(tenantConfigService.put(tenantId, key, dto.getValue()));
+    }
+
+    private void requireRulePermission(Long tenantId) {
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.RULE_MANAGE);
     }
 
     @Data

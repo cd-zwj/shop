@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.VirtualProductCategoryUpsertDTO;
 import com.payment.dto.VirtualProductCategoryVO;
 import com.payment.dto.VirtualProductTypeUpsertDTO;
@@ -37,7 +38,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
 
     @Override
     public List<VirtualProductTypeVO> listTypes(Long tenantId, Long platformUserId, Integer status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         return typeMapper.selectList(new LambdaQueryWrapper<VirtualProductType>()
                         .eq(VirtualProductType::getTenantId, tenantId)
                         .eq(VirtualProductType::getDeleted, 0)
@@ -52,7 +53,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VirtualProductTypeVO createType(Long tenantId, Long platformUserId, VirtualProductTypeUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         String typeCode = normalizeRequired(dto.getTypeCode(), "类型编码不能为空");
         ensureTypeCodeAvailable(tenantId, typeCode, null);
 
@@ -68,7 +69,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VirtualProductTypeVO updateType(Long tenantId, Long platformUserId, Long id, VirtualProductTypeUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         VirtualProductType type = getTenantType(tenantId, id, false);
         String typeCode = normalizeRequired(dto.getTypeCode(), "类型编码不能为空");
         ensureTypeCodeAvailable(tenantId, typeCode, id);
@@ -82,7 +83,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteType(Long tenantId, Long platformUserId, Long id) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         VirtualProductType type = getTenantType(tenantId, id, false);
         type.setDeleted(1);
         type.setStatus(0);
@@ -91,7 +92,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
 
     @Override
     public List<VirtualProductCategoryVO> listCategories(Long tenantId, Long platformUserId, Long typeId, Integer status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         return categoryMapper.selectList(new LambdaQueryWrapper<VirtualProductCategory>()
                         .eq(VirtualProductCategory::getTenantId, tenantId)
                         .eq(VirtualProductCategory::getDeleted, 0)
@@ -107,7 +108,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VirtualProductCategoryVO createCategory(Long tenantId, Long platformUserId, VirtualProductCategoryUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         getTenantType(tenantId, dto.getTypeId(), false);
         validateParentCategory(tenantId, dto.getTypeId(), dto.getParentId(), null);
         String categoryCode = normalizeRequired(dto.getCategoryCode(), "分类编码不能为空");
@@ -125,7 +126,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public VirtualProductCategoryVO updateCategory(Long tenantId, Long platformUserId, Long id, VirtualProductCategoryUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         VirtualProductCategory category = getTenantCategory(tenantId, id, false);
         getTenantType(tenantId, dto.getTypeId(), false);
         validateParentCategory(tenantId, dto.getTypeId(), dto.getParentId(), id);
@@ -141,7 +142,7 @@ public class VirtualProductTaxonomyServiceImpl implements VirtualProductTaxonomy
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteCategory(Long tenantId, Long platformUserId, Long id) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         VirtualProductCategory category = getTenantCategory(tenantId, id, false);
         category.setDeleted(1);
         category.setStatus(0);

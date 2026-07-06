@@ -3,6 +3,7 @@ package com.payment.controller;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.MerchantRechargeRuleVO;
 import com.payment.dto.MerchantTransactionVO;
 import com.payment.dto.V1MerchantBalanceVO;
@@ -61,7 +62,7 @@ public class V1MerchantFinanceController {
      */
     @GetMapping("/wallet-summary")
     public Result<V1MerchantBalanceVO> getWalletSummary(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireFinancePermission(tenantId);
         MerchantBalance balance = merchantBalanceMapper.selectOne(new LambdaQueryWrapper<MerchantBalance>()
                 .eq(MerchantBalance::getTenantId, tenantId)
                 .eq(MerchantBalance::getDeleted, 0));
@@ -83,7 +84,7 @@ public class V1MerchantFinanceController {
      */
     @GetMapping("/points-rule")
     public Result<V1MerchantPointsRuleDTO> getPointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireRulePermission(tenantId);
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
                 .eq(PointsRule::getStatus, 1));
@@ -102,7 +103,7 @@ public class V1MerchantFinanceController {
      */
     @PutMapping("/points-rule")
     public Result<Void> updatePointsRule(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody V1MerchantPointsRuleDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireRulePermission(tenantId);
         PointsRule rule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
                 .eq(PointsRule::getTenantId, tenantId)
                 .eq(PointsRule::getStatus, 1));
@@ -130,7 +131,7 @@ public class V1MerchantFinanceController {
      */
     @GetMapping("/recharge-rules")
     public Result<List<MerchantRechargeRuleVO>> listRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireFinancePermission(tenantId);
         return Result.success(merchantRechargeRuleService.listAllRules(tenantId).stream()
                 .map(e -> { MerchantRechargeRuleVO vo = new MerchantRechargeRuleVO(); BeanUtils.copyProperties(e, vo); return vo; })
                 .collect(Collectors.toList()));
@@ -146,7 +147,7 @@ public class V1MerchantFinanceController {
     @PutMapping("/recharge-rules")
     public Result<Void> replaceRechargeRules(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                              @Valid @RequestBody List<V1MerchantRechargeRuleDTO> rules) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireFinancePermission(tenantId);
         merchantRechargeRuleService.replaceRules(tenantId, rules);
         return Result.success();
     }
@@ -166,7 +167,7 @@ public class V1MerchantFinanceController {
             @RequestParam(defaultValue = "1") Integer current,
             @RequestParam(defaultValue = "20") Integer size) {
 
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        requireFinancePermission(tenantId);
 
         // 1. merchant_wallet_log（有 tenant_id，自动租户隔离，无 LIMIT 保证 total 准确）
         List<MerchantTransactionVO> all = new ArrayList<>();
@@ -202,6 +203,14 @@ public class V1MerchantFinanceController {
     }
 
     /* ---------- private helpers ---------- */
+
+    private void requireFinancePermission(Long tenantId) {
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.FINANCE_VIEW);
+    }
+
+    private void requireRulePermission(Long tenantId) {
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.RULE_MANAGE);
+    }
 
     /**
      * 查询商户钱包流水记录。

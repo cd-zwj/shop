@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
@@ -62,7 +63,7 @@ class V1MerchantProductServiceImplTest {
     }
 
     @Test
-    void listProductsShouldRequireEmployeeAndReturnPagedVOs() {
+    void listProductsShouldRequireProductPermissionAndReturnPagedVOs() {
         Product product = buildProduct(1L, 1L, "P001", "咖啡", 1);
         Page<Product> mapperPage = new Page<>(1, 10);
         mapperPage.setRecords(List.of(product));
@@ -72,7 +73,7 @@ class V1MerchantProductServiceImplTest {
 
         Page<V1MerchantProductVO> result = service.listProducts(1L, 100L, 1, 10, null, null, null);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.PRODUCT_MANAGE);
         assertEquals(1, result.getRecords().size());
         assertEquals("active", result.getRecords().get(0).getStatus());
         assertEquals(5, result.getRecords().get(0).getStock());
@@ -143,7 +144,7 @@ class V1MerchantProductServiceImplTest {
 
         V1MerchantProductVO vo = service.getProduct(1L, 100L, 1L);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.PRODUCT_MANAGE);
         assertEquals(1L, vo.getId());
         assertEquals(3, vo.getStock());
         assertEquals("active", vo.getStatus());
@@ -170,7 +171,7 @@ class V1MerchantProductServiceImplTest {
         when(storeMapper.selectOne(any())).thenReturn(buildStore(20L, 1L, 1));
         V1MerchantProductVO vo = service.createProduct(1L, 100L, dto);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.PRODUCT_MANAGE);
         verify(productMapper).insert(any(Product.class));
         verify(productStockMapper).insert(any(ProductStock.class));
 
@@ -332,7 +333,7 @@ class V1MerchantProductServiceImplTest {
 
         Page<?> result = service.listProductChangeLogs(1L, 100L, 1L, 1, 10);
 
-        verify(supportService).requireEmployee(1L, 100L);
+        verify(supportService).requirePermission(1L, 100L, MerchantPermission.PRODUCT_MANAGE);
         assertEquals(1L, result.getTotal());
         assertEquals(1, result.getRecords().size());
     }
@@ -352,10 +353,10 @@ class V1MerchantProductServiceImplTest {
     }
 
     @Test
-    void writesShouldFailWhenEmployeeRejected() {
-        // requireEmployee 抛出业务异常时，写路径应短路
+    void writesShouldFailWhenProductPermissionRejected() {
+        // requirePermission 抛出业务异常时，写路径应短路
         org.mockito.Mockito.doThrow(new BusinessException("当前用户无权访问该商户"))
-                .when(supportService).requireEmployee(any(), any());
+                .when(supportService).requirePermission(any(), any(), any());
 
         V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 1, "active");
         assertThrows(BusinessException.class, () -> service.createProduct(1L, 100L, dto));

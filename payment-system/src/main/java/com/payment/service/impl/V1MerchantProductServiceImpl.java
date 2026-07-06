@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantProductChangeLogVO;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
@@ -52,7 +53,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     public Page<V1MerchantProductVO> listProducts(Long tenantId, Long platformUserId, Integer current, Integer size,
                                                   String search, String category, String status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
 
         boolean filterOutOfStock = "out_of_stock".equalsIgnoreCase(status);
         // 缺货过滤需要先按库存表锁定 productId 子集，再让 product 分页查询使用，
@@ -87,7 +88,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
 
     @Override
     public V1MerchantProductVO getProduct(Long tenantId, Long platformUserId, Long productId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         Product product = getTenantProduct(tenantId, productId);
         ProductStock stock = getOrCreateStock(tenantId, productId);
         return toProductVO(product, stock);
@@ -96,7 +97,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantProductVO createProduct(Long tenantId, Long platformUserId, V1MerchantProductUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
 
         String productCode = resolveProductCode(dto);
         Product existing = productMapper.selectOne(new LambdaQueryWrapper<Product>()
@@ -142,7 +143,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantProductVO updateProduct(Long tenantId, Long platformUserId, Long productId, V1MerchantProductUpsertDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
 
         Product product = getTenantProduct(tenantId, productId);
         String productCode = resolveProductCode(dto);
@@ -191,7 +192,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     public Page<V1MerchantProductChangeLogVO> listProductChangeLogs(Long tenantId, Long platformUserId, Long productId,
                                                                     Integer current, Integer size) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         getTenantProduct(tenantId, productId);
 
         Page<ProductChangeLog> page = productChangeLogMapper.selectPage(
@@ -212,7 +213,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(Long tenantId, Long platformUserId, Long productId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         Product product = getTenantProduct(tenantId, productId);
         product.setDeleted(1);
         product.setStatus(0);

@@ -3,6 +3,7 @@ package com.payment.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.entity.ProductCategory;
 import com.payment.service.ProductCategoryService;
 import com.payment.service.impl.V1MerchantSupportService;
@@ -39,7 +40,7 @@ public class V1MerchantProductCategoryController {
     @GetMapping
     public Result<List<ProductCategoryVO>> listCategories(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.PRODUCT_MANAGE);
         return Result.success(productCategoryService.listTreeByTenant(tenantId));
     }
 
@@ -54,7 +55,7 @@ public class V1MerchantProductCategoryController {
     public Result<ProductCategoryVO> createCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @RequestBody ProductCategoryCreateDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.PRODUCT_MANAGE);
         ProductCategory category = new ProductCategory();
         category.setTenantId(tenantId);
         category.setName(dto.getName());
@@ -78,7 +79,7 @@ public class V1MerchantProductCategoryController {
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id,
             @RequestBody ProductCategoryUpdateDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.PRODUCT_MANAGE);
         verifyBelongsToTenant(id, tenantId);
         ProductCategory category = new ProductCategory();
         category.setName(dto.getName());
@@ -100,7 +101,7 @@ public class V1MerchantProductCategoryController {
     public Result<Void> deleteCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.PRODUCT_MANAGE);
         verifyBelongsToTenant(id, tenantId);
         productCategoryService.delete(id);
         return Result.success();

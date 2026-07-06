@@ -3,6 +3,7 @@ package com.payment.controller;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantBalanceVO;
 import com.payment.dto.WithdrawalApplyDTO;
 import com.payment.dto.WithdrawalQueryDTO;
@@ -39,7 +40,7 @@ public class V1MerchantWithdrawalController {
     @SaCheckPermission(type = "merchant", value = "merchant:withdrawal:view")
     @GetMapping("/balance")
     public Result<V1MerchantBalanceVO> getBalance(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.WITHDRAWAL_MANAGE);
         MerchantBalance balance = withdrawalService.getMerchantBalance(tenantId);
         V1MerchantBalanceVO vo = new V1MerchantBalanceVO();
         vo.setTenantId(tenantId);
@@ -56,7 +57,7 @@ public class V1MerchantWithdrawalController {
                                                            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                            @RequestParam(required = false) Integer status) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.WITHDRAWAL_MANAGE);
         WithdrawalQueryDTO queryDTO = new WithdrawalQueryDTO();
         queryDTO.setTenantId(tenantId);
         queryDTO.setStatus(status);
@@ -73,7 +74,7 @@ public class V1MerchantWithdrawalController {
     @SaCheckPermission(type = "merchant", value = "merchant:withdrawal:create")
     @PostMapping
     public Result<WithdrawalVO> createWithdrawal(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @Valid @RequestBody WithdrawalApplyDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, PlatformSessionHelper.getPlatformUserId());
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.WITHDRAWAL_MANAGE);
         Withdrawal entity = withdrawalService.createWithdrawal(tenantId, dto);
         WithdrawalVO vo = new WithdrawalVO();
         BeanUtils.copyProperties(entity, vo);

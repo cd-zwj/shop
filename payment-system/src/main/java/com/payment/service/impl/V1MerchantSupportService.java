@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantTenantVO;
 import com.payment.entity.Tenant;
 import com.payment.entity.TenantEmployee;
@@ -67,6 +68,22 @@ public class V1MerchantSupportService {
         Tenant tenant = tenantMapper.selectById(tenantId);
         if (tenant == null || (tenant.getDeleted() != null && tenant.getDeleted() == 1) || tenant.getStatus() == null || tenant.getStatus() == 0) {
             throw new BusinessException("商户不存在或已停用");
+        }
+        return employee;
+    }
+
+    /**
+     * 校验用户是否为指定租户的有效员工，并具备指定商户模块权限。
+     *
+     * @param tenantId       租户ID
+     * @param platformUserId 平台用户ID
+     * @param permission     需要的商户模块权限
+     * @return 校验通过的员工记录
+     */
+    public TenantEmployee requirePermission(Long tenantId, Long platformUserId, MerchantPermission permission) {
+        TenantEmployee employee = requireEmployee(tenantId, platformUserId);
+        if (!MerchantPermission.allows(employee.getEmployeeRole(), permission)) {
+            throw new BusinessException("当前员工无权操作该商户模块");
         }
         return employee;
     }

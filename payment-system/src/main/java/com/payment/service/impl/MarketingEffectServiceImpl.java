@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.CouponEffectVO;
 import com.payment.dto.MarketingEffectSummaryVO;
 import com.payment.entity.CouponTemplate;
@@ -23,7 +24,7 @@ public class MarketingEffectServiceImpl implements MarketingEffectService {
 
     @Override
     public MarketingEffectSummaryVO getSummary(Long tenantId, Long platformUserId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.MARKETING_MANAGE);
         List<CouponTemplate> templates = couponTemplateMapper.selectList(baseTenantCouponQuery(tenantId));
 
         int receivedCount = templates.stream().mapToInt(t -> value(t.getReceivedQuantity())).sum();
@@ -42,7 +43,7 @@ public class MarketingEffectServiceImpl implements MarketingEffectService {
 
     @Override
     public CouponEffectVO getCouponEffect(Long tenantId, Long platformUserId, Long templateId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.MARKETING_MANAGE);
         CouponTemplate template = couponTemplateMapper.selectOne(baseTenantCouponQuery(tenantId)
                 .eq(CouponTemplate::getId, templateId));
         if (template == null) {

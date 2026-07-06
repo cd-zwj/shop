@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.CardKeyDeliveryDTO;
 import com.payment.dto.V1MerchantCardKeySummaryVO;
 import com.payment.dto.V1MerchantCardKeyUploadDTO;
@@ -61,7 +62,7 @@ public class CardKeyPoolServiceImpl implements CardKeyPoolService {
     @Override
     public Page<V1MerchantCardKeyVO> listMerchantCardKeys(Long tenantId, Long platformUserId, Long productId,
                                                           Integer current, Integer size, String status) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         requireCardKeyProduct(tenantId, productId);
 
         Page<CardKeyPool> page = cardKeyPoolMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<CardKeyPool>()
@@ -78,7 +79,7 @@ public class CardKeyPoolServiceImpl implements CardKeyPoolService {
 
     @Override
     public V1MerchantCardKeySummaryVO getMerchantSummary(Long tenantId, Long platformUserId, Long productId) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         requireCardKeyProduct(tenantId, productId);
         return buildSummary(tenantId, productId);
     }
@@ -87,7 +88,7 @@ public class CardKeyPoolServiceImpl implements CardKeyPoolService {
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantCardKeySummaryVO uploadMerchantCardKeys(Long tenantId, Long platformUserId, Long productId,
                                                              V1MerchantCardKeyUploadDTO dto) {
-        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
         requireCardKeyProduct(tenantId, productId);
 
         List<String> codes = normalizeCodes(dto == null ? null : dto.getCodes());
