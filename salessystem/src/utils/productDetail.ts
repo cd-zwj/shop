@@ -1,4 +1,4 @@
-import type { FulfillmentMode, ProductType } from '../types/catalog';
+import type { FulfillmentMode, ProductType, Tenant } from '../types/catalog';
 
 interface InventoryInput {
   stock?: number | null;
@@ -16,6 +16,14 @@ export interface DeliveryAccessPresentation {
   label: string;
   description: string;
   actionLabel: string;
+}
+
+export interface MerchantInfoPresentation {
+  title: string;
+  description: string;
+  contactLine: string;
+  actionLabel: string;
+  actionPath?: string;
 }
 
 export function getInventoryPresentation(product: InventoryInput): InventoryPresentation {
@@ -144,6 +152,31 @@ export function getDeliveryAccessPresentation(
     label: '物流查看位置',
     description: '支付完成后，发货进度和物流信息会同步到订单详情和“我的已购”。',
     actionLabel: '查看订单履约',
+  };
+}
+
+export function getMerchantInfoPresentation(
+  tenant?: Pick<Tenant, 'id' | 'name' | 'contact' | 'phone' | 'address'> | null,
+  fallbackTenantId?: number | null,
+): MerchantInfoPresentation {
+  const tenantId = tenant?.id ?? fallbackTenantId ?? undefined;
+  const title = tenant?.name?.trim() || (tenantId ? `商户 #${tenantId}` : '商户信息待确认');
+  const contactParts = [
+    tenant?.contact?.trim() ? `联系人 ${tenant.contact.trim()}` : '',
+    tenant?.phone?.trim() || '',
+  ].filter(Boolean);
+  const address = tenant?.address?.trim();
+
+  return {
+    title,
+    description: address
+      ? `商家地址：${address}`
+      : tenantId
+        ? '可进入商户店铺查看商家资料、商品和售后联系入口。'
+        : '当前商品缺少商户资料，请从商户店铺或商品列表重新进入。',
+    contactLine: contactParts.length > 0 ? contactParts.join(' · ') : '联系方式以商户店铺展示为准',
+    actionLabel: tenantId ? '进入商户店铺' : '商户信息待确认',
+    actionPath: tenantId ? `/merchant-store/${tenantId}` : undefined,
   };
 }
 

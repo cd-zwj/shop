@@ -22,7 +22,7 @@ import { appCatalogService } from '../services/modules/appCatalog';
 import { createOrderForItems, getOrderCheckoutPath, requiresShippingAddress } from '../services/orderCheckout';
 import type { WalletStrategy } from '../types/order';
 import { ApiError } from '../types/api';
-import type { Product } from '../types/catalog';
+import type { Product, Tenant } from '../types/catalog';
 import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
@@ -32,6 +32,7 @@ import {
   getDeliveryAccessPresentation,
   getFulfillmentPresentation,
   getInventoryPresentation,
+  getMerchantInfoPresentation,
   getPurchaseLimitNote,
 } from '../utils/productDetail';
 
@@ -43,6 +44,7 @@ export default function ProductDetails() {
   const { addItem, totalItems } = useCart();
   const productId = Number(id);
   const [product, setProduct] = useState<Product | null>(null);
+  const [merchant, setMerchant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
@@ -72,6 +74,18 @@ export default function ProductDetails() {
         const detail = await appCatalogService.getProduct(productId);
         if (!isMounted) return;
         setProduct(detail);
+        const nextTenantId = detail.tenantId ?? tenantId;
+        setMerchant(null);
+        if (nextTenantId) {
+          try {
+            const tenant = await appCatalogService.getTenant(nextTenantId);
+            if (!isMounted) return;
+            setMerchant(tenant);
+          } catch {
+            if (!isMounted) return;
+            setMerchant(null);
+          }
+        }
       } catch {
         if (!isMounted) return;
         setError('商品详情加载失败，请稍后重试');
@@ -87,7 +101,7 @@ export default function ProductDetails() {
     return () => {
       isMounted = false;
     };
-  }, [productId]);
+  }, [productId, tenantId]);
 
   const inventory = getInventoryPresentation({
     stock: product?.stock,
@@ -96,6 +110,7 @@ export default function ProductDetails() {
   const fulfillment = getFulfillmentPresentation(product?.fulfillmentMode, product?.productType);
   const deliveryAccess = getDeliveryAccessPresentation(product?.fulfillmentMode, product?.productType);
   const afterSalesNote = getAfterSalesNote(product?.fulfillmentMode, product?.productType);
+  const merchantInfo = getMerchantInfoPresentation(merchant, resolvedTenantId);
   const purchaseLimitNote = getPurchaseLimitNote({
     stock: product?.stock,
     unit: product?.unit,
@@ -271,7 +286,7 @@ export default function ProductDetails() {
           <div className="mb-8">
             <div className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-widest text-slate-400">
               <CheckCircle2 className="h-4 w-4 fill-current text-blue-500" />
-              <span>{resolvedTenantId ? `商户 #${resolvedTenantId}` : '商户信息待确认'}</span>
+              <span>{merchantInfo.title}</span>
             </div>
             <h1 className="mb-4 text-3xl font-black leading-tight text-slate-900 md:text-4xl">
               {product?.name || (isLoading ? '商品加载中...' : '未找到商品')}
@@ -337,7 +352,7 @@ export default function ProductDetails() {
                 {
                   icon: Store,
                   title: '商户信息',
-                  label: resolvedTenantId ? `当前商品归属商户 #${resolvedTenantId}` : '缺少商户信息时不可加入购物车。',
+                  label: `${merchantInfo.description} ${merchantInfo.contactLine}`,
                 },
               ].map((item) => (
                 <li key={item.title} className="flex items-start gap-4">
@@ -369,6 +384,32 @@ export default function ProductDetails() {
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-blue-700 shadow-sm transition-all hover:bg-blue-100"
                 >
                   {deliveryAccess.actionLabel}
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-12 rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-primary">
+                <Store className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-black text-slate-900">{merchantInfo.title}</h3>
+                <p className="mt-1 text-sm font-semibold leading-relaxed text-slate-600">
+                  {merchantInfo.description}
+                </p>
+                <p className="mt-1 text-xs font-medium leading-relaxed text-slate-400">
+                  {merchantInfo.contactLine}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => merchantInfo.actionPath && navigate(merchantInfo.actionPath)}
+                  disabled={!merchantInfo.actionPath}
+                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-black text-white shadow-sm transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {merchantInfo.actionLabel}
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>

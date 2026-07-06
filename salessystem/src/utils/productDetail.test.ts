@@ -4,6 +4,7 @@ import {
   getDeliveryAccessPresentation,
   getFulfillmentPresentation,
   getInventoryPresentation,
+  getMerchantInfoPresentation,
   getPurchaseLimitNote,
 } from './productDetail';
 
@@ -60,5 +61,28 @@ describe('productDetail helpers', () => {
 
     expect(presentation.label).toBe('物流查看位置');
     expect(presentation.description).toContain('订单详情');
+  });
+
+  it('summarizes merchant contact information when tenant detail is available', () => {
+    const presentation = getMerchantInfoPresentation({
+      id: 8,
+      name: '本地生活旗舰店',
+      contact: '张店长',
+      phone: '13800000000',
+      address: '上海市浦东新区世纪大道 1 号',
+    });
+
+    expect(presentation.title).toBe('本地生活旗舰店');
+    expect(presentation.description).toContain('上海市浦东新区世纪大道 1 号');
+    expect(presentation.contactLine).toBe('联系人 张店长 · 13800000000');
+    expect(presentation.actionPath).toBe('/merchant-store/8');
+  });
+
+  it('keeps merchant entry actionable when only tenant id is known', () => {
+    const presentation = getMerchantInfoPresentation(null, 9);
+
+    expect(presentation.title).toBe('商户 #9');
+    expect(presentation.description).toContain('商户店铺');
+    expect(presentation.actionPath).toBe('/merchant-store/9');
   });
 });
