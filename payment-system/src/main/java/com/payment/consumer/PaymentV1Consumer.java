@@ -193,7 +193,10 @@ public class PaymentV1Consumer {
         salesOrderMapper.updateById(salesOrder);
 
         // 商户钱包部分在充值成功时已经进入商户财务余额，订单消费时不重复入账。
-        BigDecimal settlementAmount = salesOrder.getTotalAmount().subtract(salesOrder.getMerchantWalletDeductAmount());
+        // 商户结算应以订单实际应付金额为基数，避免优惠券/积分/折扣订单按原价多入账。
+        BigDecimal payableAmount = resolvePayableAmount(salesOrder);
+        BigDecimal merchantWalletDeductAmount = amountOrZero(salesOrder.getMerchantWalletDeductAmount());
+        BigDecimal settlementAmount = payableAmount.subtract(merchantWalletDeductAmount);
         if (settlementAmount.compareTo(BigDecimal.ZERO) > 0) {
             withdrawalService.addMerchantBalance(salesOrder.getTenantId(), settlementAmount, orderNo);
         }
@@ -237,5 +240,18 @@ public class PaymentV1Consumer {
         // 由 MQ 重投 + 幂等(根据 messageId)兜底再次进入此方法。
         // 静默 catch 会导致"订单已 PAID 但交付事件丢失",从而漏发商品。
         orderDeliveryService.enqueueDelivery(orderNo);
+    }
+
+    private BigDecimal resolvePayableAmount(SalesOrder salesOrder) {
+        if (salesOrder.getPayableAmount() != null) {
+            return salesOrder.getPayableAmount();
+        }
+        return amountOrZero(salesOrder.getTotalAmount())
+                .subtract(amountOrZero(salesOrder.getDiscountAmount()))
+                .subtract(amountOrZero(salesOrder.getPointsDeductAmount()));
+    }
+
+    private BigDecimal amountOrZero(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
     }
 }

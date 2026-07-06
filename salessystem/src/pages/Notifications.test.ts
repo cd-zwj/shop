@@ -117,6 +117,48 @@ describe('Notifications', () => {
 
     expect(element.textContent).toContain('订单详情路由');
   });
+
+  it('deduplicates concurrent mark-read requests for the same notification', async () => {
+    const notification = buildNotification({
+      id: 9,
+      title: '系统通知',
+      content: '请查看',
+      readStatus: 0,
+    });
+    let resolveMarkRead: (value: AppNotification) => void = () => undefined;
+    const markReadPromise = new Promise<AppNotification>((resolve) => {
+      resolveMarkRead = resolve;
+    });
+
+    mockedNotificationService.list.mockResolvedValue({
+      records: [notification],
+      total: 1,
+      page: 1,
+      size: 20,
+      pages: 1,
+    });
+    mockedNotificationService.getUnreadCount.mockResolvedValue({ count: 1 });
+    mockedNotificationService.markRead.mockReturnValue(markReadPromise);
+
+    const element = await renderNotifications();
+    const card = Array.from(element.querySelectorAll('.cursor-pointer'))[0];
+    expect(card).toBeTruthy();
+
+    await act(async () => {
+      card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      card.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mockedNotificationService.markRead).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveMarkRead({ ...notification, readStatus: 1, readTime: '2026-07-06T10:00:00' });
+      await markReadPromise;
+    });
+    await flushAsyncWork();
+
+    expect(element.textContent).not.toContain('1 条未读');
+  });
 });
 
 function buildNotification(overrides: Partial<AppNotification>): AppNotification {

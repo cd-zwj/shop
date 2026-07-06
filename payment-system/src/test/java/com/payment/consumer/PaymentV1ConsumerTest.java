@@ -109,6 +109,88 @@ class PaymentV1ConsumerTest {
         verify(fixture.salesOrderMapper, never()).updateById(any(SalesOrder.class));
     }
 
+    @Test
+    void handleOrderPaidShouldSettlePayableAmountMinusMerchantWalletDeduction() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        SalesOrder salesOrder = paidOrderFixture("SO_PAYABLE");
+        salesOrder.setTotalAmount(new BigDecimal("100.00"));
+        salesOrder.setPayableAmount(new BigDecimal("80.00"));
+        salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
+        SalesOrderItem item = orderItemFixture();
+
+        when(fixture.messageIdempotentService.isProcessed(
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PAYABLE",
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
+
+        fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_PAYABLE\"}");
+
+        verify(fixture.withdrawalService).addMerchantBalance(9L, new BigDecimal("60.00"), "SO_PAYABLE");
+        verify(fixture.withdrawalService, never()).addMerchantBalance(9L, new BigDecimal("80.00"), "SO_PAYABLE");
+    }
+
+    @Test
+    void handleOrderPaidShouldSkipNonPositiveSettlementAmount() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        SalesOrder salesOrder = paidOrderFixture("SO_ZERO");
+        salesOrder.setTotalAmount(new BigDecimal("100.00"));
+        salesOrder.setPayableAmount(new BigDecimal("20.00"));
+        salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
+        SalesOrderItem item = orderItemFixture();
+
+        when(fixture.messageIdempotentService.isProcessed(
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_ZERO",
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
+
+        fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_ZERO\"}");
+
+        verify(fixture.withdrawalService, never()).addMerchantBalance(any(), any(), any());
+    }
+
+    @Test
+    void handleOrderPaidShouldDerivePayableAmountWhenStoredValueIsMissing() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        SalesOrder salesOrder = paidOrderFixture("SO_LEGACY");
+        salesOrder.setTotalAmount(new BigDecimal("100.00"));
+        salesOrder.setDiscountAmount(new BigDecimal("10.00"));
+        salesOrder.setUnifiedWalletDeductAmount(new BigDecimal("5.00"));
+        salesOrder.setPointsDeductAmount(new BigDecimal("5.00"));
+        salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
+        SalesOrderItem item = orderItemFixture();
+
+        when(fixture.messageIdempotentService.isProcessed(
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_LEGACY",
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
+
+        fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_LEGACY\"}");
+
+        verify(fixture.withdrawalService).addMerchantBalance(9L, new BigDecimal("65.00"), "SO_LEGACY");
+    }
+
+    private static SalesOrder paidOrderFixture(String orderNo) {
+        SalesOrder salesOrder = new SalesOrder();
+        salesOrder.setId(1L);
+        salesOrder.setOrderNo(orderNo);
+        salesOrder.setTenantId(9L);
+        salesOrder.setPlatformUserId(100L);
+        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
+        salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setDeleted(0);
+        return salesOrder;
+    }
+
+    private static SalesOrderItem orderItemFixture() {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setProductId(1L);
+        item.setQuantity(2);
+        return item;
+    }
+
     private static class ConsumerFixture {
         private final WalletRechargeService walletRechargeService = mock(WalletRechargeService.class);
         private final SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);

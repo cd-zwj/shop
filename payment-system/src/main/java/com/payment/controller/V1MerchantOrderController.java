@@ -69,7 +69,9 @@ public class V1MerchantOrderController {
     @SaCheckLogin(type = "merchant")
     @GetMapping("/{orderNo}")
     public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable String orderNo) {
-        return Result.success(appOrderService.getMerchantOrderDetail(tenantId, PlatformSessionHelper.getPlatformUserId(), orderNo));
+        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
+        return Result.success(appOrderService.getMerchantOrderDetail(tenantId, platformUserId, orderNo));
     }
 
     /**

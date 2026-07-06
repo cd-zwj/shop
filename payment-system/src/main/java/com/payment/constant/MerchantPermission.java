@@ -48,7 +48,6 @@ public enum MerchantPermission {
         ROLE_PERMISSIONS.put(MerchantRole.CASHIER, EnumSet.of(
                 DASHBOARD_VIEW,
                 ORDER_MANAGE,
-                REFUND_MANAGE,
                 AI_USE
         ));
         ROLE_PERMISSIONS.put(MerchantRole.FINANCE, EnumSet.of(

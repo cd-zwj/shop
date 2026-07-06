@@ -1,12 +1,14 @@
 package com.payment.controller;
 
-import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.payment.common.Result;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.VirtualProductCategoryUpsertDTO;
 import com.payment.dto.VirtualProductCategoryVO;
 import com.payment.dto.VirtualProductTypeUpsertDTO;
 import com.payment.dto.VirtualProductTypeVO;
 import com.payment.service.VirtualProductTaxonomyService;
+import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -29,79 +31,88 @@ import java.util.List;
 public class V1MerchantVirtualProductTaxonomyController {
 
     private final VirtualProductTaxonomyService virtualProductTaxonomyService;
+    private final V1MerchantSupportService v1MerchantSupportService;
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:read")
+    @SaCheckLogin(type = "merchant")
     @GetMapping("/virtual-product-types")
     public Result<List<VirtualProductTypeVO>> listTypes(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @RequestParam(required = false) Integer status) {
-        return Result.success(virtualProductTaxonomyService.listTypes(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), status));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.listTypes(tenantId, platformUserId, status));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @PostMapping("/virtual-product-types")
     public Result<VirtualProductTypeVO> createType(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @Valid @RequestBody VirtualProductTypeUpsertDTO dto) {
-        return Result.success(virtualProductTaxonomyService.createType(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), dto));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.createType(tenantId, platformUserId, dto));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @PutMapping("/virtual-product-types/{id}")
     public Result<VirtualProductTypeVO> updateType(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id,
             @Valid @RequestBody VirtualProductTypeUpsertDTO dto) {
-        return Result.success(virtualProductTaxonomyService.updateType(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), id, dto));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.updateType(tenantId, platformUserId, id, dto));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @DeleteMapping("/virtual-product-types/{id}")
     public Result<Void> deleteType(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
-        virtualProductTaxonomyService.deleteType(tenantId, PlatformSessionHelper.getPlatformUserId(), id);
+        Long platformUserId = requireProductPermission(tenantId);
+        virtualProductTaxonomyService.deleteType(tenantId, platformUserId, id);
         return Result.success();
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:read")
+    @SaCheckLogin(type = "merchant")
     @GetMapping("/virtual-product-categories")
     public Result<List<VirtualProductCategoryVO>> listCategories(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @RequestParam(required = false) Long typeId,
             @RequestParam(required = false) Integer status) {
-        return Result.success(virtualProductTaxonomyService.listCategories(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), typeId, status));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.listCategories(tenantId, platformUserId, typeId, status));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @PostMapping("/virtual-product-categories")
     public Result<VirtualProductCategoryVO> createCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @Valid @RequestBody VirtualProductCategoryUpsertDTO dto) {
-        return Result.success(virtualProductTaxonomyService.createCategory(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), dto));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.createCategory(tenantId, platformUserId, dto));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @PutMapping("/virtual-product-categories/{id}")
     public Result<VirtualProductCategoryVO> updateCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id,
             @Valid @RequestBody VirtualProductCategoryUpsertDTO dto) {
-        return Result.success(virtualProductTaxonomyService.updateCategory(
-                tenantId, PlatformSessionHelper.getPlatformUserId(), id, dto));
+        Long platformUserId = requireProductPermission(tenantId);
+        return Result.success(virtualProductTaxonomyService.updateCategory(tenantId, platformUserId, id, dto));
     }
 
-    @SaCheckPermission(type = "merchant", value = "merchant:product:write")
+    @SaCheckLogin(type = "merchant")
     @DeleteMapping("/virtual-product-categories/{id}")
     public Result<Void> deleteCategory(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long id) {
-        virtualProductTaxonomyService.deleteCategory(tenantId, PlatformSessionHelper.getPlatformUserId(), id);
+        Long platformUserId = requireProductPermission(tenantId);
+        virtualProductTaxonomyService.deleteCategory(tenantId, platformUserId, id);
         return Result.success();
+    }
+
+    private Long requireProductPermission(Long tenantId) {
+        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        return platformUserId;
     }
 }

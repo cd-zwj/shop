@@ -1,7 +1,6 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
@@ -21,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 商户端退款审核控制器（Merchant 端）。
  * <p>提供商户对退款申请的列表查询和审核（通过/拒绝）操作。
- * 需要商户角色登录，并通过 RBAC 权限（merchant:refund:list / audit）控制访问。</p>
+ * 需要商户角色登录，并通过商户员工本地权限矩阵控制访问。</p>
  */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/refunds")
@@ -40,7 +39,7 @@ public class V1MerchantRefundController {
      * @param pageSize 每页条数，默认 10
      * @return 退款申请分页列表
      */
-    @SaCheckPermission(type = "merchant", value = "merchant:refund:list")
+    @SaCheckLogin(type = "merchant")
     @GetMapping
     public Result<PageResult<RefundApplicationVO>> listTenantRefunds(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                                       @RequestParam(required = false) String status,
@@ -61,7 +60,7 @@ public class V1MerchantRefundController {
      * @param request  审核请求（是否通过、拒绝原因）
      * @return 操作结果
      */
-    @SaCheckPermission(type = "merchant", value = "merchant:refund:audit")
+    @SaCheckLogin(type = "merchant")
     @PutMapping("/{refundId}/audit")
     public Result<Void> auditRefund(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId,

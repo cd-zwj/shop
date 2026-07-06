@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   ArrowLeft,
@@ -58,6 +58,7 @@ export default function Notifications() {
   const [totalPages, setTotalPages] = useState(1);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<NotificationFilterId>('ALL');
+  const markReadRequestsRef = useRef<Map<number, Promise<boolean>>>(new Map());
 
   const loadNotifications = useCallback(
     async (page: number, filterId: NotificationFilterId) => {
@@ -84,21 +85,39 @@ export default function Notifications() {
     void loadNotifications(currentPage, activeFilter);
   }, [activeFilter, currentPage, loadNotifications]);
 
-  const handleMarkRead = async (id: number): Promise<boolean> => {
-    try {
-      await appNotificationService.markRead(id);
-      setNotifications((prev) =>
-        prev.map((n) =>
-          n.id === id ? { ...n, readStatus: 1, readTime: new Date().toISOString() } : n
-        )
-      );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
-      return true;
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : '标记已读失败', 'error');
-      return false;
+  const handleMarkRead = useCallback((id: number): Promise<boolean> => {
+    const existingRequest = markReadRequestsRef.current.get(id);
+    if (existingRequest) {
+      return existingRequest;
     }
-  };
+
+    const request = (async () => {
+      try {
+        await appNotificationService.markRead(id);
+        setNotifications((prev) => {
+          let shouldDecrement = false;
+          const next = prev.map((n) => {
+            if (n.id !== id) return n;
+            shouldDecrement = n.readStatus === 0;
+            return { ...n, readStatus: 1, readTime: new Date().toISOString() };
+          });
+          if (shouldDecrement) {
+            setUnreadCount((count) => Math.max(0, count - 1));
+          }
+          return next;
+        });
+        return true;
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : '标记已读失败', 'error');
+        return false;
+      } finally {
+        markReadRequestsRef.current.delete(id);
+      }
+    })();
+
+    markReadRequestsRef.current.set(id, request);
+    return request;
+  }, [showToast]);
 
   const handleNotificationAction = async (notification: AppNotification, path: string) => {
     if (notification.readStatus === 0) {

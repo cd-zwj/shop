@@ -17,9 +17,9 @@ describe('merchantPermissions', () => {
     expect(hasMerchantPermission('OWNER', 'withdrawal:manage')).toBe(true);
   });
 
-  it('keeps cashier focused on orders and refunds', () => {
+  it('keeps cashier focused on orders without refund authority', () => {
     expect(hasMerchantPermission('CASHIER', 'order:manage')).toBe(true);
-    expect(hasMerchantPermission('CASHIER', 'refund:manage')).toBe(true);
+    expect(hasMerchantPermission('CASHIER', 'refund:manage')).toBe(false);
     expect(hasMerchantPermission('CASHIER', 'finance:view')).toBe(false);
     expect(hasMerchantPermission('CASHIER', 'product:manage')).toBe(false);
   });

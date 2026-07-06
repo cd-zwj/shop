@@ -26,10 +26,8 @@ import {
   clearCurrentAuthRole,
   clearMerchantSession,
   clearPlatformUserProfile,
-  getAdminSession,
   getCurrentAuthRole,
   getMerchantSession,
-  getPlatformUserProfile,
   setAdminSession,
   setCurrentAuthRole,
   setMerchantSession,
@@ -75,11 +73,9 @@ function resetLocalAuthState(
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentRole, setCurrentRoleState] = useState<AuthRole | null>(() => getCurrentAuthRole());
-  const [currentUser, setCurrentUser] = useState<PlatformUser | null>(() => getPlatformUserProfile());
-  const [merchantSession, setMerchantSessionState] = useState<MerchantSession | null>(() =>
-    getMerchantSession(),
-  );
-  const [adminSession, setAdminSessionState] = useState<AdminSession | null>(() => getAdminSession());
+  const [currentUser, setCurrentUser] = useState<PlatformUser | null>(null);
+  const [merchantSession, setMerchantSessionState] = useState<MerchantSession | null>(null);
+  const [adminSession, setAdminSessionState] = useState<AdminSession | null>(null);
   const [isReady, setIsReady] = useState(false);
   const isLoginInProgress = useRef(false);
 
@@ -110,21 +106,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        if (role === 'user' && !getPlatformUserProfile()) {
+        if (role === 'user') {
           const profile = await appUserService.getCurrentUser();
           if (!isMounted) return;
           setPlatformUserProfile(profile);
           setCurrentUser(profile);
         }
 
-        if (role === 'merchant' && !getMerchantSession()) {
+        if (role === 'merchant') {
+          const cachedTenantId = getMerchantSession()?.tenantId;
           const session = await merchantAuthService.getCurrentSession();
+          const selectedTenant = cachedTenantId
+            ? session.tenants.find((item) => item.tenantId === cachedTenantId)
+            : null;
+          const hydratedSession = selectedTenant
+            ? {
+                ...session,
+                tenantId: selectedTenant.tenantId,
+                tenantName: selectedTenant.tenantName,
+                employeeRole: selectedTenant.employeeRole,
+              }
+            : session;
           if (!isMounted) return;
-          setMerchantSession(session);
-          setMerchantSessionState(session);
+          setMerchantSession(hydratedSession);
+          setMerchantSessionState(hydratedSession);
         }
 
-        if (role === 'admin' && !getAdminSession()) {
+        if (role === 'admin') {
           const session = await adminAuthService.getCurrentSession();
           if (!isMounted) return;
           setAdminSession(session);
@@ -296,11 +304,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const isAuthenticated =
+    (currentRole === 'user' && !!currentUser) ||
+    (currentRole === 'merchant' && !!merchantSession) ||
+    (currentRole === 'admin' && !!adminSession);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       currentRole,
       isReady,
-      isAuthenticated: Boolean(currentRole),
+      isAuthenticated,
       currentUser,
       merchantSession,
       adminSession,
@@ -313,7 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refreshCurrentUser,
       logout,
     }),
-    [adminSession, currentRole, currentUser, isReady, merchantSession],
+    [adminSession, currentRole, currentUser, isAuthenticated, isReady, merchantSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -58,7 +58,7 @@ describe('AuthGuard', () => {
     window.localStorage.clear();
   });
 
-  it('本地已有刚写入的管理员 session 时，不因上下文首帧为空而跳回登录页', async () => {
+  it('does not trust a cached admin session when context has no server-confirmed session', async () => {
     window.localStorage.setItem('salessystem:platform:token', 'fresh-admin-token');
     setStoredSession('admin', {
       userId: 1,
@@ -75,6 +75,38 @@ describe('AuthGuard', () => {
       currentUser: null,
       merchantSession: null,
       adminSession: null,
+      refreshCurrentUser: vi.fn(),
+      refreshMerchantSession: vi.fn(),
+      refreshAdminSession: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    const { root, container } = renderGuard();
+
+    await vi.waitFor(() => {
+      expect(container.textContent).not.toContain('protected content');
+    });
+
+    cleanup(root, container);
+  });
+
+  it('allows access when an admin session is server-confirmed in context', async () => {
+    window.localStorage.setItem('salessystem:platform:token', 'fresh-admin-token');
+    window.localStorage.setItem('salessystem:current-role', 'admin');
+
+    mockUseAuth.mockReturnValue({
+      isReady: true,
+      currentRole: 'admin',
+      currentUser: null,
+      merchantSession: null,
+      adminSession: {
+        userId: 1,
+        username: 'admin',
+        role: 'admin',
+        scope: 'all',
+        permissions: [],
+        roles: ['admin'],
+      },
       refreshCurrentUser: vi.fn(),
       refreshMerchantSession: vi.fn(),
       refreshAdminSession: vi.fn(),

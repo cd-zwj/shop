@@ -51,7 +51,6 @@ const ROLE_PERMISSIONS: Record<string, MerchantPermission[]> = {
   CASHIER: [
     'dashboard:view',
     'order:manage',
-    'refund:manage',
     'ai:use',
   ],
   FINANCE: [

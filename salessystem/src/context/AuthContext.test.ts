@@ -106,10 +106,11 @@ describe('AuthProvider', () => {
     };
     const profile = { id: 7, username: 'sleephhh' };
     mockLoginByPassword.mockResolvedValue('fresh-user-token');
-    mockGetCurrentUser.mockImplementation(async () => {
+    mockGetCurrentUser.mockImplementationOnce(async () => {
       window.dispatchEvent(new CustomEvent(AUTH_TOKEN_CLEAR_EVENT, { detail: { role: 'user' } }));
       return profile;
     });
+    mockGetCurrentUser.mockResolvedValue(profile);
 
     let auth: AuthContextShape | null = null;
     const { root, container } = renderProvider((value) => {
@@ -167,6 +168,87 @@ describe('AuthProvider', () => {
     expect(JSON.parse(window.localStorage.getItem('salessystem:admin:session') ?? '{}')).toEqual(session);
     expect(auth?.adminSession).toEqual(session);
     expect(auth?.currentRole).toBe('admin');
+    cleanup(root, container);
+  });
+
+  it('cached user profile must still be verified by server before authentication', async () => {
+    const cachedProfile = { id: 1, username: 'forged' };
+    const serverProfile = { id: 7, username: 'server-user' };
+    window.localStorage.setItem('salessystem:current-role', 'user');
+    window.localStorage.setItem('salessystem:app:token', 'user-token');
+    window.localStorage.setItem('salessystem:user:profile', JSON.stringify(cachedProfile));
+    mockGetCurrentUser.mockResolvedValue(serverProfile);
+
+    let auth: AuthContextShape | null = null;
+    const { root, container } = renderProvider((value) => {
+      auth = value;
+    });
+
+    await vi.waitFor(() => {
+      expect(mockGetCurrentUser).toHaveBeenCalled();
+      expect(auth?.currentUser).toEqual(serverProfile);
+      expect(auth?.isAuthenticated).toBe(true);
+    });
+    expect(JSON.parse(window.localStorage.getItem('salessystem:user:profile') ?? '{}')).toEqual(serverProfile);
+    cleanup(root, container);
+  });
+
+  it('cached merchant session is cleared when server verification fails', async () => {
+    window.localStorage.setItem('salessystem:current-role', 'merchant');
+    window.localStorage.setItem('salessystem:merchant:token', 'merchant-token');
+    window.localStorage.setItem('salessystem:merchant:session', JSON.stringify({ employeeRole: 'OWNER' }));
+    mockGetMerchantSession.mockRejectedValue(new Error('unauthorized'));
+
+    let auth: AuthContextShape | null = null;
+    const { root, container } = renderProvider((value) => {
+      auth = value;
+    });
+
+    await vi.waitFor(() => {
+      expect(mockGetMerchantSession).toHaveBeenCalled();
+      expect(auth?.isReady).toBe(true);
+      expect(auth?.currentRole).toBeNull();
+    });
+    expect(window.localStorage.getItem('salessystem:merchant:token')).toBeNull();
+    expect(window.localStorage.getItem('salessystem:merchant:session')).toBeNull();
+    cleanup(root, container);
+  });
+
+  it('preserves a cached merchant tenant selection after server verification', async () => {
+    const cachedSession = {
+      token: 'token',
+      expiresIn: 3600,
+      platformUserId: 1,
+      username: 'merchant',
+      tenantId: 2,
+      tenantName: '租户B',
+      employeeRole: 'FINANCE',
+      tenants: [
+        { tenantId: 1, tenantName: '租户A', employeeRole: 'OWNER' },
+        { tenantId: 2, tenantName: '租户B', employeeRole: 'FINANCE' },
+      ],
+    };
+    const serverSession = {
+      ...cachedSession,
+      tenantId: 1,
+      tenantName: '租户A',
+      employeeRole: 'OWNER',
+    };
+    window.localStorage.setItem('salessystem:current-role', 'merchant');
+    window.localStorage.setItem('salessystem:merchant:token', 'merchant-token');
+    window.localStorage.setItem('salessystem:merchant:session', JSON.stringify(cachedSession));
+    mockGetMerchantSession.mockResolvedValue(serverSession);
+
+    let auth: AuthContextShape | null = null;
+    const { root, container } = renderProvider((value) => {
+      auth = value;
+    });
+
+    await vi.waitFor(() => {
+      expect(auth?.merchantSession?.tenantId).toBe(2);
+      expect(auth?.merchantSession?.employeeRole).toBe('FINANCE');
+    });
+    expect(JSON.parse(window.localStorage.getItem('salessystem:merchant:session') ?? '{}').tenantId).toBe(2);
     cleanup(root, container);
   });
 });

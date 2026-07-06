@@ -53,7 +53,7 @@ describe('RoleGuard', () => {
     window.localStorage.clear();
   });
 
-  it('本地已有管理员 session 时，不因上下文首帧为空而跳转', async () => {
+  it('does not trust a cached admin session when context has no server-confirmed session', async () => {
     window.localStorage.setItem('salessystem:current-role', 'admin');
     window.localStorage.setItem(
       'salessystem:admin:session',
@@ -68,7 +68,7 @@ describe('RoleGuard', () => {
     );
 
     mockUseAuth.mockReturnValue({
-      currentRole: null,
+      currentRole: 'admin',
       currentUser: null,
       merchantSession: null,
       adminSession: null,
@@ -77,7 +77,36 @@ describe('RoleGuard', () => {
     const { root, container } = renderGuard();
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('protected content');
+      expect(container.textContent).not.toContain('protected content');
+    });
+
+    cleanup(root, container);
+  });
+
+  it('does not use forged merchant localStorage permissions', async () => {
+    window.localStorage.setItem('salessystem:current-role', 'merchant');
+    window.localStorage.setItem(
+      'salessystem:merchant:session',
+      JSON.stringify({
+        employeeRole: 'OWNER',
+      }),
+    );
+
+    mockUseAuth.mockReturnValue({
+      currentRole: 'merchant',
+      currentUser: null,
+      merchantSession: null,
+      adminSession: null,
+    });
+
+    const { root, container } = renderGuard({
+      initialPath: '/merchant/products',
+      allowedRoles: ['merchant'],
+      merchantPermission: 'product:manage',
+    });
+
+    await vi.waitFor(() => {
+      expect(container.textContent).not.toContain('protected content');
     });
 
     cleanup(root, container);
@@ -94,8 +123,6 @@ describe('RoleGuard', () => {
       employeeRole: 'FINANCE',
       tenants: [],
     };
-    window.localStorage.setItem('salessystem:current-role', 'merchant');
-    window.localStorage.setItem('salessystem:merchant:session', JSON.stringify(merchantSession));
 
     mockUseAuth.mockReturnValue({
       currentRole: 'merchant',
