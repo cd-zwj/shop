@@ -1,0 +1,128 @@
+import React, { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import CouponCenter from './CouponCenter';
+import { ToastProvider } from '../context/ToastContext';
+import { appCatalogService } from '../services/modules/appCatalog';
+import { appCouponService } from '../services/modules/appCoupon';
+
+vi.mock('motion/react', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+  motion: new Proxy({}, {
+    get: (_target, tag: string) => tag,
+  }),
+}));
+
+vi.mock('../services/modules/appCatalog', () => ({
+  appCatalogService: {
+    listTenants: vi.fn(),
+  },
+}));
+
+vi.mock('../services/modules/appCoupon', () => ({
+  appCouponService: {
+    getAvailableCoupons: vi.fn(),
+    getMyCoupons: vi.fn(),
+    claimCoupon: vi.fn(),
+  },
+}));
+
+const mockedCatalogService = vi.mocked(appCatalogService);
+const mockedCouponService = vi.mocked(appCouponService);
+
+let root: Root | null = null;
+let container: HTMLDivElement | null = null;
+
+afterEach(() => {
+  if (root) {
+    act(() => root?.unmount());
+  }
+  container?.remove();
+  root = null;
+  container = null;
+  vi.clearAllMocks();
+});
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function renderCouponCenter() {
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  root = createRoot(container);
+
+  await act(async () => {
+    root?.render(
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ['/coupons?tenantId=9'] },
+        React.createElement(
+          ToastProvider,
+          null,
+          React.createElement(
+            Routes,
+            null,
+            React.createElement(Route, { path: '/coupons', element: React.createElement(CouponCenter) }),
+          ),
+        ),
+      ),
+    );
+  });
+
+  await flushAsyncWork();
+  return container;
+}
+
+describe('CouponCenter', () => {
+  it('shows a retryable error state when coupon assets fail to load', async () => {
+    mockedCatalogService.listTenants.mockResolvedValue([{ id: 9, name: '测试店铺' }]);
+    mockedCouponService.getAvailableCoupons
+      .mockRejectedValueOnce(new Error('优惠券服务不可用'))
+      .mockResolvedValueOnce([{
+        id: 11,
+        tenantId: 9,
+        ownerType: 'TENANT',
+        name: '满 100 减 20',
+        couponType: 'FIXED',
+        thresholdAmount: 100,
+        discountAmount: 20,
+        discountRate: null,
+        maxDiscountAmount: null,
+        perUserLimit: 1,
+        remainingStock: 8,
+        receivedByCurrentUser: 0,
+        receivable: true,
+        receiveStartTime: '2026-07-01T00:00:00',
+        receiveEndTime: '2026-07-31T23:59:59',
+        validStartTime: '2026-07-01T00:00:00',
+        validEndTime: '2026-08-31T23:59:59',
+        validDaysAfterReceive: null,
+        description: null,
+      }]);
+    mockedCouponService.getMyCoupons.mockResolvedValue([]);
+
+    const element = await renderCouponCenter();
+
+    expect(element.textContent).toContain('优惠券服务不可用');
+    expect(element.textContent).toContain('重试');
+
+    const retryButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('重试'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(element.textContent).toContain('满 100 减 20');
+    expect(Array.from(element.querySelectorAll('button'))
+      .some((button) => button.textContent?.includes('重试'))).toBe(false);
+  });
+});

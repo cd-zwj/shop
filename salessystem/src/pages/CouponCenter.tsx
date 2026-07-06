@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Ticket, ArrowLeft, Store, Clock } from 'lucide-react';
+import { AlertCircle, Ticket, ArrowLeft, Store, Clock, RefreshCw } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appCatalogService } from '../services/modules/appCatalog';
 import { appCouponService } from '../services/modules/appCoupon';
@@ -10,6 +10,7 @@ import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getCouponTracePresentation } from '../utils/assetTracePresentation';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function CouponCenter() {
   const navigate = useNavigate();
@@ -26,77 +27,90 @@ export default function CouponCenter() {
   
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Load tenant list
-  useEffect(() => {
-    let isMounted = true;
-    async function loadTenants() {
-      try {
-        const list = await appCatalogService.listTenants();
-        if (!isMounted) return;
-        setTenants(list);
+  const loadTenants = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const list = await appCatalogService.listTenants();
+      setTenants(list);
 
-        // Determine active tenant from URL or default to first
-        const urlTenantId = searchParams.get('tenantId');
-        if (urlTenantId) {
-          const tenant = list.find((t) => t.id === Number(urlTenantId));
-          if (tenant) {
-            setActiveTenant(tenant);
-            return;
-          }
-        }
-        if (list.length > 0) {
-          setActiveTenant(list[0]);
-        }
-      } catch (e) {
-        if (isMounted) {
-          showToast('获取商户列表失败', 'error');
+      // Determine active tenant from URL or default to first
+      const urlTenantId = searchParams.get('tenantId');
+      if (urlTenantId) {
+        const tenant = list.find((t) => t.id === Number(urlTenantId));
+        if (tenant) {
+          setActiveTenant(tenant);
+          return;
         }
       }
+      if (list.length > 0) {
+        setActiveTenant(list[0]);
+        return;
+      }
+
+      setActiveTenant(null);
+      setIsLoading(false);
+    } catch (e) {
+      const message = getErrorMessage(e, '获取商户列表失败');
+      setError(message);
+      setTenants([]);
+      setActiveTenant(null);
+      setAvailableCoupons([]);
+      setMyCoupons([]);
+      setExpiredCoupons([]);
+      setIsLoading(false);
+      showToast(message, 'error');
     }
+  }, [searchParams, showToast]);
+
+  useEffect(() => {
     void loadTenants();
-    return () => {
-      isMounted = false;
-    };
-  }, [searchParams]);
+  }, [loadTenants]);
 
   // Load coupon data for active tenant
-  useEffect(() => {
-    if (!activeTenant) return undefined;
+  const loadCoupons = useCallback(async (tenant: Tenant) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [available, usable, used, expired] = await Promise.all([
+        appCouponService.getAvailableCoupons(tenant.id),
+        appCouponService.getMyCoupons(tenant.id, 'USABLE'),
+        appCouponService.getMyCoupons(tenant.id, 'USED'),
+        appCouponService.getMyCoupons(tenant.id, 'EXPIRED'),
+      ]);
 
-    let isMounted = true;
-    async function loadCoupons() {
-      setIsLoading(true);
-      try {
-        const [available, usable, used, expired] = await Promise.all([
-          appCouponService.getAvailableCoupons(activeTenant!.id),
-          appCouponService.getMyCoupons(activeTenant!.id, 'USABLE'),
-          appCouponService.getMyCoupons(activeTenant!.id, 'USED'),
-          appCouponService.getMyCoupons(activeTenant!.id, 'EXPIRED'),
-        ]);
+      setAvailableCoupons(available);
+      setMyCoupons(usable);
 
-        if (!isMounted) return;
-        setAvailableCoupons(available);
-        setMyCoupons(usable);
-        
-        // Combine USED and EXPIRED into expiredCoupons tab
-        setExpiredCoupons([...used, ...expired]);
-      } catch (e) {
-        if (isMounted) {
-          showToast('获取优惠券列表失败', 'error');
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
+      // Combine USED and EXPIRED into expiredCoupons tab
+      setExpiredCoupons([...used, ...expired]);
+    } catch (e) {
+      const message = getErrorMessage(e, '获取优惠券列表失败');
+      setError(message);
+      setAvailableCoupons([]);
+      setMyCoupons([]);
+      setExpiredCoupons([]);
+      showToast(message, 'error');
+    } finally {
+      setIsLoading(false);
     }
+  }, [showToast]);
 
-    void loadCoupons();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTenant]);
+  useEffect(() => {
+    if (!activeTenant) return;
+    void loadCoupons(activeTenant);
+  }, [activeTenant, loadCoupons]);
+
+  const handleRetry = () => {
+    if (activeTenant) {
+      void loadCoupons(activeTenant);
+      return;
+    }
+    void loadTenants();
+  };
 
   const handleClaim = async (coupon: CouponTemplate) => {
     if (!activeTenant) return;
@@ -120,7 +134,7 @@ export default function CouponCenter() {
       // Automatically switch to My Coupons tab
       setActiveTab('my');
     } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : '领取失败，请稍后重试';
+      const errMsg = getErrorMessage(e, '领取失败，请稍后重试');
       showToast(errMsg, 'error');
     } finally {
       setIsSubmitting(null);
@@ -158,6 +172,23 @@ export default function CouponCenter() {
           </div>
         </div>
       </header>
+
+      {error && (
+        <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 flex-none" />
+            <span className="text-sm font-bold">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
+        </div>
+      )}
 
       {/* Multi-Tenant / Shop selector dropdown */}
       {tenants.length > 1 && (
