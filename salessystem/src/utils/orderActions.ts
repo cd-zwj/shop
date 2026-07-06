@@ -35,18 +35,21 @@ export function getPaymentFailureActions(state: PaymentFlowState, orderNo?: stri
     return {
       primaryLabel: '返回订单列表',
       showRepurchase: false,
+      showRetryPayment: false,
     };
   }
 
   if (state === 'failed' || state === 'closed' || state === 'expired') {
     return {
-      primaryLabel: '查看订单详情',
+      primaryLabel: '重新支付',
       showRepurchase: true,
+      showRetryPayment: true,
     };
   }
 
   return {
     primaryLabel: '查看订单详情',
     showRepurchase: false,
+    showRetryPayment: false,
   };
 }

@@ -30,6 +30,7 @@ import {
   readAlipayPaymentPayload,
   clearAlipayPaymentPayload,
   openAlipayPaymentWindow,
+  saveAlipayPaymentPayload,
 } from '../utils/alipayPayment';
 
 export default function PaymentStatus() {
@@ -45,6 +46,7 @@ export default function PaymentStatus() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isRepurchasing, setIsRepurchasing] = useState(false);
+  const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [error, setError] = useState('');
 
   const effectiveBillNo = paymentBill?.billNo ?? billNo;
@@ -176,6 +178,7 @@ export default function PaymentStatus() {
     () => getPaymentFailureActions(statusPresentation.state, orderNo),
     [orderNo, statusPresentation.state],
   );
+  const primaryActionLabel = source === 'order' ? failureActions.primaryLabel : content.primaryAction;
 
   async function handleRepurchase() {
     if (!orderNo || isRepurchasing) {
@@ -201,6 +204,43 @@ export default function PaymentStatus() {
       );
     } finally {
       setIsRepurchasing(false);
+    }
+  }
+
+  async function handleRetryPayment() {
+    if (!orderNo || isRetryingPayment) {
+      return;
+    }
+
+    setIsRetryingPayment(true);
+    setError('');
+
+    try {
+      const payment = await appOrderService.repayOrder(orderNo, 'ALIPAY_PAGE');
+      if (!payment.paymentBillNo) {
+        throw new Error('当前订单未返回有效支付单号');
+      }
+
+      if (payment.externalPayUrl) {
+        const isOpened = openAlipayPaymentWindow(payment.externalPayUrl);
+        if (!isOpened) {
+          saveAlipayPaymentPayload({
+            billNo: payment.paymentBillNo,
+            orderNo: payment.orderNo ?? orderNo,
+            source: 'order',
+            payHtml: payment.externalPayUrl,
+            amount: payment.totalAmount,
+          });
+        }
+      }
+
+      navigate(
+        `/payment/status?billNo=${encodeURIComponent(payment.paymentBillNo)}&orderNo=${encodeURIComponent(payment.orderNo ?? orderNo)}&source=order&reused=${payment.reusedPaymentBill ? '1' : '0'}`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '重新支付失败，请稍后重试');
+    } finally {
+      setIsRetryingPayment(false);
     }
   }
 
@@ -290,12 +330,22 @@ export default function PaymentStatus() {
             </button>
           )}
           <button
-            onClick={() => (content.primaryPath ? navigate(content.primaryPath) : handleRefresh())}
-            disabled={isRefreshing}
+            onClick={() => {
+              if (failureActions.showRetryPayment && source === 'order') {
+                void handleRetryPayment();
+                return;
+              }
+              if (content.primaryPath) {
+                navigate(content.primaryPath);
+                return;
+              }
+              void handleRefresh();
+            }}
+            disabled={isRefreshing || isRetryingPayment}
             className="flex w-full items-center justify-center gap-3 rounded-[24px] bg-primary py-5 text-lg font-black text-white shadow-2xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {content.primaryAction}
-            {statusKey === 'pending' ? <RefreshCcw size={20} className={cn(isRefreshing && 'animate-spin')} /> : <ShieldCheck size={20} />}
+            {isRetryingPayment ? '正在发起支付...' : primaryActionLabel}
+            {statusKey === 'pending' || isRetryingPayment ? <RefreshCcw size={20} className={cn((isRefreshing || isRetryingPayment) && 'animate-spin')} /> : <ShieldCheck size={20} />}
           </button>
           {source === 'order' && failureActions.showRepurchase && (
             <button
