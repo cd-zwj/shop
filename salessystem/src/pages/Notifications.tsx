@@ -84,7 +84,7 @@ export default function Notifications() {
     void loadNotifications(currentPage, activeFilter);
   }, [activeFilter, currentPage, loadNotifications]);
 
-  const handleMarkRead = async (id: number) => {
+  const handleMarkRead = async (id: number): Promise<boolean> => {
     try {
       await appNotificationService.markRead(id);
       setNotifications((prev) =>
@@ -93,9 +93,19 @@ export default function Notifications() {
         )
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
+      return true;
     } catch (err) {
       showToast(err instanceof Error ? err.message : '标记已读失败', 'error');
+      return false;
     }
+  };
+
+  const handleNotificationAction = async (notification: AppNotification, path: string) => {
+    if (notification.readStatus === 0) {
+      const marked = await handleMarkRead(notification.id);
+      if (!marked) return;
+    }
+    navigate(path);
   };
 
   const handleMarkAllRead = async () => {
@@ -276,8 +286,7 @@ export default function Notifications() {
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (isUnread) void handleMarkRead(notification.id);
-                            navigate(action.path);
+                            void handleNotificationAction(notification, action.path);
                           }}
                           className="mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition-all hover:border-primary hover:text-primary"
                         >
