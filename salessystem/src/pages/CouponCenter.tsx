@@ -457,12 +457,22 @@ export default function CouponCenter() {
                           <span className="text-[11px] font-semibold text-slate-400">
                             {trace.hint}
                           </span>
-                          <button
-                            disabled
-                            className="px-5 py-2 rounded-full text-xs font-black tracking-wide bg-slate-100 text-slate-400 cursor-not-allowed border"
-                          >
-                            已失效
-                          </button>
+                          {trace.actionPath ? (
+                            <button
+                              type="button"
+                              onClick={() => navigate(trace.actionPath!)}
+                              className="px-5 py-2 rounded-full text-xs font-black tracking-wide bg-white text-primary border border-primary/20 shadow-sm hover:bg-primary/5 active:scale-95 transition-all"
+                            >
+                              {trace.actionLabel}
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="px-5 py-2 rounded-full text-xs font-black tracking-wide bg-slate-100 text-slate-400 cursor-not-allowed border"
+                            >
+                              已失效
+                            </button>
+                          )}
                         </div>
                       </div>
                       </div>

@@ -393,6 +393,26 @@ class CouponServiceImplTest {
     }
 
     @Test
+    void listUserCouponsShouldExposeOrderNoForUsedCouponTrace() {
+        CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
+        UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
+        CouponServiceImpl service = service(templateMapper, userCouponMapper, mock(CouponReceiveRecordMapper.class),
+                mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
+        UserCoupon usedCoupon = receivedCoupon();
+        usedCoupon.setCouponStatus(UserCouponStatusEnum.USED.name());
+        usedCoupon.setOrderNo("SO202607060001");
+        usedCoupon.setUseTime(LocalDateTime.now());
+
+        when(userCouponMapper.selectList(any())).thenReturn(List.of(usedCoupon));
+        when(templateMapper.selectBatchIds(anyCollection())).thenReturn(List.of(activeTemplate()));
+
+        List<AppUserCouponVO> result = service.listUserCoupons(9L, 100L, UserCouponStatusEnum.USED.name());
+
+        assertEquals(1, result.size());
+        assertEquals("SO202607060001", result.get(0).getOrderNo());
+    }
+
+    @Test
     void resolveCouponCandidateShouldUseOnlyMatchingProductAmount() {
         CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
         CouponScopeMapper scopeMapper = mock(CouponScopeMapper.class);

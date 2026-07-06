@@ -133,4 +133,30 @@ describe('assetTracePresentation', () => {
     expect(presentation.actionPath).toBeUndefined();
     expect(presentation.tone).toBe('neutral');
   });
+
+  it('links used coupon lifecycle to the order that consumed it', () => {
+    const coupon: UserCoupon = {
+      id: 6,
+      couponNo: 'CP20260706003',
+      couponTemplateId: 42,
+      tenantId: 10,
+      status: 'USED',
+      name: '满减券',
+      couponType: 'FIXED',
+      thresholdAmount: 100,
+      discountAmount: 20,
+      discountRate: null,
+      maxDiscountAmount: null,
+      receiveTime: '2026-07-01T09:00:00',
+      expireTime: '2026-07-31T23:59:59',
+      usedTime: '2026-07-06T13:10:00',
+      orderNo: 'SO202607060001',
+    };
+
+    const presentation = getCouponTracePresentation(coupon);
+
+    expect(presentation.source).toBe('使用订单 SO202607060001');
+    expect(presentation.actionLabel).toBe('查看订单');
+    expect(presentation.actionPath).toBe('/order/SO202607060001');
+  });
 });

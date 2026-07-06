@@ -35,6 +35,7 @@ export interface UserCoupon {
   receiveTime: string;
   expireTime: string;
   usedTime: string | null;
+  orderNo?: string | null;
 }
 
 export interface CouponReceiveResult {

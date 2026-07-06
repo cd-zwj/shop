@@ -988,6 +988,7 @@ public class CouponServiceImpl implements CouponService {
         vo.setTemplateId(coupon.getTemplateId());
         vo.setTenantId(coupon.getTenantId());
         vo.setCouponStatus(coupon.getCouponStatus());
+        vo.setOrderNo(coupon.getOrderNo());
         vo.setReceiveTime(coupon.getReceiveTime());
         vo.setExpireTime(coupon.getExpireTime());
         vo.setUseTime(coupon.getUseTime());

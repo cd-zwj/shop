@@ -20,6 +20,8 @@ public class AppUserCouponVO {
     private Long tenantId;
     /** 优惠券状态（如 AVAILABLE-可用、USED-已使用、EXPIRED-已过期） */
     private String couponStatus;
+    /** 使用或锁定该优惠券的订单号，用于用户侧追溯 */
+    private String orderNo;
     /** 优惠券名称 */
     private String templateName;
     /** 优惠券类型（如 FIXED-满减、DISCOUNT-折扣） */

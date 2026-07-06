@@ -66,10 +66,13 @@ export function getGrowthTracePresentation(log: GrowthLog): AssetTracePresentati
 
 export function getCouponTracePresentation(coupon: UserCoupon): AssetTracePresentation {
   if (coupon.status === 'USED') {
+    const orderNo = coupon.orderNo?.trim();
     return {
-      source: `领取时间 ${formatDateTime(coupon.receiveTime)}`,
+      source: orderNo ? `使用订单 ${orderNo}` : `领取时间 ${formatDateTime(coupon.receiveTime)}`,
       status: '已使用',
       hint: `使用时间 ${formatDateTime(coupon.usedTime)}`,
+      actionLabel: orderNo ? '查看订单' : undefined,
+      actionPath: orderNo ? buildOrderDetailPath(orderNo) : undefined,
       tone: 'neutral',
     };
   }
