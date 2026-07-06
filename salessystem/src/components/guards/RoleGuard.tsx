@@ -8,13 +8,18 @@ import {
   getMerchantSession,
   getPlatformUserProfile,
 } from '../../utils/authSession';
+import {
+  hasMerchantPermission,
+  type MerchantPermission,
+} from '../../utils/merchantPermissions';
 
 interface RoleGuardProps {
   children: ReactNode;
   allowedRoles: AuthRole[];
+  merchantPermission?: MerchantPermission;
 }
 
-export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
+export default function RoleGuard({ children, allowedRoles, merchantPermission }: RoleGuardProps) {
   const { currentRole, currentUser, merchantSession, adminSession } = useAuth();
   const effectiveRole = currentRole ?? getCurrentAuthRole();
   const storedSession =
@@ -50,6 +55,13 @@ export default function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
   }
   if (effectiveRole === 'admin' && !adminSession && !storedSession) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (effectiveRole === 'merchant' && merchantPermission) {
+    const session = merchantSession ?? (storedSession && 'employeeRole' in storedSession ? storedSession : null);
+    if (!hasMerchantPermission(session?.employeeRole, merchantPermission)) {
+      return <Navigate to="/merchant" replace />;
+    }
   }
 
   return <>{children}</>;

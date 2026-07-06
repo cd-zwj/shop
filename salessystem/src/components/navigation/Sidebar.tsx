@@ -26,11 +26,12 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
+import { filterMerchantPermissionItems, type MerchantPermission } from '../../utils/merchantPermissions';
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, merchantSession } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
@@ -50,25 +51,32 @@ export function Sidebar() {
     { icon: Bot, label: 'AI 治理助手', path: '/admin/ai' },
   ];
 
-  const merchantMenu = [
-    { icon: LayoutDashboard, label: '商户工作台', path: '/merchant' },
-    { icon: Store, label: '门店管理', path: '/merchant/stores' },
-    { icon: Package, label: '我的商品', path: '/merchant/products' },
-    { icon: FolderTree, label: '商品形态字典', path: '/merchant/product-taxonomy' },
-    { icon: ShoppingBag, label: '订单管理', path: '/merchant/orders' },
-    { icon: Wallet, label: '财务结算', path: '/merchant/finance' },
-    { icon: Ticket, label: '优惠券管理', path: '/merchant/marketing/coupons' },
-    { icon: Sparkles, label: '促销活动管理', path: '/merchant/marketing/activities' },
-    { icon: Users, label: '会员等级标签', path: '/merchant/marketing/members' },
-    { icon: HeartHandshake, label: '售后退款审核', path: '/merchant/refunds' },
-    { icon: Settings2, label: '规则配置', path: '/merchant/rules' },
-    { icon: ArrowUpRight, label: '提现中心', path: '/merchant/withdrawals' },
-    { icon: Bot, label: 'AI 经营助手', path: '/merchant/ai' },
+  const merchantMenu: Array<{
+    icon: typeof LayoutDashboard;
+    label: string;
+    path: string;
+    permission: MerchantPermission;
+  }> = [
+    { icon: LayoutDashboard, label: '商户工作台', path: '/merchant', permission: 'dashboard:view' },
+    { icon: Store, label: '门店管理', path: '/merchant/stores', permission: 'store:manage' },
+    { icon: Package, label: '我的商品', path: '/merchant/products', permission: 'product:manage' },
+    { icon: FolderTree, label: '商品形态字典', path: '/merchant/product-taxonomy', permission: 'product:manage' },
+    { icon: ShoppingBag, label: '订单管理', path: '/merchant/orders', permission: 'order:manage' },
+    { icon: Wallet, label: '财务结算', path: '/merchant/finance', permission: 'finance:view' },
+    { icon: Ticket, label: '优惠券管理', path: '/merchant/marketing/coupons', permission: 'marketing:manage' },
+    { icon: Sparkles, label: '促销活动管理', path: '/merchant/marketing/activities', permission: 'marketing:manage' },
+    { icon: Users, label: '会员等级标签', path: '/merchant/marketing/members', permission: 'marketing:manage' },
+    { icon: HeartHandshake, label: '售后退款审核', path: '/merchant/refunds', permission: 'refund:manage' },
+    { icon: Settings2, label: '规则配置', path: '/merchant/rules', permission: 'rule:manage' },
+    { icon: ArrowUpRight, label: '提现中心', path: '/merchant/withdrawals', permission: 'withdrawal:manage' },
+    { icon: Bot, label: 'AI 经营助手', path: '/merchant/ai', permission: 'ai:use' },
   ];
 
   if (!isAdmin && !isMerchant) return null;
 
-  const currentMenu = isAdmin ? adminMenu : merchantMenu;
+  const currentMenu = isAdmin
+    ? adminMenu
+    : filterMerchantPermissionItems(merchantSession?.employeeRole, merchantMenu);
   const title = isAdmin ? '管理控制台' : '商户中心';
   const subtitle = isAdmin ? '全局治理' : '店铺管理';
 

@@ -1,9 +1,10 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import AuthGuard from '../components/guards/AuthGuard';
 import GuestGuard from '../components/guards/GuestGuard';
 import RoleGuard from '../components/guards/RoleGuard';
 import NotFoundPage from '../components/NotFoundPage';
+import type { MerchantPermission } from '../utils/merchantPermissions';
 
 const Home = lazy(() => import('../pages/Home'));
 const Discovery = lazy(() => import('../pages/Discovery'));
@@ -76,6 +77,16 @@ function PageLoader() {
   );
 }
 
+function merchantRoute(element: ReactNode, permission: MerchantPermission) {
+  return (
+    <AuthGuard>
+      <RoleGuard allowedRoles={['merchant']} merchantPermission={permission}>
+        {element}
+      </RoleGuard>
+    </AuthGuard>
+  );
+}
+
 export function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -126,23 +137,23 @@ export function AppRoutes() {
         <Route path="/admin/documents" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDocuments /></RoleGuard></AuthGuard>} />
         <Route path="/admin/ai" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AIAssistant /></RoleGuard></AuthGuard>} />
 
-        <Route path="/merchant" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantDashboard /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/stores" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantStores /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/products" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProducts /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/product-taxonomy" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductTaxonomy /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/product/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductDetail /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/product/new" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/product/edit/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantProductEdit /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/orders" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrders /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/order/:id" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantOrderDetail /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/finance" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantFinance /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/marketing/coupons" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantCoupons /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/marketing/activities" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantActivities /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/marketing/members" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantMembers /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/refunds" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRefunds /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/rules" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantRules /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><MerchantWithdraw /></RoleGuard></AuthGuard>} />
-        <Route path="/merchant/ai" element={<AuthGuard><RoleGuard allowedRoles={['merchant']}><AIAssistant /></RoleGuard></AuthGuard>} />
+        <Route path="/merchant" element={merchantRoute(<MerchantDashboard />, 'dashboard:view')} />
+        <Route path="/merchant/stores" element={merchantRoute(<MerchantStores />, 'store:manage')} />
+        <Route path="/merchant/products" element={merchantRoute(<MerchantProducts />, 'product:manage')} />
+        <Route path="/merchant/product-taxonomy" element={merchantRoute(<MerchantProductTaxonomy />, 'product:manage')} />
+        <Route path="/merchant/product/:id" element={merchantRoute(<MerchantProductDetail />, 'product:manage')} />
+        <Route path="/merchant/product/new" element={merchantRoute(<MerchantProductEdit />, 'product:manage')} />
+        <Route path="/merchant/product/edit/:id" element={merchantRoute(<MerchantProductEdit />, 'product:manage')} />
+        <Route path="/merchant/orders" element={merchantRoute(<MerchantOrders />, 'order:manage')} />
+        <Route path="/merchant/order/:id" element={merchantRoute(<MerchantOrderDetail />, 'order:manage')} />
+        <Route path="/merchant/finance" element={merchantRoute(<MerchantFinance />, 'finance:view')} />
+        <Route path="/merchant/marketing/coupons" element={merchantRoute(<MerchantCoupons />, 'marketing:manage')} />
+        <Route path="/merchant/marketing/activities" element={merchantRoute(<MerchantActivities />, 'marketing:manage')} />
+        <Route path="/merchant/marketing/members" element={merchantRoute(<MerchantMembers />, 'marketing:manage')} />
+        <Route path="/merchant/refunds" element={merchantRoute(<MerchantRefunds />, 'refund:manage')} />
+        <Route path="/merchant/rules" element={merchantRoute(<MerchantRules />, 'rule:manage')} />
+        <Route path="/merchant/withdrawals" element={merchantRoute(<MerchantWithdraw />, 'withdrawal:manage')} />
+        <Route path="/merchant/ai" element={merchantRoute(<AIAssistant />, 'ai:use')} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>

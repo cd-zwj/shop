@@ -10,7 +10,15 @@ vi.mock('../../context/AuthContext', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
-function renderGuard() {
+function renderGuard({
+  initialPath = '/admin',
+  allowedRoles = ['admin'],
+  merchantPermission,
+}: {
+  initialPath?: string;
+  allowedRoles?: Array<'user' | 'merchant' | 'admin'>;
+  merchantPermission?: import('../../utils/merchantPermissions').MerchantPermission;
+} = {}) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -18,10 +26,11 @@ function renderGuard() {
   root.render(
     React.createElement(
       MemoryRouter,
-      { initialEntries: ['/admin'] },
+      { initialEntries: [initialPath] },
       React.createElement(RoleGuard, {
-        allowedRoles: ['admin'],
-        children: React.createElement('div', null, 'admin content'),
+        allowedRoles,
+        merchantPermission,
+        children: React.createElement('div', null, 'protected content'),
       }),
     ),
   );
@@ -68,7 +77,41 @@ describe('RoleGuard', () => {
     const { root, container } = renderGuard();
 
     await vi.waitFor(() => {
-      expect(container.textContent).toContain('admin content');
+      expect(container.textContent).toContain('protected content');
+    });
+
+    cleanup(root, container);
+  });
+
+  it('财务员工访问商品模块时会被商户权限拦截', async () => {
+    const merchantSession = {
+      token: 'token',
+      expiresIn: 3600,
+      platformUserId: 1,
+      username: 'finance',
+      tenantId: 2,
+      tenantName: '测试商户',
+      employeeRole: 'FINANCE',
+      tenants: [],
+    };
+    window.localStorage.setItem('salessystem:current-role', 'merchant');
+    window.localStorage.setItem('salessystem:merchant:session', JSON.stringify(merchantSession));
+
+    mockUseAuth.mockReturnValue({
+      currentRole: 'merchant',
+      currentUser: null,
+      merchantSession,
+      adminSession: null,
+    });
+
+    const { root, container } = renderGuard({
+      initialPath: '/merchant/products',
+      allowedRoles: ['merchant'],
+      merchantPermission: 'product:manage',
+    });
+
+    await vi.waitFor(() => {
+      expect(container.textContent).not.toContain('protected content');
     });
 
     cleanup(root, container);
