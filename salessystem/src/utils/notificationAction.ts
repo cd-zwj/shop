@@ -1,12 +1,6 @@
-import type { AppNotification } from '../types/addressNotification';
+import type { AppNotification, AppNotificationActionType } from '../types/addressNotification';
 
-export type NotificationActionType =
-  | 'ORDER_DETAIL'
-  | 'REFUND_DETAIL'
-  | 'ORDER_LIST'
-  | 'COUPON_CENTER'
-  | 'WALLET'
-  | 'RECHARGE_STATUS';
+export type NotificationActionType = AppNotificationActionType;
 
 export interface NotificationAction {
   type: NotificationActionType;

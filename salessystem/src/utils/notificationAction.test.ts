@@ -4,7 +4,7 @@ import { getNotificationAction } from './notificationAction';
 
 describe('notificationAction', () => {
   it('uses backend action fields when present', () => {
-    const action = getNotificationAction(notification({
+    const action = getNotificationAction(backendNotification({
       actionType: 'ORDER_DETAIL',
       actionLabel: '查看订单',
       actionUrl: '/order/SO001',
@@ -14,6 +14,22 @@ describe('notificationAction', () => {
       type: 'ORDER_DETAIL',
       label: '查看订单',
       path: '/order/SO001',
+    });
+  });
+
+  it('accepts backend wallet and recharge action fields without content fallback', () => {
+    const action = getNotificationAction(notification({
+      category: 'SYSTEM',
+      content: '充值结果已更新',
+      actionType: 'RECHARGE_STATUS',
+      actionLabel: '查看充值',
+      actionUrl: '/payment/status?bizNo=WR202607060001&source=recharge',
+    }));
+
+    expect(action).toEqual({
+      type: 'RECHARGE_STATUS',
+      label: '查看充值',
+      path: '/payment/status?bizNo=WR202607060001&source=recharge',
     });
   });
 
@@ -89,6 +105,19 @@ function notification(overrides: Partial<AppNotification>): AppNotification {
     readTime: null,
     createTime: null,
     updateTime: null,
+    ...overrides,
+  };
+}
+
+function backendNotification(overrides: Partial<AppNotification>): AppNotification {
+  return {
+    id: 1,
+    title: '通知',
+    content: '内容',
+    category: 'SYSTEM',
+    readStatus: 0,
+    readTime: null,
+    createTime: null,
     ...overrides,
   };
 }
