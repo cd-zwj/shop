@@ -6,6 +6,7 @@ import {
   Eye,
   Filter,
   Package,
+  RefreshCw,
   Search,
   Truck,
   XCircle,
@@ -16,6 +17,7 @@ import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrder } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
+import { getErrorMessage } from '../../utils/errorMessage';
 import { getOrderLifecyclePresentation, getOrderToneClass } from '../../utils/orderLifecycle';
 
 const ORDER_TABS = [
@@ -42,6 +44,7 @@ export default function MerchantOrders() {
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const tabFilters = useMemo(
     () => ({
@@ -72,6 +75,8 @@ export default function MerchantOrders() {
     let isMounted = true;
 
     async function loadOrders() {
+      setIsLoading(true);
+      setError('');
       if (!tenantId) {
         setError('当前商户会话缺少 tenantId，请重新登录');
         setIsLoading(false);
@@ -88,9 +93,10 @@ export default function MerchantOrders() {
         if (!isMounted) return;
         setOrders(result.records ?? []);
         setError('');
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
-        setError('订单列表加载失败，请稍后重试');
+        setOrders([]);
+        setError(getErrorMessage(loadError, '订单列表加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -103,7 +109,7 @@ export default function MerchantOrders() {
     return () => {
       isMounted = false;
     };
-  }, [activeTab, keyword, tabFilters, tenantId]);
+  }, [activeTab, keyword, reloadKey, tabFilters, tenantId]);
 
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
@@ -121,7 +127,17 @@ export default function MerchantOrders() {
 
       {error && (
         <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-          {error}
+          <div className="flex items-center justify-between gap-4">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setReloadKey((key) => key + 1)}
+              className="inline-flex shrink-0 items-center gap-1.5 font-black text-red-700"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              重试
+            </button>
+          </div>
         </div>
       )}
 
