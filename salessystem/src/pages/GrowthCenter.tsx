@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Clock, TrendingUp } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Clock, RefreshCw, TrendingUp } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appGrowthService } from '../services/modules/appGrowth';
 import type { GrowthOverview, GrowthLog } from '../types/growth';
 import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getGrowthTracePresentation } from '../utils/assetTracePresentation';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function GrowthCenter() {
   const navigate = useNavigate();
@@ -18,17 +19,24 @@ export default function GrowthCenter() {
   const [overview, setOverview] = useState<GrowthOverview | null>(null);
   const [logs, setLogs] = useState<GrowthLog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
-  const loadData = async (page = 1) => {
+  const loadData = useCallback(async (page = 1) => {
     if (!tenantId || isNaN(tenantId)) {
-      showToast('缺少商户参数', 'error');
+      const message = '缺少商户参数';
+      setError(message);
+      showToast(message, 'error');
       setIsLoading(false);
       return;
     }
+
+    setIsLoading(true);
+    setError(null);
+
     try {
       if (page === 1) {
         const overviewData = await appGrowthService.getGrowthOverview(tenantId);
@@ -40,16 +48,21 @@ export default function GrowthCenter() {
       setTotalPages(logsData.pages ?? 1);
       setCurrentPage(page);
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : '获取成长值数据失败';
+      const message = getErrorMessage(e, '获取成长值数据失败');
+      setError(message);
+      setOverview(null);
+      setLogs([]);
+      setTotalPages(1);
+      setCurrentPage(1);
       showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, tenantId]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const handlePageChange = (page: number) => {
     if (page < 1 || page > totalPages || page === currentPage) return;
@@ -96,6 +109,23 @@ export default function GrowthCenter() {
           </div>
         </div>
       </header>
+
+      {error && (
+        <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 flex-none" />
+            <span className="text-sm font-bold">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
+        </div>
+      )}
 
       {/* Growth Overview Card */}
       <section className="relative overflow-hidden bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-900/10">
