@@ -22,6 +22,7 @@ export type DeliveryStatus =
 
 export interface PurchaseRecord {
   id: number;
+  tenantId?: number | null;
   orderId: number;
   orderNo: string;
   orderItemId: number;

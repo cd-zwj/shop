@@ -45,11 +45,26 @@ describe('purchaseDelivery', () => {
   it('shows contact action when revoke failed', () => {
     const presentation = getPurchaseDeliveryPresentation({
       ...baseRecord,
+      tenantId: 9,
       status: 'REVOKE_FAILED',
       failReason: '卡密作废接口超时',
     });
 
     expect(presentation.guidance).toContain('卡密作废接口超时');
     expect(presentation.primaryAction?.label).toBe('联系商户');
+    expect(presentation.primaryAction?.value).toBe('/merchant-store/9');
+  });
+
+  it('keeps contact action without route when tenant id is missing', () => {
+    const presentation = getPurchaseDeliveryPresentation({
+      ...baseRecord,
+      status: 'FAILED',
+    });
+
+    expect(presentation.primaryAction).toEqual({
+      kind: 'contact',
+      label: '联系商户',
+      value: undefined,
+    });
   });
 });

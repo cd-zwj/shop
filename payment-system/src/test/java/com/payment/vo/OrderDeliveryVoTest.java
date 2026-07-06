@@ -11,6 +11,7 @@ class OrderDeliveryVoTest {
     void fromShouldExposeProductNameSnapshotForPurchaseList() {
         OrderDeliveryRecord record = new OrderDeliveryRecord();
         record.setId(11L);
+        record.setTenantId(9L);
         record.setOrderNo("SO202607050001");
         record.setProductId(22L);
         record.setProductName("课程资料包");
@@ -19,6 +20,7 @@ class OrderDeliveryVoTest {
 
         OrderDeliveryVO vo = OrderDeliveryVO.from(record);
 
+        assertThat(vo.getTenantId()).isEqualTo(9L);
         assertThat(vo.getProductName()).isEqualTo("课程资料包");
     }
 }

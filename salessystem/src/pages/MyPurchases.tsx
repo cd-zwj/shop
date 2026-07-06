@@ -152,6 +152,7 @@ export default function MyPurchases() {
               onConfirm={() => handleConfirm(item.id)}
               onCopy={handleCopy}
               onOpenOrder={() => navigate(`/order/${encodeURIComponent(item.orderNo)}`)}
+              onContactMerchant={(path) => navigate(path)}
             />
           ))
         )}
@@ -169,9 +170,10 @@ interface CardProps {
   onConfirm: () => void;
   onCopy: (text: string) => void;
   onOpenOrder: () => void;
+  onContactMerchant: (path: string) => void;
 }
 
-function PurchaseCard({ record, onConfirm, onCopy, onOpenOrder }: CardProps) {
+function PurchaseCard({ record, onConfirm, onCopy, onOpenOrder, onContactMerchant }: CardProps) {
   const payload = useMemo(() => parseDeliveryPayload(record.payload), [record.payload]);
   const presentation = useMemo(() => getPurchaseDeliveryPresentation(record), [record]);
   const statusStyle = STATUS_STYLE[record.status] ?? STATUS_STYLE.PENDING;
@@ -213,6 +215,7 @@ function PurchaseCard({ record, onConfirm, onCopy, onOpenOrder }: CardProps) {
             onConfirm={onConfirm}
             onCopy={onCopy}
             onOpenOrder={onOpenOrder}
+            onContactMerchant={onContactMerchant}
           />
         </div>
       )}
@@ -337,11 +340,13 @@ function PrimaryActionButton({
   onConfirm,
   onCopy,
   onOpenOrder,
+  onContactMerchant,
 }: {
   action?: ReturnType<typeof getPurchaseDeliveryPresentation>['primaryAction'];
   onConfirm: () => void;
   onCopy: (text: string) => void;
   onOpenOrder: () => void;
+  onContactMerchant: (path: string) => void;
 }) {
   if (!action) {
     return (
@@ -388,6 +393,18 @@ function PrimaryActionButton({
         className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
+        {action.label}
+      </button>
+    );
+  }
+
+  if (action.kind === 'contact') {
+    return (
+      <button
+        onClick={() => action.value ? onContactMerchant(action.value) : onOpenOrder()}
+        className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-black text-white hover:bg-slate-800"
+      >
+        <ExternalLink className="h-3.5 w-3.5" />
         {action.label}
       </button>
     );

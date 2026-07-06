@@ -15,6 +15,7 @@ public class OrderDeliveryVO implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private Long id;
+    private Long tenantId;
     private Long orderId;
     private String orderNo;
     private Long orderItemId;
@@ -36,6 +37,7 @@ public class OrderDeliveryVO implements Serializable {
         }
         OrderDeliveryVO vo = new OrderDeliveryVO();
         vo.setId(entity.getId());
+        vo.setTenantId(entity.getTenantId());
         vo.setOrderId(entity.getOrderId());
         vo.setOrderNo(entity.getOrderNo());
         vo.setOrderItemId(entity.getOrderItemId());

@@ -42,11 +42,12 @@ export function getPurchaseDeliveryPresentation(record: PurchaseRecord): Purchas
   const subtitle = `${typeLabel} · 订单 ${record.orderNo}`;
 
   if (record.status === 'FAILED' || record.status === 'REVOKE_FAILED') {
+    const merchantPath = record.tenantId ? `/merchant-store/${record.tenantId}` : undefined;
     return {
       title,
       subtitle,
       guidance: record.failReason ? `处理失败：${record.failReason}` : '交付或撤销处理失败，请联系商户处理。',
-      primaryAction: { kind: 'contact', label: '联系商户' },
+      primaryAction: { kind: 'contact', label: '联系商户', value: merchantPath },
     };
   }
 
