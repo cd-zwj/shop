@@ -28,19 +28,11 @@ import type { CouponTemplate, UserCoupon } from '../types/coupon';
 import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { validateCartItemsAgainstCatalog } from '../utils/cartValidation';
-
-const calculateDiscount = (coupon: { couponType: 'FIXED' | 'RATE'; discountAmount: number | null; discountRate: number | null; maxDiscountAmount: number | null }, subtotal: number) => {
-  if (coupon.couponType === 'FIXED') {
-    return coupon.discountAmount ?? 0;
-  } else {
-    const rate = coupon.discountRate ?? 1;
-    const discount = subtotal * (1 - rate);
-    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
-      return coupon.maxDiscountAmount;
-    }
-    return discount;
-  }
-};
+import {
+  getSelectableCartCoupons,
+  resolveSelectedCartCoupon,
+  type SelectedCartCoupon,
+} from '../utils/cartCoupons';
 
 function getStockValidationMessage(item: { name: string; stock?: number | null; quantity: number }) {
   if (typeof item.stock !== 'number') {
@@ -85,12 +77,7 @@ export default function Cart() {
     isLoading: boolean;
   }>>({});
 
-  const [selectedCouponByTenant, setSelectedCouponByTenant] = useState<Record<number, {
-    key: string;
-    type: 'TEMPLATE' | 'OWNED';
-    id: number;
-    name: string;
-  } | null>>({});
+  const [selectedCouponByTenant, setSelectedCouponByTenant] = useState<Record<number, SelectedCartCoupon | null>>({});
 
   const loadedTenantsRef = useRef<Set<number>>(new Set());
 
@@ -195,95 +182,15 @@ export default function Cart() {
   }, [items]);
 
   const getSelectableCoupons = useCallback((tenantId: number, subtotal: number) => {
-    const data = couponsByTenant[tenantId];
-    if (!data) return [];
-
-    const options: Array<{
-      key: string;
-      id: number;
-      type: 'OWNED' | 'TEMPLATE';
-      name: string;
-      desc: string;
-      discountAmount: number;
-      thresholdAmount: number;
-      isUsable: boolean;
-      reason?: string;
-    }> = [];
-
-    // 1. Add owned coupons
-    data.myUsableCoupons.forEach((coupon) => {
-      const isUsable = subtotal >= coupon.thresholdAmount;
-      const discount = calculateDiscount(coupon, subtotal);
-      
-      options.push({
-        key: `owned-${coupon.id}`,
-        id: coupon.id,
-        type: 'OWNED',
-        name: coupon.name,
-        desc: coupon.couponType === 'FIXED' 
-          ? `满 ¥${coupon.thresholdAmount} 减 ¥${coupon.discountAmount}`
-          : `满 ¥${coupon.thresholdAmount} 打 ${(coupon.discountRate ?? 1) * 10} 折`,
-        discountAmount: discount,
-        thresholdAmount: coupon.thresholdAmount,
-        isUsable,
-        reason: isUsable ? undefined : `还差 ¥${(coupon.thresholdAmount - subtotal).toFixed(2)}`
-      });
-    });
-
-    // 2. Add available templates to claim
-    data.availableTemplates.forEach((template) => {
-      const hasOwnedUsable = data.myUsableCoupons.some((c) => c.couponTemplateId === template.id);
-      if (hasOwnedUsable) return;
-
-      const isUsable = subtotal >= template.thresholdAmount && template.receivable && template.remainingStock > 0;
-      const discount = calculateDiscount(template, subtotal);
-
-      let reason = undefined;
-      if (subtotal < template.thresholdAmount) {
-        reason = `还差 ¥${(template.thresholdAmount - subtotal).toFixed(2)}`;
-      } else if (!template.receivable) {
-        reason = '已领超限';
-      } else if (template.remainingStock <= 0) {
-        reason = '无库存';
-      }
-
-      options.push({
-        key: `template-${template.id}`,
-        id: template.id,
-        type: 'TEMPLATE',
-        name: `${template.name} (可领用)`,
-        desc: template.couponType === 'FIXED' 
-          ? `满 ¥${template.thresholdAmount} 减 ¥${template.discountAmount}`
-          : `满 ¥${template.thresholdAmount} 打 ${(template.discountRate ?? 1) * 10} 折`,
-        discountAmount: discount,
-        thresholdAmount: template.thresholdAmount,
-        isUsable,
-        reason
-      });
-    });
-
-    return options.sort((a, b) => {
-      if (a.isUsable && !b.isUsable) return -1;
-      if (!a.isUsable && b.isUsable) return 1;
-      return b.discountAmount - a.discountAmount;
-    });
+    return getSelectableCartCoupons(couponsByTenant[tenantId], subtotal);
   }, [couponsByTenant]);
 
   const getSelectedCouponDiscount = useCallback((tenantId: number, subtotal: number) => {
-    const sel = selectedCouponByTenant[tenantId];
-    if (!sel) return 0;
-    const data = couponsByTenant[tenantId];
-    if (!data) return 0;
-
-    if (sel.type === 'OWNED') {
-      const coupon = data.myUsableCoupons.find((c) => c.id === sel.id);
-      if (!coupon || subtotal < coupon.thresholdAmount) return 0;
-      return calculateDiscount(coupon, subtotal);
-    } else {
-      const template = data.availableTemplates.find((t) => t.id === sel.id);
-      if (!template || subtotal < template.thresholdAmount) return 0;
-      return calculateDiscount(template, subtotal);
-    }
+    return resolveSelectedCartCoupon(
+      couponsByTenant[tenantId],
+      selectedCouponByTenant[tenantId],
+      subtotal,
+    ).discountAmount;
   }, [selectedCouponByTenant, couponsByTenant]);
 
   const groupedItems = useMemo(() => {
@@ -396,8 +303,20 @@ export default function Cart() {
     );
     if (validation.hasIssues) {
       replaceTenantItems(tenantId, validation.refreshedItems);
-      setSelectedCouponByTenant((prev) => ({ ...prev, [tenantId]: null }));
-      setError(`购物车已刷新：${validation.issues.map((issue) => issue.message).join('；')}。请确认后重新结算。`);
+      const refreshedSubtotal = validation.refreshedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const couponResolution = resolveSelectedCartCoupon(
+        couponsByTenant[tenantId],
+        selectedCouponByTenant[tenantId],
+        refreshedSubtotal,
+      );
+      const couponMessage = selectedCouponByTenant[tenantId] && !couponResolution.isUsable
+        ? `；已选优惠券已取消：${couponResolution.reason ?? '不满足当前购物车条件'}`
+        : '';
+
+      if (selectedCouponByTenant[tenantId] && !couponResolution.isUsable) {
+        setSelectedCouponByTenant((prev) => ({ ...prev, [tenantId]: null }));
+      }
+      setError(`购物车已刷新：${validation.issues.map((issue) => issue.message).join('；')}${couponMessage}。请确认后重新结算。`);
       return;
     }
 
@@ -421,10 +340,10 @@ export default function Cart() {
       const selectedCoupon = selectedCouponByTenant[tenantId];
       
       if (selectedCoupon) {
-        const tenantSubtotal = tenantItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-        const discount = getSelectedCouponDiscount(tenantId, tenantSubtotal);
+        const tenantSubtotal = validation.refreshedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+        const couponResolution = resolveSelectedCartCoupon(couponsByTenant[tenantId], selectedCoupon, tenantSubtotal);
         
-        if (discount > 0) {
+        if (couponResolution.isUsable && couponResolution.discountAmount > 0) {
           if (selectedCoupon.type === 'OWNED') {
             finalCouponId = selectedCoupon.id;
           } else if (selectedCoupon.type === 'TEMPLATE') {
@@ -434,7 +353,8 @@ export default function Cart() {
             showToast('优惠券领用成功！', 'success');
           }
         } else {
-          showToast('所选优惠券不满足门槛条件或已失效', 'error');
+          setSelectedCouponByTenant((prev) => ({ ...prev, [tenantId]: null }));
+          showToast(`所选优惠券已取消：${couponResolution.reason ?? '不满足当前购物车条件'}`, 'error');
           setIsSubmittingTenantId(null);
           return;
         }
@@ -443,7 +363,7 @@ export default function Cart() {
       const walletStrategy = paymentMethod === 'UNIFIED_WALLET' ? 'UNIFIED_ONLY' : 'NO_WALLET';
       const channelCode = paymentMethod === 'UNIFIED_WALLET' ? undefined : paymentMethod;
       const payment = await createOrderForItems(
-        tenantItems,
+        validation.refreshedItems,
         'APP_CART',
         finalCouponId,
         walletStrategy,
