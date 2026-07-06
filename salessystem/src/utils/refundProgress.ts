@@ -14,6 +14,30 @@ type RefundProgressInput = Partial<Pick<
   'refundStatus' | 'rejectReason' | 'refundSuggestion' | 'deliveryStatus'
 >>;
 
+const ACTIVE_REFUND_STATUSES = new Set(['PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED']);
+
+const REFUND_STATUS_LABELS: Record<string, string> = {
+  PENDING: '待审核',
+  APPROVED: '审核通过',
+  PROCESSING: '退款处理中',
+  COMPLETED: '退款完成',
+  FAILED: '退款失败',
+  REJECTED: '已驳回',
+  CANCELLED: '已取消',
+};
+
+export function isRefundApplicationActive(refund: RefundProgressInput) {
+  return ACTIVE_REFUND_STATUSES.has(refund.refundStatus ?? '');
+}
+
+export function getRefundStatusLabel(status?: string | null) {
+  if (!status) {
+    return '未知状态';
+  }
+
+  return REFUND_STATUS_LABELS[status] ?? status;
+}
+
 export function getRefundProgressPresentation(refund: RefundProgressInput): RefundProgressPresentation {
   const status = refund.refundStatus;
   const suggestion = refund.refundSuggestion?.trim();

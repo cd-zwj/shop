@@ -7,7 +7,12 @@ import { useToast } from '../context/ToastContext';
 import type { SalesOrderDetail } from '../types/order';
 import type { Refund } from '../types/refund';
 import { formatCurrency } from '../utils/display';
-import { getRefundProgressPresentation, getRefundToneClass } from '../utils/refundProgress';
+import {
+  getRefundProgressPresentation,
+  getRefundStatusLabel,
+  getRefundToneClass,
+  isRefundApplicationActive,
+} from '../utils/refundProgress';
 
 export default function ApplyRefund() {
   const { orderNo } = useParams<{ orderNo: string }>();
@@ -123,7 +128,7 @@ export default function ApplyRefund() {
     );
   }
 
-  const activeRefund = refunds.find(r => r.refundStatus === 'PENDING' || r.refundStatus === 'APPROVED' || r.refundStatus === 'COMPLETED');
+  const activeRefund = refunds.find(isRefundApplicationActive);
   const maxRefundAmount = orderDetail.order.payableAmount ?? orderDetail.order.totalAmount;
 
   return (
@@ -172,39 +177,29 @@ export default function ApplyRefund() {
           <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-xs font-black uppercase tracking-widest text-slate-400">退款售后历史</h2>
             <div className="flex flex-col gap-4">
-              {refunds.map((refund) => (
-                <div key={refund.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4">
-                  {(() => {
-                    const progress = getRefundProgressPresentation(refund);
-                    return (
-                      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <span className="text-xs font-black uppercase tracking-widest text-slate-400">处理节点</span>
-                          <span className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${getRefundToneClass(progress.tone)}`}>
-                            {progress.label}
-                          </span>
-                        </div>
-                        <p className="text-xs font-medium leading-relaxed text-slate-600">{progress.description}</p>
-                        <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">{progress.nextStep}</p>
-                      </div>
-                    );
-                  })()}
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono text-slate-400">退款单: {refund.refundNo}</span>
-                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-black uppercase tracking-wider ${
-                      refund.refundStatus === 'PENDING' ? 'bg-yellow-50 text-yellow-600' :
-                      refund.refundStatus === 'APPROVED' || refund.refundStatus === 'COMPLETED' ? 'bg-green-50 text-green-600' :
-                      refund.refundStatus === 'REJECTED' ? 'bg-red-50 text-red-600' :
-                      'bg-slate-100 text-slate-500'
-                    }`}>
-                      {refund.refundStatus === 'PENDING' ? '待审核' :
-                       refund.refundStatus === 'APPROVED' ? '审核通过' :
-                       refund.refundStatus === 'COMPLETED' ? '退款完成' :
-                       refund.refundStatus === 'REJECTED' ? '已驳回' : '已取消'}
-                    </span>
-                  </div>
+              {refunds.map((refund) => {
+                const progress = getRefundProgressPresentation(refund);
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                return (
+                  <div key={refund.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 p-4">
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">处理节点</span>
+                        <span className={`rounded-lg border px-2.5 py-1 text-xs font-bold ${getRefundToneClass(progress.tone)}`}>
+                          {progress.label}
+                        </span>
+                      </div>
+                      <p className="text-xs font-medium leading-relaxed text-slate-600">{progress.description}</p>
+                      <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">{progress.nextStep}</p>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-slate-400">退款单: {refund.refundNo}</span>
+                      <span className={`rounded-full border px-2.5 py-0.5 text-xs font-black uppercase tracking-wider ${getRefundToneClass(progress.tone)}`}>
+                        {getRefundStatusLabel(refund.refundStatus)}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <span className="text-slate-500">退款金额</span>
                     <span className="font-bold text-slate-900">{formatCurrency(refund.refundAmount)}</span>
                     
@@ -235,7 +230,8 @@ export default function ApplyRefund() {
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}
