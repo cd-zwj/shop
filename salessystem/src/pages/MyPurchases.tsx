@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Clock, Copy, ExternalLink, Package, Truck } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  Package,
+  RefreshCw,
+  Truck,
+} from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import { appPurchasesService, type DeliveryStatus, type ProductType, type PurchaseRecord } from '../services/modules/appPurchases';
@@ -53,15 +63,19 @@ export default function MyPurchases() {
   const [tab, setTab] = useState<'ALL' | DeliveryStatus>('ALL');
   const [items, setItems] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const orderNoFilter = searchParams.get('orderNo')?.trim() || '';
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await appPurchasesService.list(tab === 'ALL' ? undefined : tab, 1, 50);
       setItems(res.records || []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败';
+      setItems([]);
+      setLoadError(msg);
       showToast(msg, 'error');
     } finally {
       setLoading(false);
@@ -138,6 +152,24 @@ export default function MyPurchases() {
       <section className="flex flex-col gap-3 px-4">
         {loading && items.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">加载中...</div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-red-100 bg-red-50/70 px-4 py-14 text-center shadow-sm">
+            <div className="mb-4 rounded-full bg-white p-4 text-red-500 shadow-sm">
+              <AlertCircle className="h-10 w-10" />
+            </div>
+            <h2 className="text-base font-black text-slate-900">交付记录加载失败</h2>
+            <p className="mt-1.5 max-w-xs text-xs font-semibold leading-relaxed text-slate-500">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition-all hover:bg-slate-800 active:scale-95"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重试
+            </button>
+          </div>
         ) : visibleItems.length === 0 ? (
           <EmptyState
             icon={<Package className="h-6 w-6" />}
