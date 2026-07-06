@@ -53,6 +53,19 @@ export interface MerchantProductFilters {
   status?: string;
 }
 
+export interface MerchantProductChangeLog {
+  id: number;
+  tenantId: number;
+  productId: number;
+  changeType: 'PRICE' | 'STOCK' | string;
+  fieldName: 'price' | 'stock' | string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  operatorId?: number | null;
+  remark?: string | null;
+  createTime?: string | null;
+}
+
 export type MerchantCardKeyStatus = 'AVAILABLE' | 'USED' | 'RETURNED' | 'DISABLED';
 
 export interface MerchantCardKey {

@@ -4,6 +4,7 @@ import type {
   MerchantProduct,
   MerchantCardKey,
   MerchantCardKeySummary,
+  MerchantProductChangeLog,
   MerchantProductFilters,
   MerchantProductUpsertPayload,
 } from '../../types/merchant';
@@ -54,6 +55,18 @@ export const merchantProductService = {
     return request<void>({
       url: `/v1/merchant/tenants/${tenantId}/products/${productId}`,
       method: 'delete',
+      authRole: 'merchant',
+    });
+  },
+
+  listChangeLogs(tenantId: number, productId: number, filters: { current?: number; size?: number } = {}) {
+    return request<PageResult<MerchantProductChangeLog>>({
+      url: `/v1/merchant/tenants/${tenantId}/products/${productId}/change-logs`,
+      method: 'get',
+      params: {
+        current: filters.current ?? 1,
+        size: filters.size ?? 10,
+      },
       authRole: 'merchant',
     });
   },

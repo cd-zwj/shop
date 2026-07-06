@@ -6,6 +6,7 @@ import com.payment.common.Result;
 import com.payment.dto.V1MerchantCardKeySummaryVO;
 import com.payment.dto.V1MerchantCardKeyUploadDTO;
 import com.payment.dto.V1MerchantCardKeyVO;
+import com.payment.dto.V1MerchantProductChangeLogVO;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.service.CardKeyPoolService;
@@ -65,6 +66,27 @@ public class V1MerchantProductController {
     @GetMapping("/{productId}")
     public Result<V1MerchantProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
         return Result.success(v1MerchantProductService.getProduct(tenantId, PlatformSessionHelper.getPlatformUserId(), productId));
+    }
+
+    /**
+     * 分页查询商品价格/库存变更记录。
+     *
+     * @param tenantId  租户 ID
+     * @param productId 商品 ID
+     * @param current   当前页码，默认 1
+     * @param size      每页条数，默认 10
+     * @return 商品变更记录分页列表
+     */
+    @SaCheckPermission(type = "merchant", value = "merchant:product:read")
+    @GetMapping("/{productId}/change-logs")
+    public Result<PageResult<V1MerchantProductChangeLogVO>> listChangeLogs(
+            @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+            @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
+            @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
+        Page<V1MerchantProductChangeLogVO> page = v1MerchantProductService.listProductChangeLogs(
+                tenantId, PlatformSessionHelper.getPlatformUserId(), productId, current, size);
+        return Result.success(PageResult.from(page));
     }
 
     /**

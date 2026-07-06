@@ -6,10 +6,12 @@ import com.payment.common.BusinessException;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
+import com.payment.entity.ProductChangeLog;
 import com.payment.entity.ProductStock;
 import com.payment.entity.Store;
 import com.payment.entity.VirtualProductCategory;
 import com.payment.entity.VirtualProductType;
+import com.payment.mapper.ProductChangeLogMapper;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
 import com.payment.mapper.StoreMapper;
@@ -38,6 +40,7 @@ class V1MerchantProductServiceImplTest {
 
     private ProductMapper productMapper;
     private ProductStockMapper productStockMapper;
+    private ProductChangeLogMapper productChangeLogMapper;
     private StoreMapper storeMapper;
     private VirtualProductTypeMapper virtualProductTypeMapper;
     private VirtualProductCategoryMapper virtualProductCategoryMapper;
@@ -49,12 +52,13 @@ class V1MerchantProductServiceImplTest {
     void setUp() {
         productMapper = mock(ProductMapper.class);
         productStockMapper = mock(ProductStockMapper.class);
+        productChangeLogMapper = mock(ProductChangeLogMapper.class);
         storeMapper = mock(StoreMapper.class);
         virtualProductTypeMapper = mock(VirtualProductTypeMapper.class);
         virtualProductCategoryMapper = mock(VirtualProductCategoryMapper.class);
         supportService = mock(V1MerchantSupportService.class);
         productIndexMessagePublisher = mock(ProductIndexMessagePublisher.class);
-        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, storeMapper, virtualProductTypeMapper, virtualProductCategoryMapper, supportService, productIndexMessagePublisher);
+        service = new V1MerchantProductServiceImpl(productMapper, productStockMapper, productChangeLogMapper, storeMapper, virtualProductTypeMapper, virtualProductCategoryMapper, supportService, productIndexMessagePublisher);
     }
 
     @Test
@@ -254,6 +258,83 @@ class V1MerchantProductServiceImplTest {
         assertEquals(30L, productCaptor.getValue().getStoreId());
         verify(productIndexMessagePublisher).publishUpsert(any(Product.class));
         assertEquals("active", vo.getStatus());
+    }
+
+    @Test
+    void updateProductShouldRecordPriceAndStockChanges() {
+        Product existing = buildProduct(1L, 1L, "P001", "咖啡", 1);
+        existing.setPrice(new BigDecimal("28.00"));
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(existing)
+                .thenReturn(null);
+        when(productStockMapper.selectOne(any())).thenReturn(buildStock(10L, 1L, 1L, 5));
+        Product updated = buildProduct(1L, 1L, "P001", "咖啡升级", 1);
+        updated.setPrice(new BigDecimal("32.00"));
+        when(productMapper.selectById(any())).thenReturn(updated);
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 8));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡升级", 8, "active");
+        dto.setPrice(new BigDecimal("32.00"));
+        service.updateProduct(1L, 100L, 1L, dto);
+
+        ArgumentCaptor<ProductChangeLog> captor = ArgumentCaptor.forClass(ProductChangeLog.class);
+        verify(productChangeLogMapper, times(2)).insert(captor.capture());
+
+        List<ProductChangeLog> logs = captor.getAllValues();
+        assertEquals("PRICE", logs.get(0).getChangeType());
+        assertEquals("price", logs.get(0).getFieldName());
+        assertEquals("28.00", logs.get(0).getOldValue());
+        assertEquals("32.00", logs.get(0).getNewValue());
+        assertEquals(100L, logs.get(0).getOperatorId());
+
+        assertEquals("STOCK", logs.get(1).getChangeType());
+        assertEquals("stock", logs.get(1).getFieldName());
+        assertEquals("5", logs.get(1).getOldValue());
+        assertEquals("8", logs.get(1).getNewValue());
+        assertEquals(1L, logs.get(1).getProductId());
+    }
+
+    @Test
+    void updateProductShouldNotRecordChangeWhenPriceAndStockUnchanged() {
+        Product existing = buildProduct(1L, 1L, "P001", "咖啡", 1);
+        existing.setPrice(new BigDecimal("28.00"));
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(existing)
+                .thenReturn(null);
+        when(productStockMapper.selectOne(any())).thenReturn(buildStock(10L, 1L, 1L, 5));
+        when(productMapper.selectById(any())).thenReturn(existing);
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 5));
+
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "咖啡", 5, "active");
+        service.updateProduct(1L, 100L, 1L, dto);
+
+        verify(productChangeLogMapper, never()).insert(any(ProductChangeLog.class));
+    }
+
+    @Test
+    void listProductChangeLogsShouldRequireEmployeeAndReturnPagedLogs() {
+        ProductChangeLog log = new ProductChangeLog();
+        log.setId(7L);
+        log.setTenantId(1L);
+        log.setProductId(1L);
+        log.setChangeType("PRICE");
+        log.setFieldName("price");
+        log.setOldValue("28.00");
+        log.setNewValue("32.00");
+        log.setOperatorId(100L);
+
+        Page<ProductChangeLog> mapperPage = new Page<>(1, 10);
+        mapperPage.setRecords(List.of(log));
+        mapperPage.setTotal(1);
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(buildProduct(1L, 1L, "P001", "咖啡", 1));
+        when(productChangeLogMapper.selectPage(any(), any())).thenReturn(mapperPage);
+
+        Page<?> result = service.listProductChangeLogs(1L, 100L, 1L, 1, 10);
+
+        verify(supportService).requireEmployee(1L, 100L);
+        assertEquals(1L, result.getTotal());
+        assertEquals(1, result.getRecords().size());
     }
 
     @Test

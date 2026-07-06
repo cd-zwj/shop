@@ -3,14 +3,17 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.dto.V1MerchantProductChangeLogVO;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 import com.payment.entity.Product;
+import com.payment.entity.ProductChangeLog;
 import com.payment.entity.ProductStock;
 import com.payment.entity.Store;
 import com.payment.entity.VirtualProductCategory;
 import com.payment.entity.VirtualProductType;
 import com.payment.enums.ProductTypeEnum;
+import com.payment.mapper.ProductChangeLogMapper;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.ProductStockMapper;
 import com.payment.mapper.StoreMapper;
@@ -22,6 +25,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -37,6 +42,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
 
     private final ProductMapper productMapper;
     private final ProductStockMapper productStockMapper;
+    private final ProductChangeLogMapper productChangeLogMapper;
     private final StoreMapper storeMapper;
     private final VirtualProductTypeMapper virtualProductTypeMapper;
     private final VirtualProductCategoryMapper virtualProductCategoryMapper;
@@ -152,6 +158,9 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         String productType = resolveProductType(dto.getProductType());
         String fulfillmentMode = resolveFulfillmentMode(productType, dto.getFulfillmentMode());
         validateVirtualTaxonomy(tenantId, productType, dto.getVirtualTypeId(), dto.getVirtualCategoryId());
+        ProductStock existingStock = getOrCreateStock(tenantId, productId);
+        BigDecimal oldPrice = product.getPrice();
+        Integer oldStock = existingStock.getQuantity() == null ? 0 : existingStock.getQuantity();
 
         product.setProductCode(productCode);
         product.setName(dto.getName());
@@ -169,13 +178,35 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setDeliveryConfig(dto.getDeliveryConfig());
         productMapper.updateById(product);
 
-        ProductStock stock = getOrCreateStock(tenantId, productId);
+        ProductStock stock = existingStock;
         stock.setQuantity(Math.max(dto.getStock(), 0));
         productStockMapper.updateById(stock);
+        recordPriceAndStockChanges(tenantId, platformUserId, productId, oldPrice, product.getPrice(), oldStock, stock.getQuantity());
 
         Product updatedProduct = productMapper.selectById(productId);
         productIndexMessagePublisher.publishUpsert(updatedProduct);
         return toProductVO(updatedProduct, productStockMapper.selectById(stock.getId()));
+    }
+
+    @Override
+    public Page<V1MerchantProductChangeLogVO> listProductChangeLogs(Long tenantId, Long platformUserId, Long productId,
+                                                                    Integer current, Integer size) {
+        v1MerchantSupportService.requireEmployee(tenantId, platformUserId);
+        getTenantProduct(tenantId, productId);
+
+        Page<ProductChangeLog> page = productChangeLogMapper.selectPage(
+                new Page<>(current, size),
+                new LambdaQueryWrapper<ProductChangeLog>()
+                        .eq(ProductChangeLog::getTenantId, tenantId)
+                        .eq(ProductChangeLog::getProductId, productId)
+                        .orderByDesc(ProductChangeLog::getCreateTime)
+                        .orderByDesc(ProductChangeLog::getId));
+
+        Page<V1MerchantProductChangeLogVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
+        result.setRecords(page.getRecords().stream()
+                .map(V1MerchantProductChangeLogVO::from)
+                .toList());
+        return result;
     }
 
     @Override
@@ -270,6 +301,61 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         vo.setCreateTime(product.getCreateTime());
         vo.setUpdateTime(product.getUpdateTime());
         return vo;
+    }
+
+    private void recordPriceAndStockChanges(Long tenantId, Long platformUserId, Long productId,
+                                            BigDecimal oldPrice, BigDecimal newPrice,
+                                            Integer oldStock, Integer newStock) {
+        if (!sameAmount(oldPrice, newPrice)) {
+            productChangeLogMapper.insert(buildChangeLog(
+                    tenantId,
+                    productId,
+                    "PRICE",
+                    "price",
+                    formatAmount(oldPrice),
+                    formatAmount(newPrice),
+                    platformUserId,
+                    "商户调整商品售价"));
+        }
+
+        int previousStock = oldStock == null ? 0 : oldStock;
+        int currentStock = newStock == null ? 0 : newStock;
+        if (previousStock != currentStock) {
+            productChangeLogMapper.insert(buildChangeLog(
+                    tenantId,
+                    productId,
+                    "STOCK",
+                    "stock",
+                    String.valueOf(previousStock),
+                    String.valueOf(currentStock),
+                    platformUserId,
+                    "商户调整商品库存"));
+        }
+    }
+
+    private ProductChangeLog buildChangeLog(Long tenantId, Long productId, String changeType, String fieldName,
+                                            String oldValue, String newValue, Long operatorId, String remark) {
+        ProductChangeLog log = new ProductChangeLog();
+        log.setTenantId(tenantId);
+        log.setProductId(productId);
+        log.setChangeType(changeType);
+        log.setFieldName(fieldName);
+        log.setOldValue(oldValue);
+        log.setNewValue(newValue);
+        log.setOperatorId(operatorId);
+        log.setRemark(remark);
+        return log;
+    }
+
+    private boolean sameAmount(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
+    }
+
+    private String formatAmount(BigDecimal amount) {
+        return amount == null ? null : amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private String resolveStatus(Product product, ProductStock stock) {

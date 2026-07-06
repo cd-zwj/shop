@@ -128,6 +128,19 @@ CREATE TABLE IF NOT EXISTS product (
   update_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS product_change_log (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id BIGINT NOT NULL,
+  product_id BIGINT NOT NULL,
+  change_type VARCHAR(32) NOT NULL,
+  field_name VARCHAR(64) NOT NULL,
+  old_value VARCHAR(128) DEFAULT NULL,
+  new_value VARCHAR(128) DEFAULT NULL,
+  operator_id BIGINT DEFAULT NULL,
+  remark VARCHAR(255) DEFAULT NULL,
+  create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 测试种子数据
 
 MERGE INTO platform_user (id, user_no, username, phone, email, password_hash, status, deleted)

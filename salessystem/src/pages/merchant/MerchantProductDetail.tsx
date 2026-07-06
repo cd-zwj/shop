@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  Clock3,
   Edit3,
   Eye,
   ExternalLink,
@@ -13,8 +14,10 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { merchantProductService } from '../../services/modules/merchantProduct';
-import type { MerchantProduct } from '../../types/merchant';
+import type { MerchantProduct, MerchantProductChangeLog } from '../../types/merchant';
 import { formatCurrency, getImageUrl } from '../../utils/display';
+import { getErrorMessage } from '../../utils/errorMessage';
+import { getPageCurrent, getPageTotalPages } from '../../utils/pageResult';
 
 export default function MerchantProductDetail() {
   const navigate = useNavigate();
@@ -22,8 +25,13 @@ export default function MerchantProductDetail() {
   const { merchantSession } = useAuth();
   const tenantId = merchantSession?.tenantId;
   const [product, setProduct] = useState<MerchantProduct | null>(null);
+  const [changeLogs, setChangeLogs] = useState<MerchantProductChangeLog[]>([]);
+  const [changeLogPage, setChangeLogPage] = useState({ total: 0, current: 1, pages: 0 });
+  const [changeLogReloadKey, setChangeLogReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChangeLogsLoading, setIsChangeLogsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [changeLogError, setChangeLogError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -40,9 +48,9 @@ export default function MerchantProductDetail() {
         if (!isMounted) return;
         setProduct(result);
         setError('');
-      } catch {
+      } catch (err) {
         if (!isMounted) return;
-        setError('商品详情加载失败，请稍后重试');
+        setError(getErrorMessage(err, '商品详情加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -56,13 +64,51 @@ export default function MerchantProductDetail() {
     };
   }, [id, tenantId]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadChangeLogs() {
+      if (!tenantId || !id) {
+        return;
+      }
+      setIsChangeLogsLoading(true);
+      try {
+        const result = await merchantProductService.listChangeLogs(tenantId, Number(id), {
+          current: changeLogPage.current,
+          size: 5,
+        });
+        if (!isMounted) return;
+        setChangeLogs(result.records);
+        setChangeLogPage({
+          total: result.total,
+          current: getPageCurrent(result),
+          pages: getPageTotalPages(result),
+        });
+        setChangeLogError('');
+      } catch (err) {
+        if (!isMounted) return;
+        setChangeLogs([]);
+        setChangeLogError(getErrorMessage(err, '变更记录加载失败，请稍后重试'));
+      } finally {
+        if (isMounted) {
+          setIsChangeLogsLoading(false);
+        }
+      }
+    }
+
+    void loadChangeLogs();
+    return () => {
+      isMounted = false;
+    };
+  }, [changeLogPage.current, changeLogReloadKey, id, tenantId]);
+
   async function handleDelete() {
     if (!tenantId || !product) return;
     try {
       await merchantProductService.deleteProduct(tenantId, product.id);
       navigate('/merchant/products');
-    } catch {
-      setError('商品删除失败，请稍后重试');
+    } catch (err) {
+      setError(getErrorMessage(err, '商品删除失败，请稍后重试'));
     }
   }
 
@@ -149,6 +195,83 @@ export default function MerchantProductDetail() {
               </div>
             </div>
           </section>
+
+          <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm md:p-10">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900">价格 / 库存变更记录</h3>
+                <p className="mt-1 text-xs font-medium text-slate-400">
+                  共 {changeLogPage.total} 条记录
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setChangeLogPage((page) => ({ ...page, current: 1 }));
+                  setChangeLogReloadKey((value) => value + 1);
+                }}
+                className="w-fit rounded-2xl border border-slate-100 px-4 py-2 text-xs font-black text-slate-500 transition-colors hover:border-primary/20 hover:text-primary"
+              >
+                刷新记录
+              </button>
+            </div>
+
+            {changeLogError && (
+              <div className="mb-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+                {changeLogError}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              {isChangeLogsLoading && (
+                <div className="rounded-3xl bg-slate-50 p-5 text-sm font-bold text-slate-400">
+                  正在加载变更记录...
+                </div>
+              )}
+              {!isChangeLogsLoading && !changeLogError && changeLogs.length === 0 && (
+                <div className="rounded-3xl bg-slate-50 p-5 text-sm font-bold text-slate-400">
+                  暂无价格或库存变更记录。
+                </div>
+              )}
+              {!isChangeLogsLoading && changeLogs.map((log) => (
+                <div key={log.id} className="flex flex-col gap-3 rounded-3xl bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-2xl bg-white p-3 text-primary shadow-sm">
+                      <Clock3 size={18} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900">{getChangeLogTitle(log)}</p>
+                      <p className="mt-1 text-xs font-bold text-slate-500">
+                        {formatChangeValue(log)} · 操作人 #{log.operatorId ?? '--'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold text-slate-400">{formatDateTime(log.createTime)}</span>
+                </div>
+              ))}
+            </div>
+
+            {changeLogPage.pages > 1 && (
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button
+                  disabled={changeLogPage.current <= 1}
+                  onClick={() => setChangeLogPage((page) => ({ ...page, current: Math.max(1, page.current - 1) }))}
+                  className="rounded-2xl border border-slate-100 px-4 py-2 text-xs font-black text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  上一页
+                </button>
+                <span className="text-xs font-black text-slate-400">
+                  {changeLogPage.current} / {changeLogPage.pages}
+                </span>
+                <button
+                  disabled={changeLogPage.current >= changeLogPage.pages}
+                  onClick={() => setChangeLogPage((page) => ({ ...page, current: Math.min(page.pages, page.current + 1) }))}
+                  className="rounded-2xl border border-slate-100 px-4 py-2 text-xs font-black text-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  下一页
+                </button>
+              </div>
+            )}
+          </section>
         </div>
 
         <div className="flex flex-col gap-8 lg:col-span-4">
@@ -226,4 +349,28 @@ export default function MerchantProductDetail() {
       </div>
     </div>
   );
+}
+
+function getChangeLogTitle(log: MerchantProductChangeLog) {
+  if (log.changeType === 'PRICE' || log.fieldName === 'price') {
+    return '售价调整';
+  }
+  if (log.changeType === 'STOCK' || log.fieldName === 'stock') {
+    return '库存调整';
+  }
+  return log.remark || '商品信息调整';
+}
+
+function formatChangeValue(log: MerchantProductChangeLog) {
+  if (log.changeType === 'PRICE' || log.fieldName === 'price') {
+    return `${formatCurrency(log.oldValue)} -> ${formatCurrency(log.newValue)}`;
+  }
+  return `${log.oldValue ?? '--'} -> ${log.newValue ?? '--'}`;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return date.toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
 }

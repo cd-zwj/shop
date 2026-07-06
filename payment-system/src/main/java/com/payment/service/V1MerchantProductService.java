@@ -1,6 +1,7 @@
 package com.payment.service;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.dto.V1MerchantProductChangeLogVO;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
 
@@ -60,6 +61,19 @@ public interface V1MerchantProductService {
      * @throws com.payment.common.exception.BusinessException 当商品不存在或无权访问时抛出
      */
     V1MerchantProductVO updateProduct(Long tenantId, Long platformUserId, Long productId, V1MerchantProductUpsertDTO dto);
+
+    /**
+     * 分页查询商户商品价格/库存变更记录。
+     *
+     * @param tenantId       商户ID
+     * @param platformUserId 当前登录用户ID
+     * @param productId      商品ID
+     * @param current        页码
+     * @param size           每页条数
+     * @return 商品变更流水分页数据
+     */
+    Page<V1MerchantProductChangeLogVO> listProductChangeLogs(Long tenantId, Long platformUserId, Long productId,
+                                                             Integer current, Integer size);
 
     /**
      * 逻辑删除商户商品，同时发布ES索引 delete 消息。
