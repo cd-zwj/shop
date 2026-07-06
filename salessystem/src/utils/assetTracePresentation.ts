@@ -40,7 +40,7 @@ export function getPointsTracePresentation(log: PointsLog): AssetTracePresentati
     effect: `${isGrant ? '+' : '-'}${points} 积分`,
     balance: `变动后余额 ${log.balance}`,
     hint,
-    actionPath: orderNo ? `/orders/${orderNo}` : undefined,
+    actionPath: orderNo ? buildOrderDetailPath(orderNo) : undefined,
     actionLabel: orderNo ? '查看订单' : undefined,
     tone: isGrant ? 'positive' : 'negative',
   };
@@ -58,7 +58,7 @@ export function getGrowthTracePresentation(log: GrowthLog): AssetTracePresentati
     source: bizNo ? `来源：${bizLabel.replace('消费', '')} ${bizNo}` : `来源：${bizLabel}`,
     effect: `${effectPrefix}${Math.abs(log.changeGrowth)} 成长值`,
     balance: `${log.growthBefore} -> ${log.growthAfter}`,
-    actionPath: log.bizType === 'ORDER' && bizNo ? `/orders/${bizNo}` : undefined,
+    actionPath: log.bizType === 'ORDER' && bizNo ? buildOrderDetailPath(bizNo) : undefined,
     actionLabel: log.bizType === 'ORDER' && bizNo ? '查看订单' : undefined,
     tone: isEarn ? 'positive' : isDeduct ? 'negative' : 'neutral',
   };
@@ -111,6 +111,10 @@ function formatDateTime(value: string | null | undefined): string {
   const hour = pad(date.getHours());
   const minute = pad(date.getMinutes());
   return `${year}-${month}-${day} ${hour}:${minute}`;
+}
+
+function buildOrderDetailPath(orderNo: string): string {
+  return `/order/${encodeURIComponent(orderNo)}`;
 }
 
 function pad(value: number): string {

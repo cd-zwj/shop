@@ -29,7 +29,7 @@ describe('assetTracePresentation', () => {
       effect: '+120 积分',
       balance: '变动后余额 520',
       hint: '将于 2026-12-31 23:59 过期',
-      actionPath: '/orders/SO20260706001',
+      actionPath: '/order/SO20260706001',
       actionLabel: '查看订单',
       tone: 'positive',
     });
@@ -74,7 +74,7 @@ describe('assetTracePresentation', () => {
       source: '来源：订单 SO20260706002',
       effect: '+35 成长值',
       balance: '100 -> 135',
-      actionPath: '/orders/SO20260706002',
+      actionPath: '/order/SO20260706002',
       actionLabel: '查看订单',
       tone: 'positive',
     });
