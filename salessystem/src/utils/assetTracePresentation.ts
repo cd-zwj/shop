@@ -13,6 +13,7 @@ export interface AssetTracePresentation {
   hint?: string;
   actionLabel?: string;
   actionPath?: string;
+  inactiveActionLabel?: string;
   tone: AssetTraceTone;
 }
 
@@ -73,6 +74,7 @@ export function getCouponTracePresentation(coupon: UserCoupon): AssetTracePresen
       hint: `使用时间 ${formatDateTime(coupon.usedTime)}`,
       actionLabel: orderNo ? '查看订单' : undefined,
       actionPath: orderNo ? buildOrderDetailPath(orderNo) : undefined,
+      inactiveActionLabel: orderNo ? undefined : '已使用',
       tone: 'neutral',
     };
   }
@@ -82,6 +84,7 @@ export function getCouponTracePresentation(coupon: UserCoupon): AssetTracePresen
       source: `领取时间 ${formatDateTime(coupon.receiveTime)}`,
       status: '已过期',
       hint: `过期时间 ${formatDateTime(coupon.expireTime)}`,
+      inactiveActionLabel: '已过期',
       tone: 'negative',
     };
   }

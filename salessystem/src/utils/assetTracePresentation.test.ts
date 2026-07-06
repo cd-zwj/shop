@@ -131,6 +131,7 @@ describe('assetTracePresentation', () => {
     expect(presentation.status).toBe('已使用');
     expect(presentation.hint).toBe('使用时间 2026-07-06 13:10');
     expect(presentation.actionPath).toBeUndefined();
+    expect(presentation.inactiveActionLabel).toBe('已使用');
     expect(presentation.tone).toBe('neutral');
   });
 
@@ -158,5 +159,31 @@ describe('assetTracePresentation', () => {
     expect(presentation.source).toBe('使用订单 SO202607060001');
     expect(presentation.actionLabel).toBe('查看订单');
     expect(presentation.actionPath).toBe('/order/SO202607060001');
+    expect(presentation.inactiveActionLabel).toBeUndefined();
+  });
+
+  it('keeps expired coupon disabled action distinct from used coupons', () => {
+    const coupon: UserCoupon = {
+      id: 7,
+      couponNo: 'CP20260706004',
+      couponTemplateId: 43,
+      tenantId: 10,
+      status: 'EXPIRED',
+      name: '过期券',
+      couponType: 'FIXED',
+      thresholdAmount: 100,
+      discountAmount: 20,
+      discountRate: null,
+      maxDiscountAmount: null,
+      receiveTime: '2026-07-01T09:00:00',
+      expireTime: '2026-07-05T23:59:59',
+      usedTime: null,
+    };
+
+    const presentation = getCouponTracePresentation(coupon);
+
+    expect(presentation.status).toBe('已过期');
+    expect(presentation.inactiveActionLabel).toBe('已过期');
+    expect(presentation.actionPath).toBeUndefined();
   });
 });

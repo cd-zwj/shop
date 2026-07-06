@@ -470,7 +470,7 @@ export default function CouponCenter() {
                               disabled
                               className="px-5 py-2 rounded-full text-xs font-black tracking-wide bg-slate-100 text-slate-400 cursor-not-allowed border"
                             >
-                              已失效
+                              {trace.inactiveActionLabel ?? trace.status ?? '已失效'}
                             </button>
                           )}
                         </div>
