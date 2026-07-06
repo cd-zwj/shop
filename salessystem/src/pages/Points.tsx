@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Coins, ArrowLeft, Clock, ShoppingBag, Sparkles } from 'lucide-react';
+import { AlertCircle, Coins, ArrowLeft, Clock, RefreshCw, ShoppingBag, Sparkles } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
 import { appPointsService } from '../services/modules/appPoints';
 import { appCatalogService } from '../services/modules/appCatalog';
@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getImageUrl } from '../utils/display';
 import { getPointsTracePresentation } from '../utils/assetTracePresentation';
+import { getErrorMessage } from '../utils/errorMessage';
 
 type ProductWithTenant = Product & { tenantId: number };
 
@@ -28,16 +29,24 @@ export default function Points() {
   const [activeTab, setActiveTab] = useState<'logs' | 'exchange'>('logs');
   const [isLoading, setIsLoading] = useState(true);
   const [isExchanging, setIsExchanging] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [productLookupWarning, setProductLookupWarning] = useState<string | null>(null);
 
   // Pagination for logs
 
   // Fetch initial data
-  const loadPointsData = async () => {
+  const loadPointsData = useCallback(async () => {
     if (!tenantId || isNaN(tenantId)) {
-      showToast('缺少商户参数', 'error');
+      const message = '缺少商户参数';
+      setError(message);
+      showToast(message, 'error');
       setIsLoading(false);
       return;
     }
+    setIsLoading(true);
+    setError(null);
+    setProductLookupWarning(null);
+
     try {
       const balanceData = await appPointsService.getPointsBalance(tenantId);
       setBalance(balanceData);
@@ -48,7 +57,7 @@ export default function Points() {
         const list = await appCatalogService.listTenantProducts(tenantId);
         productsList = list.map((p) => ({ ...p, tenantId }));
       } catch (e) {
-        // Silently ignore tenant products load failure
+        setProductLookupWarning(getErrorMessage(e, '部分兑换商品详情加载失败，可稍后重试'));
       }
 
       // Load exchange products
@@ -75,7 +84,7 @@ export default function Points() {
             if (p) resolvedDetails[p.id] = { ...p, tenantId } as ProductWithTenant;
           });
         } catch (e) {
-        // Silently ignore missing product details resolution failure
+          setProductLookupWarning(getErrorMessage(e, '部分兑换商品详情加载失败，可稍后重试'));
         }
       }
 
@@ -85,15 +94,21 @@ export default function Points() {
       const logsData = await appPointsService.getPointsLogs(tenantId, 1, 20);
       setLogs(logsData.records ?? []);
     } catch (e) {
-      showToast('获取积分中心数据失败', 'error');
+      const message = getErrorMessage(e, '获取积分中心数据失败');
+      setError(message);
+      setBalance(null);
+      setLogs([]);
+      setExchangeProducts([]);
+      setProductDetails({});
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [showToast, tenantId]);
 
   useEffect(() => {
     void loadPointsData();
-  }, []);
+  }, [loadPointsData]);
 
   const handleExchange = async (ep: ExchangeProduct) => {
     if (!balance || balance.points < ep.pointsRequired) {
@@ -163,6 +178,23 @@ export default function Points() {
         </div>
       </header>
 
+      {error && (
+        <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 flex-none" />
+            <span className="text-sm font-bold">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadPointsData()}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
+        </div>
+      )}
+
       {/* Points Balance Card */}
       <section className="relative overflow-hidden bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-900/10">
         <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
@@ -213,6 +245,12 @@ export default function Points() {
 
       {/* Content */}
       <div className="min-h-[300px]">
+        {productLookupWarning && !error && (
+          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
+            <AlertCircle className="h-4 w-4 flex-none" />
+            {productLookupWarning}
+          </div>
+        )}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
             <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
