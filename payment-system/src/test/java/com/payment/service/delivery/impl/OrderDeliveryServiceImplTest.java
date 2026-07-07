@@ -1,7 +1,9 @@
 package com.payment.service.delivery.impl;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.OrderDeliveryRecord;
@@ -286,6 +288,22 @@ class OrderDeliveryServiceImplTest {
         // PENDING 状态也能走 revoke（退款场景），这里验证 REVOKED 能正常标
         assertEquals(1, changed.size());
         assertEquals(DeliveryStatusEnum.REVOKED.name(), changed.get(0).getStatus());
+    }
+
+    @Test
+    void listUserDeliveriesShouldFilterByOrderNoWhenProvided() {
+        when(deliveryRecordMapper.selectPage(any(), any())).thenReturn(new Page<>());
+
+        service.listUserDeliveries(99L, DeliveryStatusEnum.DELIVERED.name(), " SO202607060001 ", 1, 20);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Wrapper<OrderDeliveryRecord>> wrapperCaptor = ArgumentCaptor.forClass(Wrapper.class);
+        verify(deliveryRecordMapper).selectPage(any(), wrapperCaptor.capture());
+
+        String sqlSegment = wrapperCaptor.getValue().getSqlSegment().toLowerCase();
+        org.junit.jupiter.api.Assertions.assertTrue(sqlSegment.contains("platform_user_id"));
+        org.junit.jupiter.api.Assertions.assertTrue(sqlSegment.contains("status"));
+        org.junit.jupiter.api.Assertions.assertTrue(sqlSegment.contains("order_no"));
     }
 
     // ---- helpers ----

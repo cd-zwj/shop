@@ -248,7 +248,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
     // ----------------- C 端查询 -----------------
 
     @Override
-    public Page<OrderDeliveryRecord> listUserDeliveries(Long platformUserId, String status, Integer current, Integer size) {
+    public Page<OrderDeliveryRecord> listUserDeliveries(Long platformUserId, String status, String orderNo, Integer current, Integer size) {
         int page = current == null || current < 1 ? 1 : current;
         int sz = size == null || size < 1 ? 10 : Math.min(size, 100);
         LambdaQueryWrapper<OrderDeliveryRecord> q = new LambdaQueryWrapper<OrderDeliveryRecord>()
@@ -256,7 +256,10 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
                 .eq(OrderDeliveryRecord::getDeleted, 0)
                 .orderByDesc(OrderDeliveryRecord::getCreateTime);
         if (status != null && !status.isBlank()) {
-            q.eq(OrderDeliveryRecord::getStatus, status);
+            q.eq(OrderDeliveryRecord::getStatus, status.trim());
+        }
+        if (orderNo != null && !orderNo.isBlank()) {
+            q.eq(OrderDeliveryRecord::getOrderNo, orderNo.trim());
         }
         return deliveryRecordMapper.selectPage(new Page<>(page, sz), q);
     }

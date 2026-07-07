@@ -37,7 +37,7 @@ async function flushAsyncWork() {
   });
 }
 
-async function renderMyPurchases() {
+async function renderMyPurchases(initialEntry = '/my-purchases') {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -46,7 +46,7 @@ async function renderMyPurchases() {
     root?.render(
       React.createElement(
         MemoryRouter,
-        { initialEntries: ['/my-purchases'] },
+        { initialEntries: [initialEntry] },
         React.createElement(
           ToastProvider,
           null,
@@ -101,6 +101,29 @@ describe('MyPurchases', () => {
     expect(element.textContent).toContain('重新查看内容');
     expect(Array.from(element.querySelectorAll('button'))
       .some((button) => button.textContent?.includes('重试'))).toBe(false);
+  });
+
+  it('loads purchase records by order number when opened from order detail', async () => {
+    mockedPurchasesService.list.mockResolvedValue({
+      records: [buildPurchase({
+        orderNo: 'SO202607060001',
+        productName: '会员兑换码',
+        productType: 'CARD_KEY',
+        status: 'DELIVERED',
+        payload: JSON.stringify({ code: 'VIP-2026-0001' }),
+      })],
+      total: 1,
+      page: 1,
+      size: 50,
+      pages: 1,
+    });
+
+    const element = await renderMyPurchases('/my-purchases?orderNo=SO202607060001');
+
+    expect(mockedPurchasesService.list).toHaveBeenCalledWith(undefined, 1, 50, 'SO202607060001');
+    expect(element.textContent).toContain('正在查看订单 SO202607060001 的履约记录');
+    expect(element.textContent).toContain('会员兑换码');
+    expect(element.textContent).toContain('复制兑换码');
   });
 });
 

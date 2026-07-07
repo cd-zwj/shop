@@ -70,7 +70,12 @@ export default function MyPurchases() {
     setLoading(true);
     setLoadError('');
     try {
-      const res = await appPurchasesService.list(tab === 'ALL' ? undefined : tab, 1, 50);
+      const res = await appPurchasesService.list(
+        tab === 'ALL' ? undefined : tab,
+        1,
+        50,
+        orderNoFilter || undefined,
+      );
       setItems(res.records || []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '加载失败';
@@ -80,7 +85,7 @@ export default function MyPurchases() {
     } finally {
       setLoading(false);
     }
-  }, [tab, showToast]);
+  }, [orderNoFilter, tab, showToast]);
 
   const visibleItems = useMemo(
     () => orderNoFilter ? items.filter((item) => item.orderNo === orderNoFilter) : items,

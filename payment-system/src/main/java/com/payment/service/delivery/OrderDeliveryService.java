@@ -30,8 +30,8 @@ public interface OrderDeliveryService {
     /** Consumer 入口：对订单所有 item 调对应策略，落 order_delivery_record，更新 item.delivery_status。 */
     void deliverOrder(String orderNo);
 
-    /** C 端：列出当前用户的交付记录，status 可空表示全部。 */
-    Page<OrderDeliveryRecord> listUserDeliveries(Long platformUserId, String status, Integer current, Integer size);
+    /** C 端：列出当前用户的交付记录，status/orderNo 可空表示全部。 */
+    Page<OrderDeliveryRecord> listUserDeliveries(Long platformUserId, String status, String orderNo, Integer current, Integer size);
 
     /** C 端：查看单条交付详情（含 payload）。 */
     OrderDeliveryRecord getUserDelivery(Long platformUserId, Long recordId);

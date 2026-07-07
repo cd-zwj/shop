@@ -37,6 +37,7 @@ public class V1AppPurchaseController {
      * 包含实物商品、虚拟商品、卡密、服务、订阅等所有类型的已购记录。
      *
      * @param status  交付状态筛选（可选），如pending/delivered/confirmed
+     * @param orderNo 订单号筛选（可选），用于从订单详情直达交付记录
      * @param current 页码，默认1，必须大于0
      * @param size    每页条数，默认10，必须大于0
      * @return 已购商品列表分页结果
@@ -45,10 +46,11 @@ public class V1AppPurchaseController {
     @GetMapping
     public Result<PageResult<OrderDeliveryVO>> list(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) String orderNo,
             @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
             @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
         Long userId = PlatformSessionHelper.getPlatformUserId();
-        Page<OrderDeliveryRecord> page = orderDeliveryService.listUserDeliveries(userId, status, current, size);
+        Page<OrderDeliveryRecord> page = orderDeliveryService.listUserDeliveries(userId, status, orderNo, current, size);
         return Result.success(PageResult.from(page, OrderDeliveryVO::from));
     }
 

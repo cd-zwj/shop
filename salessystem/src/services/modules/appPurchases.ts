@@ -41,11 +41,11 @@ export interface PurchaseRecord {
 
 export const appPurchasesService = {
   /** 列表 - status 可选筛选 */
-  list(status?: DeliveryStatus, pageNum = 1, pageSize = 10) {
+  list(status?: DeliveryStatus, pageNum = 1, pageSize = 10, orderNo?: string) {
     return request<PageResult<PurchaseRecord>>({
       url: '/v1/app/purchases',
       method: 'get',
-      params: { status, current: pageNum, size: pageSize },
+      params: { status, current: pageNum, size: pageSize, orderNo },
       authRole: 'user',
     });
   },
