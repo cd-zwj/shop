@@ -211,4 +211,27 @@ describe('Cart', () => {
     expect(element.textContent).toContain('所选优惠券已取消');
     expect(element.textContent).toContain('无库存');
   });
+
+  it('refreshes cart and blocks checkout when a product is removed from catalog', async () => {
+    mockedCatalogService.getTenant.mockResolvedValue({ id: 3, name: '测试店铺' });
+    mockedCatalogService.getProduct.mockResolvedValue(null);
+    mockedCouponService.getAvailableCoupons.mockResolvedValue([]);
+    mockedCouponService.getMyCoupons.mockResolvedValue([]);
+
+    const element = await renderCart();
+    const checkoutButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('结算该商户商品'));
+    expect(checkoutButton).toBeTruthy();
+
+    await act(async () => {
+      checkoutButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockReplaceTenantItems).toHaveBeenCalledWith(3, []);
+    expect(mockedOrderService.createOrder).not.toHaveBeenCalled();
+    expect(element.textContent).toContain('购物车已刷新');
+    expect(element.textContent).toContain('测试商品 已下架或不存在，已从购物车移除');
+    expect(element.textContent).toContain('请确认后重新结算');
+  });
 });
