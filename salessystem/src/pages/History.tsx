@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Calendar, Download, SearchIcon, Wallet } from 'lucide-react';
+import { AlertCircle, Calendar, Download, RefreshCw, SearchIcon, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appWalletService } from '../services/modules/appWallet';
 import type { WalletLog } from '../types/wallet';
 import { formatCurrency } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 import { getWalletLogPresentation } from '../utils/walletLogPresentation';
 
 export default function ConsumptionHistory() {
@@ -15,17 +16,25 @@ export default function ConsumptionHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadHistory() {
       setIsLoading(true);
+      setError(null);
       try {
         const result = await appWalletService.getUnifiedWalletLogs(currentPage, pageSize);
         if (!isMounted) return;
         setLogs(result.records ?? []);
         setTotalRecords(result.total ?? 0);
+      } catch (loadError) {
+        if (!isMounted) return;
+        setError(getErrorMessage(loadError, '钱包流水加载失败，请稍后重试'));
+        setLogs([]);
+        setTotalRecords(0);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -37,7 +46,12 @@ export default function ConsumptionHistory() {
     return () => {
       isMounted = false;
     };
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, reloadKey]);
+
+  function handleRetry() {
+    setCurrentPage(1);
+    setReloadKey((key) => key + 1);
+  }
 
   const filteredLogs = useMemo(() => {
     if (!searchTerm.trim()) return logs;
@@ -121,6 +135,23 @@ export default function ConsumptionHistory() {
           </div>
         </div>
       </header>
+
+      {error && (
+        <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 flex-none" />
+            <span className="text-sm font-bold">{error}</span>
+          </div>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
         {[
