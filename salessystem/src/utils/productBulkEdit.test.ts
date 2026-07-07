@@ -44,6 +44,13 @@ describe('productBulkEdit', () => {
     expect(payload.fulfillmentMode).toBe('ONLINE_VIRTUAL');
   });
 
+  it('sets stock to zero when marking a product out of stock', () => {
+    const payload = buildProductStatusUpdatePayload(product, 'out_of_stock');
+
+    expect(payload.status).toBe('out_of_stock');
+    expect(payload.stock).toBe(0);
+  });
+
   it('builds a full update payload when adjusting stock', () => {
     const payload = buildProductStockUpdatePayload(product, 28);
 

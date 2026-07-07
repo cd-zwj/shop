@@ -18,7 +18,10 @@ export function buildProductStatusUpdatePayload(
   product: MerchantProduct,
   status: ProductEditableStatus,
 ): MerchantProductUpsertPayload {
-  return buildProductUpdatePayload(product, { status });
+  return buildProductUpdatePayload(product, {
+    status,
+    ...(status === 'out_of_stock' ? { stock: 0 } : {}),
+  });
 }
 
 export function buildProductStockUpdatePayload(
