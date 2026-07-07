@@ -27,8 +27,12 @@ import {
 const TABS: { key: 'ALL' | DeliveryStatus; label: string }[] = [
   { key: 'ALL', label: '全部' },
   { key: 'PENDING', label: '待交付' },
+  { key: 'DELIVERING', label: '交付中' },
   { key: 'DELIVERED', label: '已交付' },
   { key: 'CONFIRMED', label: '已确认' },
+  { key: 'FAILED', label: '交付失败' },
+  { key: 'REVOKED', label: '已撤销' },
+  { key: 'REVOKE_FAILED', label: '撤销失败' },
 ];
 
 const STATUS_STYLE: Record<DeliveryStatus, { label: string; cls: string }> = {

@@ -125,6 +125,48 @@ describe('MyPurchases', () => {
     expect(element.textContent).toContain('会员兑换码');
     expect(element.textContent).toContain('复制兑换码');
   });
+
+  it('lets users filter failed delivery records and contact the merchant', async () => {
+    mockedPurchasesService.list
+      .mockResolvedValueOnce({
+        records: [],
+        total: 0,
+        page: 1,
+        size: 50,
+        pages: 0,
+      })
+      .mockResolvedValueOnce({
+        records: [buildPurchase({
+          id: 18,
+          productName: '课程资料包',
+          productType: 'VIRTUAL',
+          status: 'FAILED',
+          failReason: '交付配置缺少下载地址',
+          payload: null,
+        })],
+        total: 1,
+        page: 1,
+        size: 50,
+        pages: 1,
+      });
+
+    const element = await renderMyPurchases();
+
+    expect(element.textContent).toContain('交付失败');
+    const failedTab = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('交付失败'));
+    expect(failedTab).toBeTruthy();
+
+    await act(async () => {
+      failedTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedPurchasesService.list).toHaveBeenLastCalledWith('FAILED', 1, 50, undefined);
+    expect(element.textContent).toContain('课程资料包');
+    expect(element.textContent).toContain('处理失败：交付配置缺少下载地址');
+    expect(element.textContent).toContain('联系商户');
+  });
 });
 
 function buildPurchase(overrides: Partial<PurchaseRecord>): PurchaseRecord {
