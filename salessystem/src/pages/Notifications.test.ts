@@ -198,6 +198,49 @@ describe('Notifications', () => {
 
     expect(element.textContent).not.toContain('1 条未读');
   });
+
+  it('derives pagination from total and size when pages is missing', async () => {
+    mockedNotificationService.list.mockResolvedValue({
+      records: [buildNotification({ id: 21, title: '分页通知' })],
+      total: 21,
+      page: 1,
+      size: 20,
+    });
+    mockedNotificationService.getUnreadCount.mockResolvedValue({ count: 0 });
+
+    const element = await renderNotifications();
+
+    expect(element.textContent).toContain('1 / 2');
+    const nextButton = element.querySelector('button[aria-label="下一页"]');
+    expect(nextButton).toBeTruthy();
+  });
+
+  it('marks all unread notifications even when the current page has no unread items', async () => {
+    mockedNotificationService.list.mockResolvedValue({
+      records: [buildNotification({ id: 30, title: '已读通知', readStatus: 1 })],
+      total: 21,
+      page: 1,
+      size: 20,
+      pages: 2,
+    });
+    mockedNotificationService.getUnreadCount.mockResolvedValue({ count: 2 });
+    mockedNotificationService.markAllRead.mockResolvedValue(undefined);
+
+    const element = await renderNotifications();
+
+    expect(element.textContent).toContain('2 条未读');
+    const markAllButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('全部已读'));
+    expect(markAllButton).toBeTruthy();
+
+    await act(async () => {
+      markAllButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedNotificationService.markAllRead).toHaveBeenCalledTimes(1);
+    expect(element.textContent).not.toContain('2 条未读');
+  });
 });
 
 function buildNotification(overrides: Partial<AppNotification>): AppNotification {

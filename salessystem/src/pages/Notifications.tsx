@@ -19,6 +19,7 @@ import { cn } from '../lib/utils';
 import { getNotificationAction } from '../utils/notificationAction';
 import { getNotificationPresentation } from '../utils/notificationPresentation';
 import { getErrorMessage } from '../utils/errorMessage';
+import { getPageTotalPages } from '../utils/pageResult';
 
 const NOTIFICATION_FILTERS = [
   { id: 'ALL', label: '全部', readStatus: undefined },
@@ -75,7 +76,7 @@ export default function Notifications() {
           appNotificationService.getUnreadCount(),
         ]);
         setNotifications(data.records ?? []);
-        setTotalPages(data.pages ?? 1);
+        setTotalPages(Math.max(1, getPageTotalPages(data)));
         setUnreadCount(unread.count ?? 0);
       } catch (err) {
         const message = getErrorMessage(err, '通知加载失败，请稍后重试');
@@ -137,16 +138,23 @@ export default function Notifications() {
   };
 
   const handleMarkAllRead = async () => {
-    const unread = notifications.filter((n) => n.readStatus === 0);
-    if (unread.length === 0) {
+    if (unreadCount === 0) {
       showToast('没有未读通知', 'info');
       return;
     }
     try {
       await appNotificationService.markAllRead();
-      setNotifications((prev) =>
-        prev.map((n) => ({ ...n, readStatus: 1, readTime: new Date().toISOString() }))
-      );
+      const readTime = new Date().toISOString();
+      setNotifications((prev) => {
+        if (activeFilter === 'UNREAD') {
+          return [];
+        }
+
+        return prev.map((n) => ({ ...n, readStatus: 1, readTime }));
+      });
+      if (activeFilter === 'UNREAD') {
+        setTotalPages(1);
+      }
       setUnreadCount(0);
       showToast('已全部标为已读', 'success');
     } catch (err) {
@@ -171,6 +179,7 @@ export default function Notifications() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
+            aria-label="返回上一页"
             className="p-2 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -351,6 +360,7 @@ export default function Notifications() {
                           e.stopPropagation();
                           void handleMarkRead(notification.id);
                         }}
+                        aria-label="标记已读"
                         className="shrink-0 p-2 text-primary/40 hover:text-primary hover:bg-primary/5 rounded-xl transition-colors"
                         title="标记已读"
                       >
@@ -371,6 +381,7 @@ export default function Notifications() {
           <button
             disabled={currentPage <= 1}
             onClick={() => handlePageChange(currentPage - 1)}
+            aria-label="上一页"
             className={cn(
               'p-2 rounded-xl transition-colors',
               currentPage <= 1
@@ -386,6 +397,7 @@ export default function Notifications() {
           <button
             disabled={currentPage >= totalPages}
             onClick={() => handlePageChange(currentPage + 1)}
+            aria-label="下一页"
             className={cn(
               'p-2 rounded-xl transition-colors',
               currentPage >= totalPages
