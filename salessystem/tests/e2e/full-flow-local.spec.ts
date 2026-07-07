@@ -21,6 +21,11 @@ type CaptchaPayload = {
   captchaImage: string;
 };
 
+type AddressPayload = {
+  id: number;
+  isDefault?: number;
+};
+
 async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${apiBaseURL}${path}`, {
     ...init,
@@ -63,6 +68,30 @@ async function loginMerchantSession() {
       password: defaultPassword,
       captchaKey: captcha.captchaKey,
       captchaCode: captcha.code,
+    }),
+  });
+}
+
+async function ensureDefaultAddress(authHeaders: Record<string, string>) {
+  const addresses = await requestJson<AddressPayload[]>('/v1/app/addresses', {
+    headers: authHeaders,
+  });
+  const existing = addresses.find((address) => address.isDefault === 1) ?? addresses[0];
+  if (existing) {
+    return existing;
+  }
+
+  return requestJson<AddressPayload>('/v1/app/addresses', {
+    method: 'POST',
+    headers: authHeaders,
+    body: JSON.stringify({
+      receiverName: 'E2E测试用户',
+      phone: '13800138000',
+      province: '浙江省',
+      city: '杭州市',
+      district: '西湖区',
+      detail: '本地联调测试地址1号',
+      isDefault: true,
     }),
   });
 }
@@ -162,6 +191,7 @@ test.describe('本地全流程冒烟测试', () => {
       headers: authHeaders,
     });
     expect(products.length).toBeGreaterThan(0);
+    const address = await ensureDefaultAddress(authHeaders);
 
     await expectPageReady(page, '/', /SalesSystem|搜索商户|首页/);
     await expectPageReady(page, `/merchant-store/${tenantId}`, /商品|商户|E2E/);
@@ -186,6 +216,7 @@ test.describe('本地全流程冒烟测试', () => {
         source: 'E2E',
         walletStrategy: 'UNIFIED_ONLY',
         allowExternalPayFallback: false,
+        addressId: address.id,
         items: [{ productId: products[0].id, quantity: 1, price: products[0].price }],
       }),
     });

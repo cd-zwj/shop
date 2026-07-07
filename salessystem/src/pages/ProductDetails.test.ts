@@ -129,6 +129,37 @@ describe('ProductDetails', () => {
     expect(element.textContent).toContain('后端交付查看位置');
     expect(element.textContent).toContain('后端交付动作');
   });
+
+  it('lets users retry when product detail loading fails', async () => {
+    mockedCatalogService.getProduct
+      .mockRejectedValueOnce(new Error('本地网络断开'))
+      .mockResolvedValueOnce(buildProduct({
+        id: 17,
+        name: '重试后商品',
+        stock: 8,
+      }));
+    mockedCatalogService.getTenant.mockResolvedValue(buildTenant());
+
+    const element = await renderProductDetails();
+
+    expect(element.textContent).toContain('商品详情加载失败');
+    expect(element.textContent).toContain('本地网络断开');
+
+    const retryButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('重试'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mockedCatalogService.getProduct).toHaveBeenCalledTimes(2);
+    expect(element.textContent).toContain('重试后商品');
+    expect(element.textContent).not.toContain('商品详情加载失败');
+  });
 });
 
 function buildProduct(overrides: Partial<Product>): Product {

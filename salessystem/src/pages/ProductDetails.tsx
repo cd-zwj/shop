@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import {
+  AlertCircle,
   ArrowDown,
   ArrowLeft,
   CheckCircle2,
   ChevronRight,
   PackageCheck,
   PlayCircle,
+  RefreshCcw,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -26,6 +28,7 @@ import type { Product, Tenant } from '../types/catalog';
 import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import {
   getProductDetailPresentation,
@@ -46,6 +49,7 @@ export default function ProductDetails() {
   const [actionMessage, setActionMessage] = useState('');
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'ALIPAY_PAGE' | 'UNIFIED_WALLET'>('ALIPAY_PAGE');
+  const [reloadKey, setReloadKey] = useState(0);
 
   const queryTenantId = searchParams.get('tenantId');
   const tenantId = queryTenantId ? Number(queryTenantId) : undefined;
@@ -66,6 +70,9 @@ export default function ProductDetails() {
         return;
       }
 
+      setIsLoading(true);
+      setError('');
+
       try {
         const detail = await appCatalogService.getProduct(productId);
         if (!isMounted) return;
@@ -82,9 +89,11 @@ export default function ProductDetails() {
             setMerchant(null);
           }
         }
-      } catch {
+      } catch (err) {
         if (!isMounted) return;
-        setError('商品详情加载失败，请稍后重试');
+        setProduct(null);
+        setMerchant(null);
+        setError(`商品详情加载失败：${getErrorMessage(err, '请稍后重试')}`);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -97,7 +106,7 @@ export default function ProductDetails() {
     return () => {
       isMounted = false;
     };
-  }, [productId, tenantId]);
+  }, [productId, reloadKey, tenantId]);
 
   const productPresentation = getProductDetailPresentation(product);
   const inventory = productPresentation.inventory;
@@ -109,6 +118,7 @@ export default function ProductDetails() {
   const saleStatus = productPresentation.saleStatus;
   const isOutOfStock = inventory.isOutOfStock;
   const isPurchaseBlocked = isOutOfStock || !saleStatus.isPurchasable;
+  const hasLoadError = !isLoading && !product && Boolean(error);
 
   function toCheckoutItem(detail: Product): CartItem {
     return {
@@ -295,25 +305,47 @@ export default function ProductDetails() {
               {product?.name || (isLoading ? '商品加载中...' : '未找到商品')}
             </h1>
             <p className="text-lg leading-relaxed text-slate-500">
-              {product?.description || error || '这里将展示后端返回的商品描述与展示文案。'}
+              {product?.description || '这里将展示后端返回的商品描述与展示文案。'}
             </p>
           </div>
 
-          <div className="mb-10 flex items-end gap-3 border-b border-slate-100 pb-8">
-            <span className="text-4xl font-black tracking-tight text-slate-900">
-              {product ? formatCurrency(product.price) : '...'}
-            </span>
-            {product?.stock !== undefined && product?.stock !== null && (
-              <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', inventory.toneClass)}>
-                {inventory.label}
-              </span>
-            )}
-            {product && (
-              <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', saleStatus.toneClass)}>
-                {saleStatus.label}
-              </span>
-            )}
-          </div>
+          {hasLoadError ? (
+            <div className="mb-12 rounded-2xl border border-red-100 bg-red-50 p-6">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-red-500 shadow-sm">
+                  <AlertCircle className="h-6 w-6" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-base font-black text-red-900">商品详情加载失败</h2>
+                  <p className="mt-2 text-sm font-semibold leading-relaxed text-red-700">{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => setReloadKey((current) => current + 1)}
+                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                    重试
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mb-10 flex items-end gap-3 border-b border-slate-100 pb-8">
+                <span className="text-4xl font-black tracking-tight text-slate-900">
+                  {product ? formatCurrency(product.price) : '...'}
+                </span>
+                {product?.stock !== undefined && product?.stock !== null && (
+                  <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', inventory.toneClass)}>
+                    {inventory.label}
+                  </span>
+                )}
+                {product && (
+                  <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', saleStatus.toneClass)}>
+                    {saleStatus.label}
+                  </span>
+                )}
+              </div>
 
           {actionMessage && (
             <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600">
@@ -458,9 +490,12 @@ export default function ProductDetails() {
               {isSubmittingOrder ? '创建订单中...' : '立即购买'}
             </button>
           </div>
+          </>
+          )}
         </section>
       </main>
 
+      {!hasLoadError && (
       <div className="fixed bottom-16 z-50 flex w-full gap-3 border-t border-slate-100 bg-white/95 p-4 pb-10 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)] backdrop-blur-xl md:hidden">
         <button
           onClick={handleBuyNow}
@@ -480,6 +515,7 @@ export default function ProductDetails() {
           </div>
         </button>
       </div>
+      )}
     </div>
   );
 }
