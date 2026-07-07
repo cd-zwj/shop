@@ -16,6 +16,7 @@ import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
 import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload, MarketingEffectSummary } from '../../types/marketing';
 import { cn } from '../../lib/utils';
+import { validateMerchantCouponDraft } from '../../utils/merchantCouponValidation';
 
 export default function MerchantCoupons() {
   const { merchantSession } = useAuth();
@@ -89,18 +90,25 @@ export default function MerchantCoupons() {
     e.preventDefault();
     if (!tenantId) return;
 
-    if (!name.trim()) {
-      showToast('请输入优惠券名称', 'error');
-      return;
-    }
+    const validationIssues = validateMerchantCouponDraft({
+      name,
+      couponType,
+      thresholdAmount,
+      discountAmount,
+      discountRate,
+      maxDiscountAmount,
+      totalStock,
+      perUserLimit,
+      validityType,
+      validDaysAfterReceive,
+      validStartTime,
+      validEndTime,
+      receiveStartTime,
+      receiveEndTime,
+    });
 
-    if (couponType === 'FIXED' && !discountAmount) {
-      showToast('请输入满减面值', 'error');
-      return;
-    }
-
-    if (couponType === 'RATE' && !discountRate) {
-      showToast('请输入折扣比例', 'error');
+    if (validationIssues.length > 0) {
+      showToast(validationIssues.join('；'), 'error');
       return;
     }
 
@@ -128,11 +136,6 @@ export default function MerchantCoupons() {
       if (validityType === 'DAYS') {
         payload.validDaysAfterReceive = Number(validDaysAfterReceive);
       } else {
-        if (!validStartTime || !validEndTime) {
-          showToast('请选择有效期开始与结束时间', 'error');
-          setIsSubmitting(false);
-          return;
-        }
         payload.validStartTime = new Date(validStartTime).toISOString();
         payload.validEndTime = new Date(validEndTime).toISOString();
       }
