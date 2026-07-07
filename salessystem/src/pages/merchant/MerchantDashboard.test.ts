@@ -161,4 +161,58 @@ describe('MerchantDashboard', () => {
     expect(element.textContent).toContain('1 个待履约订单');
     expect(element.textContent).toContain('1 个低库存商品');
   });
+
+  it('renders local operations analytics from loaded orders and refunds', async () => {
+    mockedProductService.listProducts.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
+    mockedOrderService.listOrders.mockResolvedValue({
+      records: [
+        { id: 1, orderNo: 'SO1', tenantId: 9, platformUserId: 88, orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 100 },
+        { id: 2, orderNo: 'SO2', tenantId: 9, platformUserId: 88, orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 200 },
+        { id: 3, orderNo: 'SO3', tenantId: 9, platformUserId: 99, orderStatus: 'CREATED', payStatus: 'WAIT_PAY', totalAmount: 50 },
+      ],
+      total: 3,
+      page: 1,
+      size: 50,
+      pages: 1,
+    });
+    mockedRefundService.listRefunds.mockResolvedValue({
+      records: [{
+        id: 1,
+        refundNo: 'RF1',
+        orderNo: 'SO1',
+        orderItemId: null,
+        refundType: 'REFUND_ONLY',
+        refundStatus: 'COMPLETED',
+        refundAmount: 20,
+        deliveryStatus: null,
+        refundableAmount: null,
+        quickRefundSuggested: null,
+        refundSuggestion: null,
+        reason: '不想要了',
+        description: null,
+        rejectReason: null,
+        auditTime: null,
+        completeTime: null,
+        createTime: '2026-07-01T00:00:00',
+      }],
+      total: 1,
+      page: 1,
+      size: 50,
+      pages: 1,
+    });
+    mockedWorkbenchService.getTodoSummary.mockResolvedValue({ totalCount: 0, items: [] });
+
+    const element = await renderDashboard();
+
+    expect(element.textContent).toContain('经营分析快照');
+    expect(element.textContent).toContain('基于最近加载的 3 条订单和 1 条售后记录');
+    expect(element.textContent).toContain('客单价');
+    expect(element.textContent).toContain('¥150.00');
+    expect(element.textContent).toContain('退款率');
+    expect(element.textContent).toContain('50%');
+    expect(element.textContent).toContain('复购用户');
+    expect(element.textContent).toContain('50% / 2 位下单用户');
+    expect(element.textContent).toContain('支付转化');
+    expect(element.textContent).toContain('67%');
+  });
 });

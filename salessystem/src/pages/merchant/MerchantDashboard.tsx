@@ -29,6 +29,7 @@ import type { Refund } from '../../types/refund';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { getErrorMessage } from '../../utils/errorMessage';
+import { summarizeMerchantOperations } from '../../utils/merchantOperationsAnalytics';
 import { buildMerchantWorkItems, getOrderToneClass, prioritizeMerchantWorkItems } from '../../utils/orderLifecycle';
 
 export default function MerchantDashboard() {
@@ -127,6 +128,10 @@ export default function MerchantDashboard() {
     () => workItems.reduce((sum, item) => sum + item.count, 0),
     [workItems],
   );
+  const operationsSummary = useMemo(
+    () => summarizeMerchantOperations({ orders, refunds }),
+    [orders, refunds],
+  );
 
   return (
     <div className="flex flex-col gap-6 p-4 md:gap-8 md:p-8">
@@ -223,6 +228,63 @@ export default function MerchantDashboard() {
           </div>
         ))}
       </div>
+
+      <section className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/30 md:rounded-[40px] md:p-8">
+        <div className="mb-6 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-widest italic text-slate-900">
+              经营分析快照
+            </h2>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              基于最近加载的 {operationsSummary.orderCount} 条订单和 {refunds.length} 条售后记录。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/merchant/orders')}
+            className="flex w-fit items-center gap-1 text-xs font-black text-primary transition-all hover:gap-2"
+          >
+            查看订单明细 <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: '客单价',
+              value: formatCurrency(operationsSummary.averageOrderValue),
+              hint: `${operationsSummary.paidOrderCount} 笔支付成功订单`,
+            },
+            {
+              label: '退款率',
+              value: formatPercent(operationsSummary.refundRate),
+              hint: `${operationsSummary.refundCaseCount} 笔已支付订单产生售后`,
+            },
+            {
+              label: '复购用户',
+              value: operationsSummary.repeatCustomerCount.toString(),
+              hint: `${formatPercent(operationsSummary.repeatCustomerRate)} / ${operationsSummary.uniqueCustomerCount} 位下单用户`,
+            },
+            {
+              label: '支付转化',
+              value: formatPercent(operationsSummary.paidConversionRate),
+              hint: `${operationsSummary.paidOrderCount} / ${operationsSummary.orderCount} 笔订单支付成功`,
+            },
+          ].map((item) => (
+            <div key={item.label} className="rounded-[24px] bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {item.label}
+              </p>
+              <p className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                {isLoading ? '...' : item.value}
+              </p>
+              <p className="mt-2 text-xs font-medium leading-relaxed text-slate-500">
+                {isLoading ? '正在同步样本数据' : item.hint}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 md:gap-8">
         <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-xl shadow-slate-200/30 md:rounded-[40px] md:p-10 lg:col-span-8">
@@ -347,4 +409,12 @@ export default function MerchantDashboard() {
       </div>
     </div>
   );
+}
+
+function formatPercent(value: number) {
+  if (!Number.isFinite(value)) {
+    return '0%';
+  }
+
+  return `${Math.round(value * 100)}%`;
 }
