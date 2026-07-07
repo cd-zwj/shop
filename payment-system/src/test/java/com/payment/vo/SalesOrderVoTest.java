@@ -102,6 +102,36 @@ class SalesOrderVoTest {
     }
 
     @Test
+    void detailVoExplainsExpiredOrClosedPaymentBillBeforeGenericPendingPayment() {
+        SalesOrder order = buildOrder();
+        order.setOrderStatus("CREATED");
+        order.setPayStatus("WAIT_PAY");
+        com.payment.dto.SalesOrderDetailVO expiredDetail = new com.payment.dto.SalesOrderDetailVO();
+        expiredDetail.setOrder(order);
+        expiredDetail.setPaymentBillStatus("EXPIRED");
+        expiredDetail.setPaymentBillStatusRemark("支付单已超过 30 分钟有效期");
+
+        SalesOrderDetailVO expiredVo = SalesOrderDetailVO.from(expiredDetail);
+
+        assertThat(expiredVo.getStatusLabel()).isEqualTo("支付已过期");
+        assertThat(expiredVo.getFailureReason()).isEqualTo("支付单已超过 30 分钟有效期");
+        assertThat(expiredVo.getNextStep()).contains("重新发起支付");
+        assertThat(expiredVo.getAvailableActions()).contains("PAY", "CONTACT_MERCHANT");
+
+        com.payment.dto.SalesOrderDetailVO closedDetail = new com.payment.dto.SalesOrderDetailVO();
+        closedDetail.setOrder(order);
+        closedDetail.setPaymentBillStatus("CLOSED");
+        closedDetail.setPaymentBillStatusRemark("用户主动关闭支付页");
+
+        SalesOrderDetailVO closedVo = SalesOrderDetailVO.from(closedDetail);
+
+        assertThat(closedVo.getStatusLabel()).isEqualTo("支付已关闭");
+        assertThat(closedVo.getFailureReason()).isEqualTo("用户主动关闭支付页");
+        assertThat(closedVo.getNextStep()).contains("重新发起支付");
+        assertThat(closedVo.getAvailableActions()).contains("PAY", "CONTACT_MERCHANT");
+    }
+
+    @Test
     void detailVoUsesDeliveryItemsToExplainFulfillmentState() {
         SalesOrder order = buildOrder();
         order.setOrderStatus("PAID");

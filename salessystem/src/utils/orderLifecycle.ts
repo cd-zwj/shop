@@ -125,11 +125,6 @@ export function getOrderLifecyclePresentation(
   order?: Partial<SalesOrder> | null,
   context: OrderLifecycleContext = {},
 ): OrderLifecyclePresentation {
-  const backendPresentation = normalizeBackendOrderPresentation(context.backendPresentation ?? order);
-  if (backendPresentation) {
-    return backendPresentation;
-  }
-
   if (!order) {
     return {
       label: '加载中',
@@ -194,6 +189,11 @@ export function getOrderLifecyclePresentation(
         { key: 'contact', label: '联系商户' },
       ],
     };
+  }
+
+  const backendPresentation = normalizeBackendOrderPresentation(context.backendPresentation ?? order);
+  if (backendPresentation) {
+    return backendPresentation;
   }
 
   if (isPendingPayment(order)) {

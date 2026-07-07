@@ -35,6 +35,19 @@ public final class OrderStatusPresentation {
                     List.of("PAY", "CONTACT_MERCHANT", "REPURCHASE"));
         }
 
+        if ("EXPIRED".equals(paymentBillStatus) || "CLOSED".equals(paymentBillStatus)) {
+            boolean expired = "EXPIRED".equals(paymentBillStatus);
+            String reason = hasText(paymentBillStatusRemark)
+                    ? paymentBillStatusRemark
+                    : (expired ? "支付单已超过可支付时间" : "支付单已关闭，原链接不可继续使用");
+            return new StatusPresentation(
+                    expired ? "支付已过期" : "支付已关闭",
+                    (expired ? "过期说明：" : "关闭原因：") + reason,
+                    "下一步：重新发起支付，系统会创建新的本地支付单；如状态有疑问可联系商户核对。",
+                    reason,
+                    List.of("PAY", "CONTACT_MERCHANT"));
+        }
+
         if ("PAYING".equals(order.getPayStatus()) || "PAYING".equals(paymentBillStatus)) {
             return new StatusPresentation(
                     "支付中",

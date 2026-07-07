@@ -118,6 +118,46 @@ describe('orderLifecycle', () => {
     expect(expired.nextActions.map((action) => action.key)).toContain('pay');
   });
 
+  it('uses stale payment bill state before generic backend pending presentation', () => {
+    const expired = getOrderLifecyclePresentation(
+      {
+        orderStatus: 'CREATED',
+        payStatus: 'WAIT_PAY',
+        statusLabel: '待支付',
+        statusDescription: '订单已创建，请在支付关闭前完成付款；如支付页丢失，可继续支付。',
+        nextStep: '下一步：继续支付或取消订单。',
+        availableActions: ['PAY', 'CANCEL'],
+      },
+      {
+        paymentBillStatus: 'EXPIRED',
+        paymentBillStatusRemark: '支付单已超过 30 分钟有效期',
+      },
+    );
+
+    expect(expired.label).toBe('支付已过期');
+    expect(expired.failureReason).toBe('支付单已超过 30 分钟有效期');
+    expect(expired.nextActions.map((action) => action.key)).toEqual(['pay', 'contact']);
+
+    const closed = getOrderLifecyclePresentation(
+      {
+        orderStatus: 'CREATED',
+        payStatus: 'WAIT_PAY',
+        statusLabel: '待支付',
+        statusDescription: '订单已创建，请在支付关闭前完成付款；如支付页丢失，可继续支付。',
+        nextStep: '下一步：继续支付或取消订单。',
+        availableActions: ['PAY', 'CANCEL'],
+      },
+      {
+        paymentBillStatus: 'CLOSED',
+        paymentBillStatusRemark: '用户已关闭上一次支付',
+      },
+    );
+
+    expect(closed.label).toBe('支付已关闭');
+    expect(closed.failureReason).toBe('用户已关闭上一次支付');
+    expect(closed.nextStep).toContain('重新发起支付');
+  });
+
   it('prefers backend order presentation when the API provides it', () => {
     const presentation = getOrderLifecyclePresentation({
       orderStatus: 'CREATED',
