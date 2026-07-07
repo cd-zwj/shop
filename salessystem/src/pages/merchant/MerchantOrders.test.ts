@@ -6,6 +6,8 @@ import MerchantOrders from './MerchantOrders';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrder } from '../../types/merchant';
 
+const mockShowToast = vi.hoisted(() => vi.fn());
+
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({
     merchantSession: {
@@ -13,6 +15,12 @@ vi.mock('../../context/AuthContext', () => ({
       tenantName: '测试店铺',
       employeeRole: 'OWNER',
     },
+  }),
+}));
+
+vi.mock('../../context/ToastContext', () => ({
+  useToast: () => ({
+    showToast: mockShowToast,
   }),
 }));
 
@@ -102,6 +110,41 @@ describe('MerchantOrders', () => {
     expect(element.textContent).toContain('测试履约订单');
     expect(Array.from(element.querySelectorAll('button'))
       .some((button) => button.textContent?.includes('重试'))).toBe(false);
+  });
+
+  it('exports the current merchant order list as csv', async () => {
+    const createObjectURL = vi.fn(() => 'blob:merchant-orders');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    mockedMerchantOrderService.listOrders.mockResolvedValue({
+      records: [buildOrder({
+        orderNo: 'MO202607060002',
+        subject: '待履约订单',
+      })],
+      total: 1,
+      page: 1,
+      size: 100,
+      pages: 1,
+    });
+
+    const element = await renderMerchantOrders();
+    const exportButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('导出 CSV'));
+    expect(exportButton).toBeTruthy();
+
+    await act(async () => {
+      exportButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:merchant-orders');
+    expect(mockShowToast).toHaveBeenCalledWith('订单 CSV 已导出', 'success');
+
+    clickSpy.mockRestore();
   });
 });
 

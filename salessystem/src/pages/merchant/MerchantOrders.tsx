@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUpDown,
   CheckCircle2,
   Clock,
+  Download,
   Eye,
   Filter,
   Package,
@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import type { MerchantOrder } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { getErrorMessage } from '../../utils/errorMessage';
 import { getOrderLifecyclePresentation, getOrderToneClass } from '../../utils/orderLifecycle';
+import { downloadMerchantOrdersCsv } from '../../utils/merchantOrderExport';
 
 const ORDER_TABS = [
   { id: 'all', label: '全部订单' },
@@ -45,6 +47,7 @@ export default function MerchantOrders() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
+  const { showToast } = useToast();
 
   const tabFilters = useMemo(
     () => ({
@@ -69,6 +72,11 @@ export default function MerchantOrders() {
       return;
     }
     setSearchParams({ tab: tabId });
+  };
+
+  const handleExportCsv = () => {
+    const exported = downloadMerchantOrdersCsv(orders);
+    showToast(exported ? '订单 CSV 已导出' : '暂无可导出的订单', exported ? 'success' : 'info');
   };
 
   useEffect(() => {
@@ -119,8 +127,12 @@ export default function MerchantOrders() {
           <p className="font-medium text-slate-500">当前商户订单列表已切换为真实接口数据。</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50">
-            <ArrowUpDown className="h-4 w-4" /> 导出 CSV
+          <button
+            type="button"
+            onClick={handleExportCsv}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50"
+          >
+            <Download className="h-4 w-4" /> 导出 CSV
           </button>
         </div>
       </header>
