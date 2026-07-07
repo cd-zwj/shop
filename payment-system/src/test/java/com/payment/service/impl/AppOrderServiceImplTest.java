@@ -276,7 +276,7 @@ class AppOrderServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
 
-        assertEquals("商品库存不足, productId=1", exception.getMessage());
+        assertEquals("可乐 当前库存仅剩 1 件，请刷新购物车后重新结算", exception.getMessage());
         verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
         verify(orderPricingService, never()).calculate(any());
     }
@@ -331,7 +331,7 @@ class AppOrderServiceImplTest {
 
         BusinessException exception = assertThrows(BusinessException.class, () -> service.createOrder(100L, dto));
 
-        assertEquals("商品价格已变化, productId=1", exception.getMessage());
+        assertEquals("可乐 价格已从 ¥3.00 调整为 ¥3.50，请刷新购物车后重新结算", exception.getMessage());
         verify(salesOrderMapper, never()).insert(any(SalesOrder.class));
         verify(orderPricingService, never()).calculate(any());
     }

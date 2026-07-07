@@ -58,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -546,12 +547,15 @@ public class AppOrderServiceImpl implements AppOrderService {
             if (submittedPrice != null) {
                 BigDecimal currentPrice = BigDecimal.valueOf(VoConverterUtil.toFen(product.getPrice()));
                 if (currentPrice.compareTo(submittedPrice) != 0) {
-                    throw new BusinessException("商品价格已变化, productId=" + productId);
+                    throw new BusinessException(product.getName()
+                            + " 价格已从 " + formatFenAmount(submittedPrice)
+                            + " 调整为 " + formatFenAmount(currentPrice)
+                            + "，请刷新购物车后重新结算");
                 }
             }
             Integer stockQuantity = stockMap.get(productId);
             if (stockQuantity == null || stockQuantity < quantity) {
-                throw new BusinessException("商品库存不足, productId=" + productId);
+                throw new BusinessException(buildStockChangedMessage(product, stockQuantity));
             }
 
             BigDecimal subtotal = product.getPrice().multiply(BigDecimal.valueOf(quantity));
@@ -559,6 +563,20 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
 
         return orderLines;
+    }
+
+    private String buildStockChangedMessage(Product product, Integer stockQuantity) {
+        if (stockQuantity == null || stockQuantity <= 0) {
+            return product.getName() + " 当前无库存，请刷新购物车后重新结算";
+        }
+        return product.getName() + " 当前库存仅剩 " + stockQuantity + " 件，请刷新购物车后重新结算";
+    }
+
+    private String formatFenAmount(BigDecimal fenAmount) {
+        return "¥" + fenAmount
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP)
+                .setScale(2, RoundingMode.HALF_UP)
+                .toPlainString();
     }
 
     private ShippingAddressSnapshot resolveShippingAddressSnapshot(Long platformUserId,
