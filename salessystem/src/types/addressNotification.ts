@@ -26,7 +26,7 @@ export interface AddressPayload {
   city?: string;
   district?: string;
   detail: string;
-  isDefault?: number;
+  isDefault?: boolean;
 }
 
 export type AppNotificationActionType =

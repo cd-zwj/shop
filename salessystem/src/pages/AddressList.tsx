@@ -22,6 +22,8 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
 import { getErrorMessage } from '../utils/errorMessage';
 
+const MAINLAND_MOBILE_PATTERN = /^1[3-9]\d{9}$/;
+
 /* ------------------------------------------------------------------ */
 /*  Address Form Modal                                                 */
 /* ------------------------------------------------------------------ */
@@ -71,6 +73,8 @@ function AddressFormModal({ open, initial, onClose, onSaved }: AddressFormModalP
     e.preventDefault();
     if (!receiverName.trim()) { showToast('请输入收货人姓名', 'error'); return; }
     if (!phone.trim()) { showToast('请输入手机号', 'error'); return; }
+    if (!MAINLAND_MOBILE_PATTERN.test(phone.trim())) { showToast('手机号格式不正确', 'error'); return; }
+    if (!city.trim()) { showToast('请输入城市', 'error'); return; }
     if (!detail.trim()) { showToast('请输入详细地址', 'error'); return; }
 
     const payload: AddressPayload = {
@@ -80,7 +84,7 @@ function AddressFormModal({ open, initial, onClose, onSaved }: AddressFormModalP
       city: city.trim() || undefined,
       district: district.trim() || undefined,
       detail: detail.trim(),
-      isDefault: isDefault ? 1 : 0,
+      isDefault,
     };
 
     setSubmitting(true);
@@ -94,7 +98,7 @@ function AddressFormModal({ open, initial, onClose, onSaved }: AddressFormModalP
       }
       onSaved();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '操作失败', 'error');
+      showToast(getErrorMessage(err, '操作失败'), 'error');
     } finally {
       setSubmitting(false);
     }
