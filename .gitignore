@@ -46,7 +46,7 @@ logs/
 
 # Local agent/workspace artifacts
 .agents/
-.claude/worktrees/
+.claude/
 .codex-plugin/
 .codex/
 .playwright-mcp/
@@ -55,3 +55,11 @@ CLAUDE.md
 docs/
 支付路径剩余待办清单.md
 项目方向与需求规划.md
+
+# Local test artifacts
+playwright-report/
+test-results/
+playwright-results.json
+salessystem/playwright-report/
+salessystem/test-results/
+salessystem/playwright-results.json

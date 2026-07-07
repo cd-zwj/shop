@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ClipboardList, Check, X, ShieldAlert } from 'lucide-react';
+import { AlertCircle, ClipboardList, Check, RefreshCw, X, ShieldAlert } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
 import type { Refund } from '../../types/refund';
 import { formatCurrency } from '../../utils/display';
+import { getErrorMessage } from '../../utils/errorMessage';
 import {
   getMerchantRefundPresentation,
   getMerchantRefundRiskItems,
@@ -37,6 +38,7 @@ export default function MerchantRefunds() {
 
   const [refunds, setRefunds] = useState<Refund[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState<RefundTabId>(() => normalizeRefundTab(searchParams.get('status')));
   
   // Audit Modal States
@@ -60,8 +62,13 @@ export default function MerchantRefunds() {
   };
 
   const loadRefunds = useCallback(async () => {
-    if (!tenantId) return;
+    if (!tenantId) {
+      setLoadError('当前商户会话缺少 tenantId，请重新登录');
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
+    setLoadError('');
     try {
       const result = await merchantRefundService.listRefunds(
         tenantId,
@@ -71,7 +78,10 @@ export default function MerchantRefunds() {
       );
       setRefunds(result.records || []);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '获取售后单列表失败', 'error');
+      const message = getErrorMessage(err, '获取售后单列表失败，请稍后重试');
+      setRefunds([]);
+      setLoadError(message);
+      showToast(message, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -175,6 +185,27 @@ export default function MerchantRefunds() {
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 text-slate-500">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
           <span className="text-sm font-semibold">加载数据中...</span>
+        </div>
+      ) : loadError ? (
+        <div
+          role="alert"
+          className="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-red-100 bg-red-50/70 px-4 py-12 text-center text-red-700"
+        >
+          <div className="mb-4 rounded-full bg-white p-4 text-red-500 shadow-sm">
+            <AlertCircle className="h-10 w-10" />
+          </div>
+          <h2 className="text-base font-black text-slate-900">售后列表加载失败</h2>
+          <p className="mt-1.5 max-w-xs text-xs font-semibold leading-relaxed text-red-600">
+            {loadError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadRefunds()}
+            className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2.5 text-xs font-black text-white transition-all hover:bg-slate-800 active:scale-95"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
         </div>
       ) : refunds.length === 0 ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white py-12 text-slate-400">
