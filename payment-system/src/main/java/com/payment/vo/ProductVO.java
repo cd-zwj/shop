@@ -28,12 +28,22 @@ public class ProductVO {
     private String fulfillmentMode;
     private String productType;
     private Integer status;
+    private String inventoryLabel;
+    private String inventoryDescription;
+    private String fulfillmentLabel;
+    private String fulfillmentDescription;
+    private String afterSalesNote;
+    private String purchaseLimitNote;
+    private String deliveryAccessDescription;
+    private String deliveryAccessActionLabel;
+    private Boolean purchasable;
     private String createTime;
 
     public static ProductVO from(Product product) {
         if (product == null) {
             return null;
         }
+        ProductDetailPresentation.ProductDetailView presentation = ProductDetailPresentation.from(product);
         return ProductVO.builder()
                 .id(product.getId())
                 .tenantId(product.getTenantId())
@@ -48,6 +58,15 @@ public class ProductVO {
                 .fulfillmentMode(product.getFulfillmentMode())
                 .productType(product.getProductType())
                 .status(product.getStatus())
+                .inventoryLabel(presentation.inventoryLabel())
+                .inventoryDescription(presentation.inventoryDescription())
+                .fulfillmentLabel(presentation.fulfillmentLabel())
+                .fulfillmentDescription(presentation.fulfillmentDescription())
+                .afterSalesNote(presentation.afterSalesNote())
+                .purchaseLimitNote(presentation.purchaseLimitNote())
+                .deliveryAccessDescription(presentation.deliveryAccessDescription())
+                .deliveryAccessActionLabel(presentation.deliveryAccessActionLabel())
+                .purchasable(presentation.purchasable())
                 .createTime(VoConverterUtil.formatTime(product.getCreateTime()))
                 .build();
     }

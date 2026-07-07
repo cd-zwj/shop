@@ -5,6 +5,7 @@ import {
   getFulfillmentPresentation,
   getInventoryPresentation,
   getMerchantInfoPresentation,
+  getProductDetailPresentation,
   getPurchaseLimitNote,
   getSaleStatusPresentation,
 } from './productDetail';
@@ -93,5 +94,35 @@ describe('productDetail helpers', () => {
     expect(presentation.label).toBe('商品已下架');
     expect(presentation.description).toContain('暂不可购买');
     expect(presentation.isPurchasable).toBe(false);
+  });
+
+  it('prefers backend product detail contract fields when available', () => {
+    const presentation = getProductDetailPresentation({
+      stock: 2,
+      unit: '份',
+      status: 1,
+      fulfillmentMode: 'EXPRESS_DELIVERY',
+      productType: 'PHYSICAL',
+      inventoryLabel: '后端库存提示',
+      inventoryDescription: '后端库存说明',
+      fulfillmentLabel: '后端履约方式',
+      fulfillmentDescription: '后端履约说明',
+      afterSalesNote: '后端售后说明',
+      purchaseLimitNote: '后端购买限制',
+      deliveryAccessDescription: '后端查看位置',
+      deliveryAccessActionLabel: '后端动作',
+      purchasable: false,
+    });
+
+    expect(presentation.inventory.label).toBe('后端库存提示');
+    expect(presentation.inventory.description).toBe('后端库存说明');
+    expect(presentation.fulfillment.label).toBe('后端履约方式');
+    expect(presentation.fulfillment.description).toBe('后端履约说明');
+    expect(presentation.afterSalesNote).toBe('后端售后说明');
+    expect(presentation.purchaseLimitNote).toBe('后端购买限制');
+    expect(presentation.deliveryAccess.description).toBe('后端查看位置');
+    expect(presentation.deliveryAccess.actionLabel).toBe('后端动作');
+    expect(presentation.saleStatus.isPurchasable).toBe(false);
+    expect(presentation.inventory.isOutOfStock).toBe(false);
   });
 });

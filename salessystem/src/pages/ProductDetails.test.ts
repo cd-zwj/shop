@@ -97,6 +97,38 @@ describe('ProductDetails', () => {
     expect(purchaseButtons.length).toBeGreaterThan(0);
     expect(purchaseButtons.every((button) => button.disabled)).toBe(true);
   });
+
+  it('prefers backend product presentation copy over local fallback', async () => {
+    mockedCatalogService.getProduct.mockResolvedValue(buildProduct({
+      id: 17,
+      name: '本地服务套餐',
+      fulfillmentMode: 'EXPRESS_DELIVERY',
+      productType: 'PHYSICAL',
+      stock: 20,
+      status: 1,
+      inventoryLabel: '后端库存展示',
+      inventoryDescription: '后端库存说明',
+      fulfillmentLabel: '后端交付方式',
+      fulfillmentDescription: '后端交付说明',
+      afterSalesNote: '后端售后说明',
+      purchaseLimitNote: '后端购买限制',
+      deliveryAccessDescription: '后端交付查看位置',
+      deliveryAccessActionLabel: '后端交付动作',
+      purchasable: true,
+    }));
+    mockedCatalogService.getTenant.mockResolvedValue(buildTenant());
+
+    const element = await renderProductDetails();
+
+    expect(element.textContent).toContain('后端库存展示');
+    expect(element.textContent).toContain('后端库存说明');
+    expect(element.textContent).toContain('后端交付方式');
+    expect(element.textContent).toContain('后端交付说明');
+    expect(element.textContent).toContain('后端售后说明');
+    expect(element.textContent).toContain('后端购买限制');
+    expect(element.textContent).toContain('后端交付查看位置');
+    expect(element.textContent).toContain('后端交付动作');
+  });
 });
 
 function buildProduct(overrides: Partial<Product>): Product {

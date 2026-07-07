@@ -227,6 +227,13 @@ class V1AppCatalogIntegrationTest {
                     .andExpect(jsonPath("$.data.productType").value("CARD_KEY"))
                     .andExpect(jsonPath("$.data.fulfillmentMode").value("ONLINE_VIRTUAL"))
                     .andExpect(jsonPath("$.data.status").value(1))
+                    .andExpect(jsonPath("$.data.inventoryLabel").value("库存充足"))
+                    .andExpect(jsonPath("$.data.fulfillmentLabel").value("卡密自动交付"))
+                    .andExpect(jsonPath("$.data.afterSalesNote", containsString("卡密未使用前")))
+                    .andExpect(jsonPath("$.data.purchaseLimitNote", containsString("当前库存 8 杯")))
+                    .andExpect(jsonPath("$.data.deliveryAccessDescription", containsString("我的已购")))
+                    .andExpect(jsonPath("$.data.deliveryAccessActionLabel").value("前往我的已购"))
+                    .andExpect(jsonPath("$.data.purchasable").value(true))
                     .andExpect(jsonPath("$.timestamp").isNumber());
         }
 

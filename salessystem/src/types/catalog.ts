@@ -26,5 +26,14 @@ export interface Product {
   fulfillmentMode?: FulfillmentMode | string | null;
   productType?: ProductType | string | null;
   status?: number | string | null;
+  inventoryLabel?: string | null;
+  inventoryDescription?: string | null;
+  fulfillmentLabel?: string | null;
+  fulfillmentDescription?: string | null;
+  afterSalesNote?: string | null;
+  purchaseLimitNote?: string | null;
+  deliveryAccessDescription?: string | null;
+  deliveryAccessActionLabel?: string | null;
+  purchasable?: boolean | null;
   createTime?: string | null;
 }

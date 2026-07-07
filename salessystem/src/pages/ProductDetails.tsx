@@ -28,13 +28,8 @@ import { cn } from '../lib/utils';
 import { formatCurrency, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import {
-  getAfterSalesNote,
-  getDeliveryAccessPresentation,
-  getFulfillmentPresentation,
-  getInventoryPresentation,
+  getProductDetailPresentation,
   getMerchantInfoPresentation,
-  getPurchaseLimitNote,
-  getSaleStatusPresentation,
 } from '../utils/productDetail';
 
 export default function ProductDetails() {
@@ -104,19 +99,14 @@ export default function ProductDetails() {
     };
   }, [productId, tenantId]);
 
-  const inventory = getInventoryPresentation({
-    stock: product?.stock,
-    unit: product?.unit,
-  });
-  const fulfillment = getFulfillmentPresentation(product?.fulfillmentMode, product?.productType);
-  const deliveryAccess = getDeliveryAccessPresentation(product?.fulfillmentMode, product?.productType);
-  const afterSalesNote = getAfterSalesNote(product?.fulfillmentMode, product?.productType);
+  const productPresentation = getProductDetailPresentation(product);
+  const inventory = productPresentation.inventory;
+  const fulfillment = productPresentation.fulfillment;
+  const deliveryAccess = productPresentation.deliveryAccess;
+  const afterSalesNote = productPresentation.afterSalesNote;
   const merchantInfo = getMerchantInfoPresentation(merchant, resolvedTenantId);
-  const purchaseLimitNote = getPurchaseLimitNote({
-    stock: product?.stock,
-    unit: product?.unit,
-  });
-  const saleStatus = getSaleStatusPresentation(product?.status);
+  const purchaseLimitNote = productPresentation.purchaseLimitNote;
+  const saleStatus = productPresentation.saleStatus;
   const isOutOfStock = inventory.isOutOfStock;
   const isPurchaseBlocked = isOutOfStock || !saleStatus.isPurchasable;
 

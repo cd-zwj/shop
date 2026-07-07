@@ -33,6 +33,66 @@ export interface MerchantInfoPresentation {
   actionPath?: string;
 }
 
+export interface ProductDetailContractInput extends InventoryInput {
+  fulfillmentMode?: FulfillmentMode | string | null;
+  productType?: ProductType | string | null;
+  status?: number | string | null;
+  inventoryLabel?: string | null;
+  inventoryDescription?: string | null;
+  fulfillmentLabel?: string | null;
+  fulfillmentDescription?: string | null;
+  afterSalesNote?: string | null;
+  purchaseLimitNote?: string | null;
+  deliveryAccessDescription?: string | null;
+  deliveryAccessActionLabel?: string | null;
+  purchasable?: boolean | null;
+}
+
+export interface ProductDetailPresentation {
+  inventory: InventoryPresentation;
+  fulfillment: ReturnType<typeof getFulfillmentPresentation>;
+  deliveryAccess: DeliveryAccessPresentation;
+  afterSalesNote: string;
+  purchaseLimitNote: string;
+  saleStatus: SaleStatusPresentation;
+}
+
+export function getProductDetailPresentation(product?: ProductDetailContractInput | null): ProductDetailPresentation {
+  const inventoryFallback = getInventoryPresentation({
+    stock: product?.stock,
+    unit: product?.unit,
+  });
+  const fulfillmentFallback = getFulfillmentPresentation(product?.fulfillmentMode, product?.productType);
+  const deliveryFallback = getDeliveryAccessPresentation(product?.fulfillmentMode, product?.productType);
+  const saleStatusFallback = getSaleStatusPresentation(product?.status);
+  const backendPurchasable = typeof product?.purchasable === 'boolean' ? product.purchasable : undefined;
+
+  return {
+    inventory: {
+      ...inventoryFallback,
+      label: product?.inventoryLabel?.trim() || inventoryFallback.label,
+      description: product?.inventoryDescription?.trim() || inventoryFallback.description,
+    },
+    fulfillment: {
+      label: product?.fulfillmentLabel?.trim() || fulfillmentFallback.label,
+      description: product?.fulfillmentDescription?.trim() || fulfillmentFallback.description,
+    },
+    deliveryAccess: {
+      label: deliveryFallback.label,
+      description: product?.deliveryAccessDescription?.trim() || deliveryFallback.description,
+      actionLabel: product?.deliveryAccessActionLabel?.trim() || deliveryFallback.actionLabel,
+    },
+    afterSalesNote: product?.afterSalesNote?.trim()
+      || getAfterSalesNote(product?.fulfillmentMode, product?.productType),
+    purchaseLimitNote: product?.purchaseLimitNote?.trim()
+      || getPurchaseLimitNote({ stock: product?.stock, unit: product?.unit }),
+    saleStatus: {
+      ...saleStatusFallback,
+      isPurchasable: backendPurchasable ?? saleStatusFallback.isPurchasable,
+    },
+  };
+}
+
 export function getInventoryPresentation(product: InventoryInput): InventoryPresentation {
   if (typeof product.stock !== 'number') {
     return {
