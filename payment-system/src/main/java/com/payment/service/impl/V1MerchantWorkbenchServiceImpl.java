@@ -6,9 +6,11 @@ import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
 import com.payment.entity.RefundApplication;
 import com.payment.entity.SalesOrder;
 import com.payment.enums.RefundApplicationStatus;
+import com.payment.mapper.CompensationTaskMapper;
 import com.payment.mapper.OrderDeliveryRecordMapper;
 import com.payment.mapper.ProductMapper;
 import com.payment.mapper.RefundApplicationMapper;
+import com.payment.mapper.RetryTaskMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.V1MerchantWorkbenchService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,8 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
     private final RefundApplicationMapper refundApplicationMapper;
     private final OrderDeliveryRecordMapper orderDeliveryRecordMapper;
     private final ProductMapper productMapper;
+    private final CompensationTaskMapper compensationTaskMapper;
+    private final RetryTaskMapper retryTaskMapper;
 
     @Override
     public MerchantWorkbenchTodoSummaryVO getTodoSummary(Long tenantId) {
@@ -48,6 +52,12 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
                 item("refundFailed", "退款失败单", "内部退款处理失败，需要检查失败原因并继续跟进用户。",
                         countRefunds(tenantId, RefundApplicationStatus.FAILED.name()),
                         "/merchant/refunds?status=FAILED", "red"),
+                item("compensation", "待补偿任务", "订单、支付或退款补偿任务未结束，需要管理员介入或等待调度器继续处理。",
+                        safeCount(compensationTaskMapper.countMerchantVisibleOpenTasks(tenantId)),
+                        "/admin/compensation?type=compensation", "red"),
+                item("retry", "待重试任务", "异步重试任务仍在排队、失败或已进入死信，需要排查原因并重试。",
+                        safeCount(retryTaskMapper.countMerchantVisibleOpenTasks(tenantId)),
+                        "/admin/compensation?type=retry", "orange"),
                 item("stock", "低库存商品", "库存低于或等于 5 的上架商品，建议补货或下架。",
                         safeCount(productMapper.countActiveLowStockByTenant(tenantId, LOW_STOCK_THRESHOLD)),
                         "/merchant/products", "red")

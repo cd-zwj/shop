@@ -110,12 +110,20 @@ describe('MerchantDashboard', () => {
       totalCount: 12,
       items: [
         {
-          key: 'fulfillment',
-          label: '待履约订单',
-          description: '真实后端汇总',
-          count: 12,
-          path: '/merchant/orders?tab=shipping',
-          tone: 'blue',
+          key: 'compensation',
+          label: '待补偿任务',
+          description: '真实后端补偿汇总',
+          count: 7,
+          path: '/admin/compensation?type=compensation',
+          tone: 'red',
+        },
+        {
+          key: 'retry',
+          label: '待重试任务',
+          description: '真实后端重试汇总',
+          count: 5,
+          path: '/admin/compensation?type=retry',
+          tone: 'orange',
         },
       ],
     });
@@ -124,8 +132,9 @@ describe('MerchantDashboard', () => {
 
     expect(mockedWorkbenchService.getTodoSummary).toHaveBeenCalledWith(9);
     expect(element.textContent).toContain('12 项');
-    expect(element.textContent).toContain('12 个待履约订单');
-    expect(element.textContent).toContain('真实后端汇总');
+    expect(element.textContent).toContain('7 个待补偿任务');
+    expect(element.textContent).toContain('5 个待重试任务');
+    expect(element.textContent).toContain('真实后端补偿汇总');
   });
 
   it('falls back to local todo estimation when backend todo summary fails', async () => {
