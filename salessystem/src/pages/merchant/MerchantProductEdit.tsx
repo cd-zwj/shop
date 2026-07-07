@@ -359,7 +359,18 @@ export default function MerchantProductEdit() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="rounded-2xl border border-slate-100 bg-white p-4 text-slate-400 shadow-sm transition-all hover:text-slate-900">
+          <button
+            type="button"
+            aria-label="预览用户视图"
+            title={isEdit && id ? '预览用户视图' : '保存商品后可预览用户视图'}
+            disabled={!isEdit || !id}
+            onClick={() => {
+              if (isEdit && id) {
+                navigate(`/product/${id}`);
+              }
+            }}
+            className="rounded-2xl border border-slate-100 bg-white p-4 text-slate-400 shadow-sm transition-all hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <Eye size={20} />
           </button>
           <button
