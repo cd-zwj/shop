@@ -74,6 +74,45 @@ async function renderNotifications() {
 }
 
 describe('Notifications', () => {
+  it('shows a retryable error state when notifications fail to load', async () => {
+    const notification = buildNotification({
+      id: 11,
+      title: '退款处理完成',
+      content: '您的退款已原路退回',
+      readStatus: 1,
+    });
+
+    mockedNotificationService.list
+      .mockRejectedValueOnce(new Error('通知服务暂不可用'))
+      .mockResolvedValue({
+        records: [notification],
+        total: 1,
+        page: 1,
+        size: 20,
+        pages: 1,
+      });
+    mockedNotificationService.getUnreadCount.mockResolvedValue({ count: 0 });
+
+    const element = await renderNotifications();
+
+    expect(element.textContent).toContain('通知加载失败');
+    expect(element.textContent).toContain('通知服务暂不可用');
+    expect(mockedNotificationService.list).toHaveBeenCalledTimes(1);
+
+    const retryButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('重试'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedNotificationService.list).toHaveBeenCalledTimes(2);
+    expect(element.textContent).toContain('退款处理完成');
+    expect(element.textContent).not.toContain('通知加载失败');
+  });
+
   it('marks an unread actionable notification as read before navigating', async () => {
     const notification = buildNotification({
       id: 8,

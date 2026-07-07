@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
+  AlertCircle,
   ArrowLeft,
   BellOff,
   CheckCheck,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
@@ -16,6 +18,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { cn } from '../lib/utils';
 import { getNotificationAction } from '../utils/notificationAction';
 import { getNotificationPresentation } from '../utils/notificationPresentation';
+import { getErrorMessage } from '../utils/errorMessage';
 
 const NOTIFICATION_FILTERS = [
   { id: 'ALL', label: '全部', readStatus: undefined },
@@ -58,12 +61,14 @@ export default function Notifications() {
   const [totalPages, setTotalPages] = useState(1);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeFilter, setActiveFilter] = useState<NotificationFilterId>('ALL');
+  const [loadError, setLoadError] = useState('');
   const markReadRequestsRef = useRef<Map<number, Promise<boolean>>>(new Map());
 
   const loadNotifications = useCallback(
     async (page: number, filterId: NotificationFilterId) => {
       const readStatus = NOTIFICATION_FILTERS.find((filter) => filter.id === filterId)?.readStatus;
       setIsLoading(true);
+      setLoadError('');
       try {
         const [data, unread] = await Promise.all([
           appNotificationService.list(page, 20, readStatus),
@@ -73,7 +78,11 @@ export default function Notifications() {
         setTotalPages(data.pages ?? 1);
         setUnreadCount(unread.count ?? 0);
       } catch (err) {
-        showToast(err instanceof Error ? err.message : '加载通知失败', 'error');
+        const message = getErrorMessage(err, '通知加载失败，请稍后重试');
+        setNotifications([]);
+        setTotalPages(1);
+        setLoadError(message);
+        showToast(message, 'error');
       } finally {
         setIsLoading(false);
       }
@@ -219,6 +228,26 @@ export default function Notifications() {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
           <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
           <span className="text-sm font-medium">加载通知中...</span>
+        </div>
+      ) : loadError ? (
+        <div
+          role="alert"
+          className="flex flex-col items-center justify-center rounded-3xl border border-red-100 bg-white px-4 py-20 text-center shadow-sm"
+        >
+          <div className="mb-4 rounded-full bg-red-50 p-4 text-red-500">
+            <AlertCircle className="h-12 w-12" />
+          </div>
+          <h3 className="text-base font-extrabold text-slate-800 dark:text-white">通知加载失败</h3>
+          <p className="mt-1.5 max-w-xs text-xs font-semibold leading-relaxed text-slate-400">
+            {loadError}
+          </p>
+          <button
+            onClick={() => void loadNotifications(currentPage, activeFilter)}
+            className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-primary px-4 py-2.5 text-xs font-black text-white transition-all hover:bg-primary/90 active:scale-95"
+          >
+            <RefreshCw className="h-4 w-4" />
+            重试
+          </button>
         </div>
       ) : notifications.length === 0 ? (
         <EmptyState
