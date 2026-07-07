@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
  * <p>
  * 记录 C 端用户在平台上的购买订单，是订单生命周期的核心实体。
  * 订单状态流转：创建 → 支付 → 履约/交付 → 完成/关闭/退款。
- * 支持双钱包、优惠券、积分等多种扣减方式，各扣减金额之和等于应付金额。
+ * 支持双钱包、优惠券、积分等多种扣减方式。payableAmount 是钱包拆分前的应付基数，
+ * 后续再拆分为统一钱包抵扣、商户钱包抵扣和外部渠道实际支付金额。
  * </p>
  */
 @Data
@@ -68,7 +69,7 @@ public class SalesOrder implements Serializable {
     /** 外部渠道实际支付金额（微信/支付宝等），单位：元 */
     private BigDecimal externalPayAmount;
 
-    /** 用户实际应付金额 = totalAmount - discountAmount - 各项抵扣，单位：元 */
+    /** 钱包拆分前的应付金额 = totalAmount - discountAmount - pointsDeductAmount，单位：元 */
     private BigDecimal payableAmount;
 
     /** 订单标题/摘要，用于支付页面展示和第三方支付单描述 */

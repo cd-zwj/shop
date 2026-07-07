@@ -4,7 +4,9 @@ import com.payment.common.BusinessException;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.common.TenantContextHolder;
+import com.payment.constant.MerchantPermission;
 import com.payment.service.FileUploadApplicationService;
+import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.FileAssetVO;
 import org.junit.jupiter.api.AfterEach;
@@ -24,8 +26,9 @@ import static org.mockito.Mockito.when;
 class FileUploadControllerTest {
 
     private final FileUploadApplicationService fileUploadApplicationService = mock(FileUploadApplicationService.class);
-    private final FileUploadController legacyController = new FileUploadController(fileUploadApplicationService);
-    private final V1MerchantFileController v1Controller = new V1MerchantFileController(fileUploadApplicationService);
+    private final V1MerchantSupportService v1MerchantSupportService = mock(V1MerchantSupportService.class);
+    private final FileUploadController legacyController = new FileUploadController(fileUploadApplicationService, v1MerchantSupportService);
+    private final V1MerchantFileController v1Controller = new V1MerchantFileController(fileUploadApplicationService, v1MerchantSupportService);
 
     @AfterEach
     void tearDown() {
@@ -44,12 +47,25 @@ class FileUploadControllerTest {
             Result<String> result = legacyController.uploadFile(file, "md5");
 
             assertEquals("http://local/file.pdf", result.getData());
+            verify(v1MerchantSupportService).requirePermission(10L, 20L, MerchantPermission.PRODUCT_MANAGE);
             verify(fileUploadApplicationService).uploadFile(file, "md5", 10L, 20L);
         }
     }
 
     @Test
-    void v1UploadShouldIgnorePathTenantAndUseCurrentTenantContext() {
+    void v1UploadShouldRequirePathTenantToMatchCurrentTenantContext() {
+        TenantContextHolder.setTenantId(10L);
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.pdf", "application/pdf", "ok".getBytes());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> v1Controller.uploadFile(999L, file, "md5"));
+
+        assertEquals("租户上下文不匹配", exception.getMessage());
+    }
+
+    @Test
+    void v1UploadShouldUseCurrentTenantContextAfterPermissionCheck() {
         TenantContextHolder.setTenantId(10L);
         MockMultipartFile file = new MockMultipartFile("file", "receipt.pdf", "application/pdf", "ok".getBytes());
 
@@ -57,15 +73,16 @@ class FileUploadControllerTest {
             platformSession.when(PlatformSessionHelper::getPlatformUserId).thenReturn(20L);
             when(fileUploadApplicationService.uploadFile(file, "md5", 10L, 20L)).thenReturn("http://local/file.pdf");
 
-            Result<String> result = v1Controller.uploadFile(999L, file, "md5");
+            Result<String> result = v1Controller.uploadFile(10L, file, "md5");
 
             assertEquals("http://local/file.pdf", result.getData());
+            verify(v1MerchantSupportService).requirePermission(10L, 20L, MerchantPermission.PRODUCT_MANAGE);
             verify(fileUploadApplicationService).uploadFile(file, "md5", 10L, 20L);
         }
     }
 
     @Test
-    void v1ListShouldIgnorePathTenantAndUseCurrentTenantContext() {
+    void v1ListShouldUseCurrentTenantContextAfterPermissionCheck() {
         TenantContextHolder.setTenantId(10L);
         PageResult<FileAssetVO> page = new PageResult<>(
                 List.of(FileAssetVO.builder().id(1L).fileName("receipt.pdf").build()),
@@ -74,10 +91,15 @@ class FileUploadControllerTest {
                 10);
         when(fileUploadApplicationService.listFiles(10L, 1, 10)).thenReturn(page);
 
-        Result<PageResult<FileAssetVO>> result = v1Controller.listFiles(999L, 1, 10);
+        try (MockedStatic<PlatformSessionHelper> platformSession = mockStatic(PlatformSessionHelper.class)) {
+            platformSession.when(PlatformSessionHelper::getPlatformUserId).thenReturn(20L);
 
-        assertEquals(1L, result.getData().getTotal());
-        verify(fileUploadApplicationService).listFiles(10L, 1, 10);
+            Result<PageResult<FileAssetVO>> result = v1Controller.listFiles(10L, 1, 10);
+
+            assertEquals(1L, result.getData().getTotal());
+            verify(v1MerchantSupportService).requirePermission(10L, 20L, MerchantPermission.PRODUCT_MANAGE);
+            verify(fileUploadApplicationService).listFiles(10L, 1, 10);
+        }
     }
 
     @Test
@@ -92,7 +114,7 @@ class FileUploadControllerTest {
 
             BusinessException exception = assertThrows(
                     BusinessException.class,
-                    () -> v1Controller.uploadFile(999L, file, null));
+                    () -> v1Controller.uploadFile(10L, file, null));
 
             assertEquals("不支持的文件类型", exception.getMessage());
         }

@@ -1,12 +1,14 @@
 package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
-import cn.dev33.satoken.annotation.SaCheckPermission;
+import com.payment.common.BusinessException;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.common.TenantContextHolder;
 import com.payment.config.AuthStpKit;
+import com.payment.constant.MerchantPermission;
 import com.payment.service.FileUploadApplicationService;
+import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.FileAssetVO;
 import jakarta.validation.constraints.Min;
@@ -24,12 +26,14 @@ import java.util.Map;
 public class V1MerchantFileController {
 
     private final FileUploadApplicationService fileUploadApplicationService;
+    private final V1MerchantSupportService v1MerchantSupportService;
 
     @GetMapping("/check-exists")
     public Result<Map<String, Object>> checkFileExists(
             @PathVariable Long tenantId,
             @RequestParam("fileMd5") String fileMd5,
             @RequestParam("fileName") String fileName) {
+        requireProductManageForCurrentTenant(tenantId);
         String fileUrl = fileUploadApplicationService.checkFileExists(fileMd5, fileName);
         Map<String, Object> result = new HashMap<>();
         result.put("exists", fileUrl != null);
@@ -47,7 +51,7 @@ public class V1MerchantFileController {
             @PathVariable Long tenantId,
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "fileMd5", required = false) String fileMd5) {
-        Long currentTenantId = TenantContextHolder.getTenantId();
+        Long currentTenantId = requireProductManageForCurrentTenant(tenantId);
         Long userId = PlatformSessionHelper.getPlatformUserId();
         return Result.success(fileUploadApplicationService.uploadFile(file, fileMd5, currentTenantId, userId));
     }
@@ -60,6 +64,7 @@ public class V1MerchantFileController {
             @RequestParam("chunkNumber") int chunkNumber,
             @RequestParam("totalChunks") int totalChunks,
             @RequestParam("fileMd5") String fileMd5) {
+        requireProductManageForCurrentTenant(tenantId);
         return Result.success(fileUploadApplicationService.uploadFileChunk(file, fileId, chunkNumber, totalChunks, fileMd5));
     }
 
@@ -67,15 +72,31 @@ public class V1MerchantFileController {
     public Result<Map<String, Object>> getUploadProgress(
             @PathVariable Long tenantId,
             @RequestParam("fileId") String fileId) {
+        requireProductManageForCurrentTenant(tenantId);
         return Result.success(fileUploadApplicationService.getUploadProgress(fileId));
     }
 
-    @SaCheckPermission(type = AuthStpKit.MERCHANT_TYPE, value = "file:list")
     @GetMapping
     public Result<PageResult<FileAssetVO>> listFiles(
             @PathVariable Long tenantId,
             @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
             @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size) {
-        return Result.success(fileUploadApplicationService.listFiles(TenantContextHolder.getTenantId(), current, size));
+        Long currentTenantId = requireProductManageForCurrentTenant(tenantId);
+        return Result.success(fileUploadApplicationService.listFiles(currentTenantId, current, size));
+    }
+
+    private Long requireProductManageForCurrentTenant(Long pathTenantId) {
+        Long currentTenantId = TenantContextHolder.getTenantId();
+        if (currentTenantId == null) {
+            throw new BusinessException("租户信息不存在");
+        }
+        if (!currentTenantId.equals(pathTenantId)) {
+            throw new BusinessException("租户上下文不匹配");
+        }
+        v1MerchantSupportService.requirePermission(
+                currentTenantId,
+                PlatformSessionHelper.getPlatformUserId(),
+                MerchantPermission.PRODUCT_MANAGE);
+        return currentTenantId;
     }
 }

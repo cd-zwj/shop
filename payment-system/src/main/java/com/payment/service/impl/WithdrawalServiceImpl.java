@@ -1,7 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.WithdrawalApplyDTO;
@@ -89,22 +89,23 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new BusinessException("租户信息不存在");
         }
 
-        MerchantBalance balance = getMerchantBalance(tenantId);
-        if (balance == null || balance.getBalance().compareTo(dto.getAmount()) < 0) {
-            throw new BusinessException("可提现余额不足");
+        BigDecimal amount = dto.getAmount();
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("提现金额必须大于0");
         }
 
-        // 冻结余额（乐观锁重试）：balance → frozenBalance
+        // 冻结余额（CAS 条件更新）：balance -> frozenBalance
         for (int attempt = 0; attempt < 3; attempt++) {
-            balance.setBalance(balance.getBalance().subtract(dto.getAmount()));
-            balance.setFrozenBalance(balance.getFrozenBalance().add(dto.getAmount()));
-            balance.setUpdateTime(LocalDateTime.now());
-            if (merchantBalanceMapper.updateById(balance) > 0) break;
-            balance = getMerchantBalance(tenantId);
-            if (balance == null || balance.getBalance().compareTo(dto.getAmount()) < 0) {
+            MerchantBalance balance = getMerchantBalance(tenantId);
+            if (balance == null || balance.getBalance().compareTo(amount) < 0) {
                 throw new BusinessException("可提现余额不足");
             }
-            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            if (freezeAvailableBalance(balance, amount)) {
+                break;
+            }
+            if (attempt == 2) {
+                throw new BusinessException("操作冲突，请重试");
+            }
         }
 
         Withdrawal withdrawal = new Withdrawal();
@@ -117,7 +118,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         withdrawalMapper.insert(withdrawal);
 
         log.info("创建提现申请 tenantId={}, amount={}, withdrawalId={}",
-                tenantId, dto.getAmount(), withdrawal.getId());
+                tenantId, amount, withdrawal.getId());
         return withdrawal;
     }
 
@@ -225,31 +226,13 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             } catch (Exception e) {
                 // 并发创建 → DuplicateKeyException → 回退到重试更新
                 log.warn("商家余额并发创建冲突，转为更新，tenantId={}", tenantId);
-                balance = getMerchantBalance(tenantId);
-                if (balance == null) throw new BusinessException("创建商家余额失败");
-                for (int attempt = 0; attempt < 3; attempt++) {
-                    balance.setBalance(balance.getBalance().add(amount));
-                    balance.setTotalIncome(balance.getTotalIncome().add(amount));
-                    balance.setUpdateTime(LocalDateTime.now());
-                    if (merchantBalanceMapper.updateById(balance) > 0) break;
-                    balance = merchantBalanceMapper.selectById(balance.getId());
-                    if (attempt == 2) throw new BusinessException("操作冲突，请重试");
-                }
+                retryIncreaseMerchantBalance(tenantId, amount);
             }
         } else {
-            // 更新余额（乐观锁重试）
-            for (int attempt = 0; attempt < 3; attempt++) {
-                balance.setBalance(balance.getBalance().add(amount));
-                balance.setTotalIncome(balance.getTotalIncome().add(amount));
-                balance.setUpdateTime(LocalDateTime.now());
-                if (merchantBalanceMapper.updateById(balance) > 0) break;
-                balance = merchantBalanceMapper.selectById(balance.getId());
-                if (attempt == 2) throw new BusinessException("操作冲突，请重试");
-            }
+            retryIncreaseMerchantBalance(tenantId, amount);
         }
 
-        log.info("增加商家余额成功 tenantId={}, amount={}, balance={}, orderNo={}",
-                tenantId, amount, balance.getBalance(), orderNo);
+        log.info("增加商家余额成功 tenantId={}, amount={}, orderNo={}", tenantId, amount, orderNo);
     }
 
     /**
@@ -271,25 +254,21 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             throw new BusinessException("扣减金额必须大于0");
         }
 
-        MerchantBalance balance = getMerchantBalance(tenantId);
-        if (balance == null || balance.getBalance().compareTo(amount) < 0) {
-            throw new BusinessException("商家余额不足");
-        }
-
-        // 扣减余额（乐观锁重试）
+        // 扣减余额（CAS 条件更新）
         for (int attempt = 0; attempt < 3; attempt++) {
-            balance.setBalance(balance.getBalance().subtract(amount));
-            balance.setUpdateTime(LocalDateTime.now());
-            if (merchantBalanceMapper.updateById(balance) > 0) break;
-            balance = merchantBalanceMapper.selectById(balance.getId());
+            MerchantBalance balance = getMerchantBalance(tenantId);
             if (balance == null || balance.getBalance().compareTo(amount) < 0) {
                 throw new BusinessException("商家余额不足");
             }
-            if (attempt == 2) throw new BusinessException("操作冲突，请重试");
+            if (deductAvailableBalance(balance, amount)) {
+                break;
+            }
+            if (attempt == 2) {
+                throw new BusinessException("操作冲突，请重试");
+            }
         }
 
-        log.info("扣减商家余额成功 tenantId={}, amount={}, balance={}",
-                tenantId, amount, balance.getBalance());
+        log.info("扣减商家余额成功 tenantId={}, amount={}", tenantId, amount);
     }
 
     /**
@@ -470,15 +449,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
      * @param withdrawal 已通过的提现申请
      */
     private void moveFrozenBalanceToWithdrawal(Withdrawal withdrawal) {
-        MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法通过提现申请");
         for (int attempt = 0; attempt < 3; attempt++) {
-            balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
-            balance.setTotalWithdrawal(balance.getTotalWithdrawal().add(withdrawal.getAmount()));
-            balance.setUpdateTime(LocalDateTime.now());
-            if (merchantBalanceMapper.updateById(balance) > 0) {
+            MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法通过提现申请");
+            if (moveFrozenToWithdrawal(balance, withdrawal.getAmount())) {
                 return;
             }
-            balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法通过提现申请");
         }
         throw new BusinessException("操作冲突，请重试");
     }
@@ -489,17 +464,81 @@ public class WithdrawalServiceImpl implements WithdrawalService {
      * @param withdrawal 已拒绝的提现申请
      */
     private void unfreezeWithdrawalBalance(Withdrawal withdrawal) {
-        MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法拒绝提现申请");
         for (int attempt = 0; attempt < 3; attempt++) {
-            balance.setFrozenBalance(balance.getFrozenBalance().subtract(withdrawal.getAmount()));
-            balance.setBalance(balance.getBalance().add(withdrawal.getAmount()));
-            balance.setUpdateTime(LocalDateTime.now());
-            if (merchantBalanceMapper.updateById(balance) > 0) {
+            MerchantBalance balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法拒绝提现申请");
+            if (unfreezeBalance(balance, withdrawal.getAmount())) {
                 return;
             }
-            balance = requireFrozenBalance(withdrawal, "冻结余额不足，无法拒绝提现申请");
         }
         throw new BusinessException("拒绝提现解冻余额失败，请重试");
+    }
+
+    private void retryIncreaseMerchantBalance(Long tenantId, BigDecimal amount) {
+        for (int attempt = 0; attempt < 3; attempt++) {
+            MerchantBalance balance = getMerchantBalance(tenantId);
+            if (balance == null) {
+                throw new BusinessException("创建商家余额失败");
+            }
+            if (increaseAvailableBalance(balance, amount)) {
+                return;
+            }
+        }
+        throw new BusinessException("操作冲突，请重试");
+    }
+
+    private boolean freezeAvailableBalance(MerchantBalance balance, BigDecimal amount) {
+        UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
+                .ge("balance", amount)
+                .setSql("balance = balance - " + moneyLiteral(amount))
+                .setSql("frozen_balance = COALESCE(frozen_balance, 0) + " + moneyLiteral(amount));
+        return merchantBalanceMapper.update(null, wrapper) > 0;
+    }
+
+    private boolean increaseAvailableBalance(MerchantBalance balance, BigDecimal amount) {
+        UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
+                .setSql("balance = COALESCE(balance, 0) + " + moneyLiteral(amount))
+                .setSql("total_income = COALESCE(total_income, 0) + " + moneyLiteral(amount));
+        return merchantBalanceMapper.update(null, wrapper) > 0;
+    }
+
+    private boolean deductAvailableBalance(MerchantBalance balance, BigDecimal amount) {
+        UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
+                .ge("balance", amount)
+                .setSql("balance = balance - " + moneyLiteral(amount));
+        return merchantBalanceMapper.update(null, wrapper) > 0;
+    }
+
+    private boolean moveFrozenToWithdrawal(MerchantBalance balance, BigDecimal amount) {
+        UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
+                .ge("frozen_balance", amount)
+                .setSql("frozen_balance = frozen_balance - " + moneyLiteral(amount))
+                .setSql("total_withdrawal = COALESCE(total_withdrawal, 0) + " + moneyLiteral(amount));
+        return merchantBalanceMapper.update(null, wrapper) > 0;
+    }
+
+    private boolean unfreezeBalance(MerchantBalance balance, BigDecimal amount) {
+        UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
+                .ge("frozen_balance", amount)
+                .setSql("frozen_balance = frozen_balance - " + moneyLiteral(amount))
+                .setSql("balance = COALESCE(balance, 0) + " + moneyLiteral(amount));
+        return merchantBalanceMapper.update(null, wrapper) > 0;
+    }
+
+    private UpdateWrapper<MerchantBalance> baseBalanceUpdate(MerchantBalance balance) {
+        UpdateWrapper<MerchantBalance> wrapper = new UpdateWrapper<MerchantBalance>()
+                .eq("id", balance.getId())
+                .eq("tenant_id", balance.getTenantId())
+                .eq("deleted", 0)
+                .set("update_time", LocalDateTime.now())
+                .setSql("version = COALESCE(version, 0) + 1");
+        if (balance.getVersion() == null) {
+            return wrapper.isNull("version");
+        }
+        return wrapper.eq("version", balance.getVersion());
+    }
+
+    private String moneyLiteral(BigDecimal amount) {
+        return amount.stripTrailingZeros().toPlainString();
     }
 
     /**

@@ -38,6 +38,20 @@ class RbacPermissionSqlTest {
     }
 
     @Test
+    void rbacPrincipalTypeHardeningMigrationShouldGuardColumnsAndIndexes() throws IOException {
+        String migrationSql = Files.readString(Path.of(
+                "src", "main", "resources", "db", "migration", "V12__harden_rbac_principal_type_idempotency.sql"));
+
+        assertTrue(migrationSql.contains("information_schema.columns"));
+        assertTrue(migrationSql.contains("information_schema.statistics"));
+        assertTrue(migrationSql.contains("PREPARE stmt FROM @sql"));
+        assertTrue(migrationSql.contains("column_name = 'principal_type'"));
+        assertTrue(migrationSql.contains("index_name = 'uk_user_role'"));
+        assertTrue(migrationSql.contains("index_name = 'uk_principal_role'"));
+        assertTrue(migrationSql.contains("index_name = 'uk_principal_permission'"));
+    }
+
+    @Test
     void importAllShouldReferenceEveryNumberedSqlScript() throws IOException {
         String importAll = Files.readString(Path.of("sql", "import_all.sql"));
         try (Stream<Path> paths = Files.list(Path.of("sql"))) {

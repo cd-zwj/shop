@@ -40,7 +40,7 @@ class WithdrawalServiceImplTest {
 
         assertThrows(BusinessException.class, () -> service.approveWithdrawal(1L));
 
-        verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
+        verify(merchantBalanceMapper, never()).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -52,13 +52,13 @@ class WithdrawalServiceImplTest {
         when(withdrawalMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(pendingWithdrawal());
         when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithFrozen("100.00"));
         when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
-        when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(1);
+        when(merchantBalanceMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
 
         service.approveWithdrawal(1L);
 
         InOrder inOrder = inOrder(withdrawalMapper, merchantBalanceMapper);
         inOrder.verify(withdrawalMapper).update(isNull(), any(UpdateWrapper.class));
-        inOrder.verify(merchantBalanceMapper).updateById(any(MerchantBalance.class));
+        inOrder.verify(merchantBalanceMapper).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -73,7 +73,7 @@ class WithdrawalServiceImplTest {
         assertThrows(BusinessException.class, () -> service.rejectWithdrawal(1L, "资料不完整"));
 
         verify(withdrawalMapper, never()).update(isNull(), any(UpdateWrapper.class));
-        verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
+        verify(merchantBalanceMapper, never()).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -85,13 +85,13 @@ class WithdrawalServiceImplTest {
         when(withdrawalMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(pendingWithdrawal());
         when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithFrozen("100.00"));
         when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
-        when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(1);
+        when(merchantBalanceMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
 
         service.rejectWithdrawal(1L, "资料不完整");
 
         InOrder inOrder = inOrder(withdrawalMapper, merchantBalanceMapper);
         inOrder.verify(withdrawalMapper).update(isNull(), any(UpdateWrapper.class));
-        inOrder.verify(merchantBalanceMapper).updateById(any(MerchantBalance.class));
+        inOrder.verify(merchantBalanceMapper).update(isNull(), any(UpdateWrapper.class));
     }
 
     @Test
@@ -107,9 +107,47 @@ class WithdrawalServiceImplTest {
                 .thenReturn(balanceWithFrozen("100.00"))
                 .thenReturn(balanceWithFrozen("100.00"));
         when(withdrawalMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
-        when(merchantBalanceMapper.updateById(any(MerchantBalance.class))).thenReturn(0);
+        when(merchantBalanceMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(0);
 
         assertThrows(BusinessException.class, () -> service.rejectWithdrawal(1L, "资料不完整"));
+    }
+
+    @Test
+    void addMerchantBalanceShouldRetryWithConditionalSqlUpdate() {
+        WithdrawalMapper withdrawalMapper = mock(WithdrawalMapper.class);
+        MerchantBalanceMapper merchantBalanceMapper = mock(MerchantBalanceMapper.class);
+        WithdrawalServiceImpl service = service(withdrawalMapper, merchantBalanceMapper);
+
+        when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class)))
+                .thenReturn(balanceWithAvailable("50.00", 1))
+                .thenReturn(balanceWithAvailable("70.00", 2));
+        when(merchantBalanceMapper.update(isNull(), any(UpdateWrapper.class)))
+                .thenReturn(0)
+                .thenReturn(1);
+
+        service.addMerchantBalance(9L, new BigDecimal("10.00"), "SO1001");
+
+        verify(merchantBalanceMapper, org.mockito.Mockito.times(2)).update(isNull(), any(UpdateWrapper.class));
+        verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
+    }
+
+    @Test
+    void createWithdrawalShouldFreezeBalanceWithConditionalSqlUpdate() {
+        WithdrawalMapper withdrawalMapper = mock(WithdrawalMapper.class);
+        MerchantBalanceMapper merchantBalanceMapper = mock(MerchantBalanceMapper.class);
+        WithdrawalServiceImpl service = service(withdrawalMapper, merchantBalanceMapper);
+
+        com.payment.dto.WithdrawalApplyDTO dto = new com.payment.dto.WithdrawalApplyDTO();
+        dto.setAmount(new BigDecimal("10.00"));
+
+        when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(balanceWithAvailable("50.00", 1));
+        when(merchantBalanceMapper.update(isNull(), any(UpdateWrapper.class))).thenReturn(1);
+
+        service.createWithdrawal(9L, dto);
+
+        verify(merchantBalanceMapper).update(isNull(), any(UpdateWrapper.class));
+        verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
+        verify(withdrawalMapper).insert(any(Withdrawal.class));
     }
 
     private WithdrawalServiceImpl service(WithdrawalMapper withdrawalMapper, MerchantBalanceMapper merchantBalanceMapper) {
@@ -134,15 +172,21 @@ class WithdrawalServiceImplTest {
     }
 
     private MerchantBalance balanceWithFrozen(String frozenBalance) {
+        MerchantBalance balance = balanceWithAvailable("50.00", 1);
+        balance.setFrozenBalance(new BigDecimal(frozenBalance));
+        return balance;
+    }
+
+    private MerchantBalance balanceWithAvailable(String availableBalance, int version) {
         MerchantBalance balance = new MerchantBalance();
         balance.setId(1L);
         balance.setTenantId(9L);
-        balance.setBalance(new BigDecimal("50.00"));
-        balance.setFrozenBalance(new BigDecimal(frozenBalance));
+        balance.setBalance(new BigDecimal(availableBalance));
+        balance.setFrozenBalance(BigDecimal.ZERO);
         balance.setTotalIncome(new BigDecimal("100.00"));
         balance.setTotalWithdrawal(BigDecimal.ZERO);
         balance.setDeleted(0);
-        balance.setVersion(1);
+        balance.setVersion(version);
         return balance;
     }
 }
