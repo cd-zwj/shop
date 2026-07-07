@@ -17,6 +17,10 @@ import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
 import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload } from '../../types/marketing';
 import { cn } from '../../lib/utils';
+import {
+  validateMerchantActivityDraft,
+  validateMerchantActivityRuleDraft,
+} from '../../utils/merchantActivityValidation';
 
 export default function MerchantActivities() {
   const { merchantSession } = useAuth();
@@ -110,12 +114,14 @@ export default function MerchantActivities() {
     e.preventDefault();
     if (!tenantId) return;
 
-    if (!name.trim()) {
-      showToast('请输入活动名称', 'error');
-      return;
-    }
-    if (!startTime || !endTime) {
-      showToast('请选择活动开始与结束时间', 'error');
+    const validationIssues = validateMerchantActivityDraft({
+      name,
+      startTime,
+      endTime,
+    });
+
+    if (validationIssues.length > 0) {
+      showToast(validationIssues.join('；'), 'error');
       return;
     }
 
@@ -151,21 +157,19 @@ export default function MerchantActivities() {
     e.preventDefault();
     if (!tenantId || !targetActivity) return;
 
-    // Validation
-    if (ruleType === 'FULL_REDUCTION' && (!thresholdAmount || !discountAmount)) {
-      showToast('请输入满减门槛与优惠金额', 'error');
-      return;
-    }
-    if (ruleType === 'FULL_DISCOUNT' && (!thresholdAmount || !discountRate)) {
-      showToast('请输入满折门槛与折扣比例', 'error');
-      return;
-    }
-    if (ruleType === 'BUY_X_GET_Y' && !productId) {
-      showToast('请输入买赠的商品 ID', 'error');
-      return;
-    }
-    if (ruleType === 'CATEGORY_DISCOUNT' && (!categoryCode || !discountRate)) {
-      showToast('请输入分类编码与折扣比例', 'error');
+    const validationIssues = validateMerchantActivityRuleDraft({
+      ruleType,
+      thresholdAmount,
+      discountAmount,
+      discountRate,
+      productId,
+      categoryCode,
+      ruleConfigJson,
+      priority,
+    });
+
+    if (validationIssues.length > 0) {
+      showToast(validationIssues.join('；'), 'error');
       return;
     }
 
