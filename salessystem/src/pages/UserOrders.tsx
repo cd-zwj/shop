@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import {
+  AlertCircle,
   Ban,
   ChevronRight,
   CreditCard,
   MessageCircle,
+  RefreshCcw,
   RotateCcw,
   ShoppingBag,
 } from 'lucide-react';
@@ -16,6 +18,7 @@ import type { SalesOrder, SalesOrderDetail } from '../types/order';
 import type { Refund } from '../types/refund';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { getPaymentBillReuseHint } from '../utils/paymentStatus';
 import { canRepurchaseOrder } from '../utils/orderActions';
@@ -67,11 +70,14 @@ export default function UserOrders() {
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
   const [actionHint, setActionHint] = useState('');
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadOrders() {
+      setIsLoading(true);
+      setError('');
       try {
         const result = await appOrderService.listOrders(1, 20);
         if (!isMounted) return;
@@ -117,9 +123,13 @@ export default function UserOrders() {
           setOrderRefundMap({});
         }
         setError('');
-      } catch {
+      } catch (err) {
         if (!isMounted) return;
-        setError('订单列表加载失败，请稍后重试');
+        setOrders([]);
+        setOrderDetailMap({});
+        setPaymentBillMap({});
+        setOrderRefundMap({});
+        setError(`订单列表加载失败：${getErrorMessage(err, '请稍后重试')}`);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -131,7 +141,7 @@ export default function UserOrders() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const filteredOrders = useMemo(() => {
     if (selectedTab === 'all') {
@@ -142,6 +152,8 @@ export default function UserOrders() {
       resolveOrderTab(order, orderDetailMap[order.orderNo], orderRefundMap[order.orderNo]) === selectedTab
     );
   }, [orderDetailMap, orderRefundMap, orders, selectedTab]);
+
+  const hasLoadError = !isLoading && orders.length === 0 && Boolean(error);
 
   async function handleCancelOrder(orderNo: string) {
     if (isActionLoading) {
@@ -260,7 +272,7 @@ export default function UserOrders() {
           ))}
         </div>
 
-        {error && (
+        {error && !hasLoadError && (
           <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
             {error}
           </div>
@@ -272,7 +284,22 @@ export default function UserOrders() {
         )}
 
         <div className="flex flex-col gap-4">
-          {(isLoading ? Array.from<SalesOrder | undefined>({ length: 3 }) : filteredOrders).map((order, index) => {
+          {hasLoadError ? (
+            <div className="flex flex-col items-center justify-center rounded-[32px] border border-red-100 bg-white px-6 py-16 text-center shadow-sm">
+              <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50 text-red-500">
+                <AlertCircle className="h-7 w-7" />
+              </div>
+              <p className="text-lg font-black text-slate-900">订单列表加载失败</p>
+              <p className="mt-2 max-w-md text-sm font-medium text-slate-500">{error}</p>
+              <button
+                onClick={() => setReloadKey((current) => current + 1)}
+                className="mt-6 flex items-center gap-2 rounded-2xl bg-primary px-5 py-2.5 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]"
+              >
+                <RefreshCcw className="h-4 w-4" />
+                重试
+              </button>
+            </div>
+          ) : (isLoading ? Array.from<SalesOrder | undefined>({ length: 3 }) : filteredOrders).map((order, index) => {
             if (!order) {
               return (
                 <motion.div
@@ -421,7 +448,7 @@ export default function UserOrders() {
           })}
         </div>
 
-        {!isLoading && filteredOrders.length === 0 && (
+        {!isLoading && !hasLoadError && filteredOrders.length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-[32px] border border-slate-100 bg-white py-20 shadow-sm">
             <ShoppingBag className="mb-4 h-14 w-14 text-slate-200" />
             <p className="font-bold text-slate-500">当前筛选条件下没有订单</p>
