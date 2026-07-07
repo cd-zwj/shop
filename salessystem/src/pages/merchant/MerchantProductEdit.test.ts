@@ -73,14 +73,24 @@ async function flushAsyncWork() {
   });
 }
 
-async function renderMerchantProductEdit() {
+async function renderMerchantProductEdit(product: MerchantProduct = buildProduct()) {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
 
-  mockedProductService.getProduct.mockResolvedValue(buildProduct());
+  mockedProductService.getProduct.mockResolvedValue(product);
   mockedStoreService.listStores.mockResolvedValue({ records: [], total: 0, page: 1, size: 100, pages: 0 });
-  mockedTaxonomyService.listTypes.mockResolvedValue([]);
+  mockedTaxonomyService.listTypes.mockResolvedValue([
+    {
+      id: 1,
+      tenantId: 9,
+      typeCode: 'COURSE',
+      typeName: '课程资料',
+      deliveryStrategy: 'VIRTUAL',
+      status: 1,
+      sortOrder: 1,
+    },
+  ]);
   mockedTaxonomyService.listCategories.mockResolvedValue([]);
 
   await act(async () => {
@@ -132,9 +142,31 @@ describe('MerchantProductEdit', () => {
 
     expect(element.textContent).toContain('用户商品预览页');
   });
+
+  it('blocks virtual products with invalid delivery config before saving', async () => {
+    mockedProductService.updateProduct.mockResolvedValue(buildProduct());
+    const element = await renderMerchantProductEdit(buildProduct({
+      productType: 'VIRTUAL',
+      fulfillmentMode: 'ONLINE_VIRTUAL',
+      virtualTypeId: 1,
+      deliveryConfig: '{"note":"missing delivery target"}',
+    }));
+
+    const saveButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('保存变更'));
+    expect(saveButton).toBeTruthy();
+
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(element.textContent).toContain('虚拟内容商品必须配置 contentUrl 或 accountInfo');
+    expect(mockedProductService.updateProduct).not.toHaveBeenCalled();
+  });
 });
 
-function buildProduct(): MerchantProduct {
+function buildProduct(overrides: Partial<MerchantProduct> = {}): MerchantProduct {
   return {
     id: 42,
     tenantId: 9,
@@ -155,5 +187,6 @@ function buildProduct(): MerchantProduct {
     deliveryConfig: '',
     createTime: '2026-07-08T10:00:00',
     updateTime: null,
+    ...overrides,
   };
 }

@@ -2,6 +2,7 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.payment.common.BusinessException;
 import com.payment.constant.MerchantPermission;
 import com.payment.dto.V1MerchantProductChangeLogVO;
@@ -22,6 +23,7 @@ import com.payment.mapper.VirtualProductCategoryMapper;
 import com.payment.mapper.VirtualProductTypeMapper;
 import com.payment.service.V1MerchantProductService;
 import com.payment.util.BizNoGenerator;
+import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -111,6 +113,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         String productType = resolveProductType(dto.getProductType());
         String fulfillmentMode = resolveFulfillmentMode(productType, dto.getFulfillmentMode());
         validateVirtualTaxonomy(tenantId, productType, dto.getVirtualTypeId(), dto.getVirtualCategoryId());
+        validateDeliveryConfig(productType, dto.getDeliveryConfig());
 
         Product product = new Product();
         product.setTenantId(tenantId);
@@ -159,6 +162,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         String productType = resolveProductType(dto.getProductType());
         String fulfillmentMode = resolveFulfillmentMode(productType, dto.getFulfillmentMode());
         validateVirtualTaxonomy(tenantId, productType, dto.getVirtualTypeId(), dto.getVirtualCategoryId());
+        validateDeliveryConfig(productType, dto.getDeliveryConfig());
         ProductStock existingStock = getOrCreateStock(tenantId, productId);
         BigDecimal oldPrice = product.getPrice();
         Integer oldStock = existingStock.getQuantity() == null ? 0 : existingStock.getQuantity();
@@ -459,6 +463,35 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         if (!virtualTypeId.equals(category.getTypeId())) {
             throw new BusinessException("虚拟商品分类必须属于所选虚拟商品类型");
         }
+    }
+
+    private void validateDeliveryConfig(String productType, String deliveryConfig) {
+        if (!ProductTypeEnum.VIRTUAL.name().equals(productType)) {
+            return;
+        }
+        if (deliveryConfig == null || deliveryConfig.isBlank()) {
+            throw new BusinessException("虚拟商品交付配置必须包含 contentUrl 或 accountInfo");
+        }
+
+        JsonNode node;
+        try {
+            node = JsonUtils.fromJsonTree(deliveryConfig);
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("虚拟商品交付配置必须是合法 JSON");
+        }
+        if (node == null || !node.isObject()) {
+            throw new BusinessException("虚拟商品交付配置必须是 JSON 对象");
+        }
+        boolean hasContentUrl = hasTextNode(node, "contentUrl");
+        boolean hasAccountInfo = hasTextNode(node, "accountInfo");
+        if (!hasContentUrl && !hasAccountInfo) {
+            throw new BusinessException("虚拟商品交付配置必须包含 contentUrl 或 accountInfo");
+        }
+    }
+
+    private boolean hasTextNode(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        return value != null && value.isTextual() && !value.asText().isBlank();
     }
 
     private Integer toProductStatus(String status, Integer stock) {

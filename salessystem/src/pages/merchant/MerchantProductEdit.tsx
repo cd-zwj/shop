@@ -30,6 +30,7 @@ import type {
 } from '../../types/merchant';
 import { ApiError } from '../../types/api';
 import { buildProductEditImpacts, type ProductEditImpactTone } from '../../utils/productEditImpact';
+import { validateProductDeliveryConfig } from '../../utils/productDeliveryConfigValidation';
 
 const EMPTY_FORM: MerchantProductUpsertPayload = {
   productCode: '',
@@ -299,6 +300,14 @@ export default function MerchantProductEdit() {
     }
     if (Number(formData.price) <= 0) {
       setError('商品价格必须大于 0');
+      return;
+    }
+    const deliveryConfigValidation = validateProductDeliveryConfig(
+      formData.productType,
+      formData.deliveryConfig,
+    );
+    if (!deliveryConfigValidation.valid) {
+      setError(deliveryConfigValidation.message || '交付配置不合法');
       return;
     }
 

@@ -428,6 +428,25 @@ class V1MerchantProductServiceImplTest {
         verify(productMapper, never()).insert(any(Product.class));
     }
 
+    @Test
+    void createProductShouldRejectVirtualProductWithoutDeliveryContent() {
+        when(productMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(virtualProductTypeMapper.selectOne(any())).thenReturn(buildVirtualType(1L, 1L, "VIRTUAL"));
+        when(productStockMapper.selectOne(any())).thenReturn(null);
+        when(productMapper.selectById(any())).thenReturn(buildProduct(1L, 1L, "P001", "资料包", 1));
+        when(productStockMapper.selectById(any())).thenReturn(buildStock(10L, 1L, 1L, 8));
+        V1MerchantProductUpsertDTO dto = buildUpsertDTO("P001", "资料包", 8, "active");
+        dto.setProductType("VIRTUAL");
+        dto.setVirtualTypeId(1L);
+        dto.setDeliveryConfig("{\"note\":\"missing delivery fields\"}");
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.createProduct(1L, 100L, dto));
+
+        assertEquals("虚拟商品交付配置必须包含 contentUrl 或 accountInfo", ex.getMessage());
+        verify(productMapper, never()).insert(any(Product.class));
+    }
+
     private Product buildProduct(Long id, Long tenantId, String code, String name, Integer status) {
         Product product = new Product();
         product.setId(id);
