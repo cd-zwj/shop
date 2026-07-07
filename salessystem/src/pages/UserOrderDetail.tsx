@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   ArrowLeft,
   Ban,
   CheckCircle2,
@@ -8,6 +9,7 @@ import {
   MapPin,
   MessageCircle,
   Package,
+  RefreshCcw,
   RotateCcw,
   Truck,
 } from 'lucide-react';
@@ -20,6 +22,7 @@ import type { SalesOrderDetail, SalesOrderItem } from '../types/order';
 import type { Refund } from '../types/refund';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
+import { getErrorMessage } from '../utils/errorMessage';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { getPaymentBillReuseHint } from '../utils/paymentStatus';
 import { getPaymentStatusPresentation } from '../utils/paymentStatus';
@@ -44,6 +47,7 @@ export default function UserOrderDetail() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [actionHint, setActionHint] = useState('');
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -55,6 +59,9 @@ export default function UserOrderDetail() {
         return;
       }
 
+      setIsLoading(true);
+      setError('');
+      setActionHint('');
       try {
         const result = await appOrderService.getOrder(id);
         if (!isMounted) return;
@@ -70,9 +77,11 @@ export default function UserOrderDetail() {
           setRefunds([]);
           setActionHint('订单已加载，售后状态暂时同步失败，可稍后刷新或进入售后页查看。');
         }
-      } catch {
+      } catch (loadError) {
         if (!isMounted) return;
-        setError('订单详情加载失败，请稍后重试');
+        setDetail(null);
+        setRefunds([]);
+        setError(`订单详情加载失败：${getErrorMessage(loadError, '请稍后重试')}`);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -84,7 +93,7 @@ export default function UserOrderDetail() {
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const order = detail?.order;
   const shippingAddressText = order
@@ -278,8 +287,20 @@ export default function UserOrderDetail() {
         </section>
 
         {error && (
-          <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
-            {error}
+          <div className="flex flex-col gap-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 flex-none" />
+              <span>{error}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReloadKey((current) => current + 1)}
+              disabled={isLoading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-red-700 shadow-sm transition-all hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              {isLoading ? '重试中...' : '重试'}
+            </button>
           </div>
         )}
         {actionHint && !error && (
