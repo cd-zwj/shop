@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, AlertCircle } from 'lucide-react';
+import { ArrowLeft, AlertCircle, MessageCircle, RotateCcw } from 'lucide-react';
 import { appOrderService } from '../services/modules/appOrder';
 import { appRefundService } from '../services/modules/appRefund';
 import { useToast } from '../context/ToastContext';
@@ -24,6 +24,7 @@ export default function ApplyRefund() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const refundFormRef = useRef<HTMLElement | null>(null);
 
   // Form states
   const [refundType, setRefundType] = useState<'REFUND_ONLY' | 'RETURN_REFUND'>('REFUND_ONLY');
@@ -104,6 +105,10 @@ export default function ApplyRefund() {
     } catch (err) {
       showToast(err instanceof Error ? err.message : '取消退款失败', 'error');
     }
+  };
+
+  const handleReapplyRefund = () => {
+    refundFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   if (isLoading) {
@@ -229,6 +234,26 @@ export default function ApplyRefund() {
                       取消退款申请
                     </button>
                   )}
+                  {(refund.refundStatus === 'FAILED' || refund.refundStatus === 'REJECTED') && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/merchant-store/${orderDetail.order.tenantId}`)}
+                        className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-700 transition-colors hover:border-blue-200 hover:bg-blue-100"
+                      >
+                        <MessageCircle size={14} /> 联系商户
+                      </button>
+                      {!activeRefund && (
+                        <button
+                          type="button"
+                          onClick={handleReapplyRefund}
+                          className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition-colors hover:border-emerald-200 hover:bg-emerald-100"
+                        >
+                          <RotateCcw size={14} /> 重新申请售后
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
                 );
               })}
@@ -238,7 +263,7 @@ export default function ApplyRefund() {
 
         {/* Apply Refund Form */}
         {!activeRefund && (
-          <section className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
+          <section ref={refundFormRef} className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-xs font-black uppercase tracking-widest text-slate-400">新建退款申请</h2>
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
               {/* Refund Type */}
