@@ -21,7 +21,10 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,18 +37,18 @@ class MemberPointsAccountServiceImplTest {
         MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
 
         MemberPointsLog result = service.holdPoints(9L, 100L, 300, "ORDER_DEDUCT", "SO1001", "订单积分预占");
 
-        ArgumentCaptor<MemberPointsAccount> accountCaptor = ArgumentCaptor.forClass(MemberPointsAccount.class);
-        verify(accountMapper).updateById(accountCaptor.capture());
-        assertEquals(200, accountCaptor.getValue().getPoints());
-        assertEquals(300, accountCaptor.getValue().getTotalUsed());
+        verify(accountMapper).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
 
         ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).insert(logCaptor.capture());
         assertEquals(-300, logCaptor.getValue().getChangePoints());
+        assertEquals(500, logCaptor.getValue().getPointsBefore());
+        assertEquals(200, logCaptor.getValue().getPointsAfter());
         assertEquals(PointsDeductStatusEnum.PRE_HOLD.name(), logCaptor.getValue().getStatus());
         assertEquals(PointsDeductStatusEnum.PRE_HOLD.name(), result.getStatus());
 
@@ -91,14 +94,12 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
 
         service.releasePointsHold(9L, 100L, "ORDER_DEDUCT", "SO1001", "订单取消");
 
-        ArgumentCaptor<MemberPointsAccount> accountCaptor = ArgumentCaptor.forClass(MemberPointsAccount.class);
-        verify(accountMapper).updateById(accountCaptor.capture());
-        assertEquals(500, accountCaptor.getValue().getPoints());
-        assertEquals(0, accountCaptor.getValue().getTotalUsed());
+        verify(accountMapper).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
 
         ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).updateById(logCaptor.capture());
@@ -117,16 +118,61 @@ class MemberPointsAccountServiceImplTest {
         LocalDateTime expireTime = LocalDateTime.of(2026, 7, 1, 0, 0);
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
 
         service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分", expireTime);
+
+        verify(accountMapper).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
 
         ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).insert(logCaptor.capture());
         assertEquals(expireTime, logCaptor.getValue().getExpireTime());
+        assertEquals(200, logCaptor.getValue().getPointsBefore());
+        assertEquals(300, logCaptor.getValue().getPointsAfter());
 
         assertPointsEventPublished(service, "POINTS_GRANTED", "ORDER_REWARD", "SO1002", 100,
                 PointsDeductStatusEnum.CONFIRMED.name());
+    }
+
+    @Test
+    void grantPointsShouldUseRetriedBalanceInLogWhenOptimisticLockConflicts() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
+
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
+        when(accountMapper.update(isNull(), any()))
+                .thenReturn(0)
+                .thenReturn(1);
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 260, 0));
+
+        service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分");
+
+        verify(accountMapper, times(2)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
+
+        ArgumentCaptor<MemberPointsLog> logCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
+        verify(logMapper).insert(logCaptor.capture());
+        assertEquals(260, logCaptor.getValue().getPointsBefore());
+        assertEquals(360, logCaptor.getValue().getPointsAfter());
+    }
+
+    @Test
+    void holdPointsShouldRecheckBalanceAfterOptimisticLockConflict() {
+        MemberPointsAccountMapper accountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper logMapper = mock(MemberPointsLogMapper.class);
+        MemberPointsAccountServiceImpl service = service(accountMapper, logMapper);
+
+        when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
+        when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 80, 0));
+
+        assertThrows(BusinessException.class,
+                () -> service.holdPoints(9L, 100L, 300, "ORDER_DEDUCT", "SO1001", "订单积分预占"));
+
+        verify(accountMapper, times(1)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
     }
 
     @Test
@@ -138,17 +184,15 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
         when(logMapper.update(any(), any())).thenReturn(1);
 
         int expiredPoints = service.expirePoints(now, 100);
 
         assertEquals(300, expiredPoints);
 
-        ArgumentCaptor<MemberPointsAccount> accountCaptor = ArgumentCaptor.forClass(MemberPointsAccount.class);
-        verify(accountMapper).updateById(accountCaptor.capture());
-        assertEquals(200, accountCaptor.getValue().getPoints());
-        assertEquals(300, accountCaptor.getValue().getTotalUsed());
+        verify(accountMapper).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
 
         ArgumentCaptor<MemberPointsLog> updateCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).update(updateCaptor.capture(), any());
@@ -176,16 +220,15 @@ class MemberPointsAccountServiceImplTest {
 
         when(logMapper.selectList(any())).thenReturn(List.of(earnedLog(10L, 9L, 100L, 300)));
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 120, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(1);
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
         when(logMapper.update(any(), any())).thenReturn(1);
 
         int expiredPoints = service.expirePoints(LocalDateTime.now(), 100);
 
         assertEquals(120, expiredPoints);
 
-        ArgumentCaptor<MemberPointsAccount> accountCaptor = ArgumentCaptor.forClass(MemberPointsAccount.class);
-        verify(accountMapper).updateById(accountCaptor.capture());
-        assertEquals(0, accountCaptor.getValue().getPoints());
+        verify(accountMapper).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MemberPointsAccount.class));
 
         ArgumentCaptor<MemberPointsLog> insertCaptor = ArgumentCaptor.forClass(MemberPointsLog.class);
         verify(logMapper).insert(insertCaptor.capture());
@@ -227,7 +270,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.grantPoints(9L, 100L, 100, "ORDER_REWARD", "SO1002", "消费赠送积分"));
@@ -246,7 +289,7 @@ class MemberPointsAccountServiceImplTest {
         when(logMapper.update(any(), any())).thenReturn(1);
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.expirePoints(LocalDateTime.of(2026, 7, 2, 2, 0), 100));
@@ -263,7 +306,7 @@ class MemberPointsAccountServiceImplTest {
 
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 500, 0));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 500, 0));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.holdPoints(9L, 100L, 100, "ORDER_DEDUCT", "SO1003", "订单积分预占"));
@@ -281,7 +324,7 @@ class MemberPointsAccountServiceImplTest {
         when(logMapper.selectOne(any())).thenReturn(preHoldLog());
         when(accountMapper.selectOne(any())).thenReturn(account(9L, 100L, 200, 300));
         when(accountMapper.selectById(1L)).thenReturn(account(9L, 100L, 200, 300));
-        when(accountMapper.updateById(any(MemberPointsAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.releasePointsHold(9L, 100L, "ORDER_DEDUCT", "SO1001", "订单取消"));

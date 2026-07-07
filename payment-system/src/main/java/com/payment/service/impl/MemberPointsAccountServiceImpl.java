@@ -21,8 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
-import java.util.function.ToIntFunction;
 
 /**
  * 会员积分账户服务实现类。
@@ -130,9 +128,11 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         }
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
-        Integer before = account.getPoints();
-        Integer after = updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), points),
-                current -> current.setTotalEarned(Math.addExact(current.getTotalEarned(), points)),
+        PointsChange change = updateAccountWithRetry(account, current -> Math.addExact(pointsOrZero(current.getPoints()), points),
+                current -> baseAccountUpdate(current)
+                        .setSql("points = COALESCE(points, 0) + " + points)
+                        .setSql("total_earned = COALESCE(total_earned, 0) + " + points)
+                        .setSql("update_time = NOW()"),
                 POINTS_GRANT_COMPENSATION_BIZ_TYPE,
                 bizNo,
                 "积分发放失败，请重试");
@@ -143,8 +143,8 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setBizType(bizType);
         log.setBizNo(bizNo);
         log.setChangePoints(points);
-        log.setPointsBefore(before);
-        log.setPointsAfter(after);
+        log.setPointsBefore(change.before);
+        log.setPointsAfter(change.after);
         log.setStatus(PointsDeductStatusEnum.CONFIRMED.name());
         log.setExpireTime(expireTime);
         log.setRemark(remark);
@@ -163,18 +163,21 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         }
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
-        if (account.getPoints() < points) {
+        if (pointsOrZero(account.getPoints()) < points) {
             throw new BusinessException("会员积分不足");
         }
 
-        Integer before = account.getPoints();
-        Integer after = updateAccountWithRetry(account, current -> {
-                    if (current.getPoints() < points) {
+        PointsChange change = updateAccountWithRetry(account, current -> {
+                    if (pointsOrZero(current.getPoints()) < points) {
                         throw new BusinessException("会员积分不足");
                     }
-                    return Math.subtractExact(current.getPoints(), points);
+                    return Math.subtractExact(pointsOrZero(current.getPoints()), points);
                 },
-                current -> current.setTotalUsed(Math.addExact(current.getTotalUsed(), points)),
+                current -> baseAccountUpdate(current)
+                        .ge(MemberPointsAccount::getPoints, points)
+                        .setSql("points = points - " + points)
+                        .setSql("total_used = COALESCE(total_used, 0) + " + points)
+                        .setSql("update_time = NOW()"),
                 POINTS_HOLD_COMPENSATION_BIZ_TYPE,
                 bizNo,
                 "积分预占失败，请重试");
@@ -185,8 +188,8 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         log.setBizType(bizType);
         log.setBizNo(bizNo);
         log.setChangePoints(-points);
-        log.setPointsBefore(before);
-        log.setPointsAfter(after);
+        log.setPointsBefore(change.before);
+        log.setPointsAfter(change.after);
         log.setStatus(PointsDeductStatusEnum.PRE_HOLD.name());
         log.setRemark(remark);
         logMapper.insert(log);
@@ -223,8 +226,11 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
 
         MemberPointsAccount account = getAccount(tenantId, platformUserId);
         Integer holdPoints = Math.abs(log.getChangePoints());
-        updateAccountWithRetry(account, current -> Math.addExact(current.getPoints(), holdPoints),
-                current -> current.setTotalUsed(Math.max(0, current.getTotalUsed() - holdPoints)),
+        updateAccountWithRetry(account, current -> Math.addExact(pointsOrZero(current.getPoints()), holdPoints),
+                current -> baseAccountUpdate(current)
+                        .setSql("points = COALESCE(points, 0) + " + holdPoints)
+                        .setSql("total_used = GREATEST(COALESCE(total_used, 0) - " + holdPoints + ", 0)")
+                        .setSql("update_time = NOW()"),
                 POINTS_RELEASE_COMPENSATION_BIZ_TYPE,
                 bizNo,
                 "积分释放失败，请重试");
@@ -323,22 +329,23 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
         return change.deducted;
     }
 
-    private Integer updateAccountWithRetry(MemberPointsAccount account,
-                                           ToIntFunction<MemberPointsAccount> nextPoints,
-                                           Consumer<MemberPointsAccount> extraMutation,
-                                           String compensationBizType,
-                                           String compensationBizNo,
-                                           String failureMessage) {
+    private PointsChange updateAccountWithRetry(MemberPointsAccount account,
+                                                PointsAfterCalculator nextPoints,
+                                                PointsUpdateBuilder updateBuilder,
+                                                String compensationBizType,
+                                                String compensationBizNo,
+                                                String failureMessage) {
         MemberPointsAccount current = account;
-        Integer after = null;
         for (int retry = 0; retry < 3; retry++) {
-            after = nextPoints.applyAsInt(current);
-            extraMutation.accept(current);
-            current.setPoints(after);
-            if (accountMapper.updateById(current) > 0) {
-                return after;
+            int before = pointsOrZero(current.getPoints());
+            int after = nextPoints.calculate(current);
+            if (accountMapper.update(null, updateBuilder.build(current)) > 0) {
+                return new PointsChange(before, after, Math.abs(after - before));
             }
             current = accountMapper.selectById(current.getId());
+            if (current == null) {
+                break;
+            }
         }
         compensationTaskFactory.createIfAbsent(compensationBizType, compensationBizNo, failureMessage);
         throw new BusinessException(failureMessage);
@@ -347,23 +354,55 @@ public class MemberPointsAccountServiceImpl implements MemberPointsAccountServic
     private PointsChange expireAccountWithRetry(MemberPointsAccount account, Integer sourcePoints, String compensationBizNo) {
         MemberPointsAccount current = account;
         for (int retry = 0; retry < 3; retry++) {
-            int before = Math.max(0, current.getPoints());
+            int before = Math.max(0, pointsOrZero(current.getPoints()));
             int deducted = Math.min(before, sourcePoints);
             if (deducted <= 0) {
                 return new PointsChange(before, before, 0);
             }
 
             int after = Math.subtractExact(before, deducted);
-            current.setPoints(after);
-            current.setTotalUsed(Math.addExact(current.getTotalUsed(), deducted));
-            if (accountMapper.updateById(current) > 0) {
+            LambdaUpdateWrapper<MemberPointsAccount> wrapper = baseAccountUpdate(current)
+                    .ge(MemberPointsAccount::getPoints, deducted)
+                    .setSql("points = points - " + deducted)
+                    .setSql("total_used = COALESCE(total_used, 0) + " + deducted)
+                    .setSql("update_time = NOW()");
+            if (accountMapper.update(null, wrapper) > 0) {
                 return new PointsChange(before, after, deducted);
             }
             current = accountMapper.selectById(current.getId());
+            if (current == null) {
+                break;
+            }
         }
         String failureMessage = "积分过期扣减失败，请重试";
         compensationTaskFactory.createIfAbsent(POINTS_EXPIRE_BIZ_TYPE, compensationBizNo, failureMessage);
         throw new BusinessException(failureMessage);
+    }
+
+    private LambdaUpdateWrapper<MemberPointsAccount> baseAccountUpdate(MemberPointsAccount account) {
+        LambdaUpdateWrapper<MemberPointsAccount> wrapper = new LambdaUpdateWrapper<MemberPointsAccount>()
+                .eq(MemberPointsAccount::getId, account.getId())
+                .eq(MemberPointsAccount::getTenantId, account.getTenantId())
+                .eq(MemberPointsAccount::getPlatformUserId, account.getPlatformUserId())
+                .setSql("version = COALESCE(version, 0) + 1");
+        if (account.getVersion() == null) {
+            return wrapper.isNull(MemberPointsAccount::getVersion);
+        }
+        return wrapper.eq(MemberPointsAccount::getVersion, account.getVersion());
+    }
+
+    private int pointsOrZero(Integer points) {
+        return points == null ? 0 : points;
+    }
+
+    @FunctionalInterface
+    private interface PointsAfterCalculator {
+        Integer calculate(MemberPointsAccount account);
+    }
+
+    @FunctionalInterface
+    private interface PointsUpdateBuilder {
+        LambdaUpdateWrapper<MemberPointsAccount> build(MemberPointsAccount account);
     }
 
     private static class PointsChange {
