@@ -47,4 +47,19 @@ public interface ProductMapper extends BaseMapper<Product> {
               AND p.deleted = 0
             """)
     Product selectVisibleAppProductById(@Param("productId") Long productId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("""
+            SELECT COUNT(1)
+            FROM product p
+            JOIN product_stock ps
+              ON ps.product_id = p.id
+             AND ps.tenant_id = p.tenant_id
+            WHERE p.tenant_id = #{tenantId}
+              AND p.status = 1
+              AND p.deleted = 0
+              AND ps.quantity <= #{threshold}
+            """)
+    Long countActiveLowStockByTenant(@Param("tenantId") Long tenantId,
+                                     @Param("threshold") Integer threshold);
 }

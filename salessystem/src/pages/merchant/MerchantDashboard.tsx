@@ -23,7 +23,8 @@ import { useAuth } from '../../context/AuthContext';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import { merchantProductService } from '../../services/modules/merchantProduct';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
-import type { MerchantOrder, MerchantProduct } from '../../types/merchant';
+import { merchantWorkbenchService } from '../../services/modules/merchantWorkbench';
+import type { MerchantOrder, MerchantProduct, MerchantWorkbenchTodoItem } from '../../types/merchant';
 import type { Refund } from '../../types/refund';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
@@ -37,6 +38,7 @@ export default function MerchantDashboard() {
   const [products, setProducts] = useState<MerchantProduct[]>([]);
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [remoteWorkItems, setRemoteWorkItems] = useState<MerchantWorkbenchTodoItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -53,21 +55,24 @@ export default function MerchantDashboard() {
       }
 
       try {
-        const [productPage, orderPage, refundPage] = await Promise.all([
+        const [productPage, orderPage, refundPage, todoSummary] = await Promise.all([
           merchantProductService.listProducts(tenantId, { current: 1, size: 50 }),
           merchantOrderService.listOrders(tenantId, { current: 1, size: 50 }),
           merchantRefundService.listRefunds(tenantId, undefined, 1, 50),
+          merchantWorkbenchService.getTodoSummary(tenantId).catch(() => null),
         ]);
 
         if (!isMounted) return;
         setProducts(productPage.records ?? []);
         setOrders(orderPage.records ?? []);
         setRefunds(refundPage.records ?? []);
+        setRemoteWorkItems(todoSummary?.items ?? null);
       } catch (loadError) {
         if (!isMounted) return;
         setProducts([]);
         setOrders([]);
         setRefunds([]);
+        setRemoteWorkItems(null);
         setError(getErrorMessage(loadError, '商户仪表盘数据加载失败，请稍后重试'));
       } finally {
         if (isMounted) {
@@ -110,9 +115,13 @@ export default function MerchantDashboard() {
       .slice(-7)
       .map(([day, sales]) => ({ day, sales }));
   }, [orders]);
-  const workItems = useMemo(
-    () => prioritizeMerchantWorkItems(buildMerchantWorkItems({ orders, products, refunds })),
+  const fallbackWorkItems = useMemo(
+    () => buildMerchantWorkItems({ orders, products, refunds }),
     [orders, products, refunds],
+  );
+  const workItems = useMemo(
+    () => prioritizeMerchantWorkItems(remoteWorkItems ?? fallbackWorkItems),
+    [fallbackWorkItems, remoteWorkItems],
   );
   const totalWorkItemCount = useMemo(
     () => workItems.reduce((sum, item) => sum + item.count, 0),

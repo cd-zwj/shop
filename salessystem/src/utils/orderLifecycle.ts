@@ -55,8 +55,10 @@ interface MerchantWorkInput {
   refunds?: Array<Partial<Refund>>;
 }
 
+export type MerchantWorkItemKey = 'payment' | 'fulfillment' | 'abnormalOrder' | 'refund' | 'refundFailed' | 'stock';
+
 export interface MerchantWorkItem {
-  key: 'payment' | 'fulfillment' | 'abnormalOrder' | 'refund' | 'refundFailed' | 'stock';
+  key: MerchantWorkItemKey;
   label: string;
   description: string;
   count: number;

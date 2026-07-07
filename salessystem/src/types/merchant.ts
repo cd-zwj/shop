@@ -1,5 +1,6 @@
 import type { SalesOrder, SalesOrderDetail } from './order';
 import type { FulfillmentMode, ProductType } from './catalog';
+import type { MerchantWorkItem, MerchantWorkItemKey, OrderLifecycleTone } from '../utils/orderLifecycle';
 
 export type { FulfillmentMode, ProductType };
 
@@ -98,6 +99,15 @@ export interface MerchantOrderFilters {
   orderStatus?: string;
   payStatus?: string;
   keyword?: string;
+}
+
+export type MerchantWorkbenchTodoKey = MerchantWorkItemKey;
+export type MerchantWorkbenchTodoTone = OrderLifecycleTone;
+export type MerchantWorkbenchTodoItem = MerchantWorkItem;
+
+export interface MerchantWorkbenchTodoSummary {
+  totalCount: number;
+  items: MerchantWorkbenchTodoItem[];
 }
 
 export interface MerchantWalletSummary {
