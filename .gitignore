@@ -44,3 +44,14 @@ Thumbs.db
 logs/
 *.log
 
+# Local agent/workspace artifacts
+.agents/
+.claude/worktrees/
+.codex-plugin/
+.codex/
+.playwright-mcp/
+AGENTS.md
+CLAUDE.md
+docs/
+支付路径剩余待办清单.md
+项目方向与需求规划.md
