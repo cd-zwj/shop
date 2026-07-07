@@ -33,6 +33,8 @@ const BIZ_TYPE_LABELS: Record<string, string> = {
   LATE_CALLBACK_REFUND: '异常支付退款',
 };
 
+const ORDER_NO_PATTERN = /\b(?:SO|ORD|EX)[A-Z0-9_-]{2,}\b/;
+
 export function getWalletLogPresentation(log: WalletLog): WalletLogPresentation {
   const amount = Number(log.changeAmount || 0);
   const direction = getTraceDirection(log.trace?.tone) ?? getDirection(amount);
@@ -112,7 +114,11 @@ function getWalletLogAction(log: WalletLog): { label: string; path: string } | n
   }
 
   if (log.bizType === 'MERCHANT_APPROVED_REFUND' || log.bizType === 'LATE_CALLBACK_REFUND' || log.bizType === 'REFUND') {
-    return { label: '查看售后', path: '/orders' };
+    const orderNo = extractOrderNo(log.bizNo) ?? extractOrderNo(log.remark);
+    return {
+      label: '查看售后',
+      path: orderNo ? `/orders/${encodeURIComponent(orderNo)}/refund` : '/orders',
+    };
   }
 
   if (log.bizType === 'UNIFIED_RECHARGE' || log.bizType === 'MERCHANT_RECHARGE' || log.bizType === 'RECHARGE') {
@@ -120,6 +126,13 @@ function getWalletLogAction(log: WalletLog): { label: string; path: string } | n
   }
 
   return null;
+}
+
+function extractOrderNo(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  return value.match(ORDER_NO_PATTERN)?.[0] ?? null;
 }
 
 function getBadgeClass(direction: WalletLogDirection) {

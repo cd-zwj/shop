@@ -60,6 +60,21 @@ describe('walletLogPresentation', () => {
     expect(presentation.actionPath).toBe('/orders');
   });
 
+  it('links refund wallet logs to order refund page when an order number is available', () => {
+    const presentation = getWalletLogPresentation({
+      ...baseLog,
+      bizType: 'MERCHANT_APPROVED_REFUND',
+      bizNo: 'SO202607060001',
+      changeAmount: 600,
+      balanceBefore: 3800,
+      balanceAfter: 4400,
+      remark: '售后退款到账',
+    });
+
+    expect(presentation.actionLabel).toBe('查看售后');
+    expect(presentation.actionPath).toBe('/orders/SO202607060001/refund');
+  });
+
   it('falls back to readable unknown biz type without losing source details', () => {
     const presentation = getWalletLogPresentation({
       ...baseLog,
