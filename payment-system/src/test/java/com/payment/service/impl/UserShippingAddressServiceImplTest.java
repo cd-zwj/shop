@@ -17,6 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -40,6 +41,22 @@ class UserShippingAddressServiceImplTest {
         verify(addressMapper).insert(captor.capture());
         assertEquals(100L, captor.getValue().getPlatformUserId());
         assertEquals(1, captor.getValue().getIsDefault());
+    }
+
+    /**
+     * 创建地址Should拒绝非法手机号且不写库。
+     */
+    @Test
+    void createAddressShouldRejectInvalidPhoneBeforePersisting() {
+        UserShippingAddressMapper addressMapper = mock(UserShippingAddressMapper.class);
+        UserShippingAddressServiceImpl service = new UserShippingAddressServiceImpl(addressMapper);
+        UserShippingAddressDTO dto = buildDto(true, "科技园 1 号");
+        dto.setPhone("12345");
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.create(100L, dto));
+
+        assertEquals("手机号格式不正确", exception.getMessage());
+        verifyNoInteractions(addressMapper);
     }
 
     /**
@@ -72,6 +89,25 @@ class UserShippingAddressServiceImplTest {
         when(addressMapper.selectById(9L)).thenReturn(buildAddress(9L, 200L, 0));
 
         assertThrows(BusinessException.class, () -> service.update(100L, 9L, buildDto(false, "新地址")));
+        verify(addressMapper, never()).updateById(any(com.payment.entity.UserShippingAddress.class));
+    }
+
+    /**
+     * 更新地址Should拒绝非法手机号且不持久化。
+     */
+    @Test
+    void updateAddressShouldRejectInvalidPhoneBeforePersisting() {
+        UserShippingAddressMapper addressMapper = mock(UserShippingAddressMapper.class);
+        UserShippingAddressServiceImpl service = new UserShippingAddressServiceImpl(addressMapper);
+        UserShippingAddressDTO dto = buildDto(false, "科技园 2 号");
+        dto.setPhone("1380013800x");
+
+        when(addressMapper.selectById(9L)).thenReturn(buildAddress(9L, 100L, 0));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> service.update(100L, 9L, dto));
+
+        assertEquals("手机号格式不正确", exception.getMessage());
+        verify(addressMapper, never()).clearDefaultByPlatformUserId(anyLong());
         verify(addressMapper, never()).updateById(any(com.payment.entity.UserShippingAddress.class));
     }
 
