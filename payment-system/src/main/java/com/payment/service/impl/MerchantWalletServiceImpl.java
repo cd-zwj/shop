@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.WalletAccountVO;
@@ -16,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 /**
@@ -114,11 +114,10 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.add(amount);
 
-            account.setAvailableAmount(balanceAfter);
-            account.setTotalRecharge(account.getTotalRecharge().add(amount));
-            account.setUpdateTime(LocalDateTime.now());
-
-            int updatedRows = accountMapper.updateById(account);
+            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
+                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount))
+                    .setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount))
+                    .setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(tenantId, platformUserId, amount, bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;
@@ -158,11 +157,11 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.subtract(amount);
 
-            account.setAvailableAmount(balanceAfter);
-            account.setTotalConsume(account.getTotalConsume().add(amount));
-            account.setUpdateTime(LocalDateTime.now());
-
-            int updatedRows = accountMapper.updateById(account);
+            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
+                    .ge(MerchantWalletAccount::getAvailableAmount, amount)
+                    .setSql("available_amount = available_amount - " + moneyLiteral(amount))
+                    .setSql("total_consume = COALESCE(total_consume, 0) + " + moneyLiteral(amount))
+                    .setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(tenantId, platformUserId, amount.negate(), bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;
@@ -207,6 +206,25 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
             }
             throw duplicateKeyException;
         }
+    }
+
+    /**
+     * 余额更新必须用数据库端原子表达式，避免乐观锁失败后复用已变更实体造成重复加减。
+     */
+    private LambdaUpdateWrapper<MerchantWalletAccount> baseAccountUpdate(MerchantWalletAccount account) {
+        LambdaUpdateWrapper<MerchantWalletAccount> wrapper = new LambdaUpdateWrapper<MerchantWalletAccount>()
+                .eq(MerchantWalletAccount::getId, account.getId())
+                .eq(MerchantWalletAccount::getTenantId, account.getTenantId())
+                .eq(MerchantWalletAccount::getPlatformUserId, account.getPlatformUserId())
+                .setSql("version = COALESCE(version, 0) + 1");
+        if (account.getVersion() == null) {
+            return wrapper.isNull(MerchantWalletAccount::getVersion);
+        }
+        return wrapper.eq(MerchantWalletAccount::getVersion, account.getVersion());
+    }
+
+    private String moneyLiteral(BigDecimal amount) {
+        return amount.stripTrailingZeros().toPlainString();
     }
 
     /** 插入商户钱包资金变动流水记录。 */

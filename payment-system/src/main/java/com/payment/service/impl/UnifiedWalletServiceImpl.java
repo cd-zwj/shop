@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.WalletAccountVO;
@@ -16,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 /**
@@ -103,11 +103,10 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.add(amount);
 
-            account.setAvailableAmount(balanceAfter);
-            account.setTotalRecharge(account.getTotalRecharge().add(amount));
-            account.setUpdateTime(LocalDateTime.now());
-
-            int updatedRows = accountMapper.updateById(account);
+            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
+                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount))
+                    .setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount))
+                    .setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(platformUserId, amount, bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;
@@ -146,11 +145,11 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.subtract(amount);
 
-            account.setAvailableAmount(balanceAfter);
-            account.setTotalConsume(account.getTotalConsume().add(amount));
-            account.setUpdateTime(LocalDateTime.now());
-
-            int updatedRows = accountMapper.updateById(account);
+            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
+                    .ge(UnifiedWalletAccount::getAvailableAmount, amount)
+                    .setSql("available_amount = available_amount - " + moneyLiteral(amount))
+                    .setSql("total_consume = COALESCE(total_consume, 0) + " + moneyLiteral(amount))
+                    .setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(platformUserId, amount.negate(), bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;
@@ -192,6 +191,24 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
             }
             throw duplicateKeyException;
         }
+    }
+
+    /**
+     * 余额更新必须用数据库端原子表达式，避免乐观锁失败后复用已变更实体造成重复加减。
+     */
+    private LambdaUpdateWrapper<UnifiedWalletAccount> baseAccountUpdate(UnifiedWalletAccount account) {
+        LambdaUpdateWrapper<UnifiedWalletAccount> wrapper = new LambdaUpdateWrapper<UnifiedWalletAccount>()
+                .eq(UnifiedWalletAccount::getId, account.getId())
+                .eq(UnifiedWalletAccount::getPlatformUserId, account.getPlatformUserId())
+                .setSql("version = COALESCE(version, 0) + 1");
+        if (account.getVersion() == null) {
+            return wrapper.isNull(UnifiedWalletAccount::getVersion);
+        }
+        return wrapper.eq(UnifiedWalletAccount::getVersion, account.getVersion());
+    }
+
+    private String moneyLiteral(BigDecimal amount) {
+        return amount.stripTrailingZeros().toPlainString();
     }
 
     /** 插入统一钱包资金变动流水记录。 */

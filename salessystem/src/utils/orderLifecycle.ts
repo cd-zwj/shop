@@ -23,6 +23,10 @@ export interface OrderLifecycleContext {
   refunds?: Array<Partial<Pick<Refund, 'refundStatus' | 'rejectReason' | 'refundSuggestion'>>>;
   paymentBillStatus?: string | null;
   paymentBillStatusRemark?: string | null;
+  backendPresentation?: Partial<Pick<
+    SalesOrder,
+    'statusLabel' | 'statusDescription' | 'nextStep' | 'failureReason' | 'availableActions'
+  >> | null;
 }
 
 export interface OrderProgressStep {
@@ -111,6 +115,11 @@ export function getOrderLifecyclePresentation(
   order?: Partial<SalesOrder> | null,
   context: OrderLifecycleContext = {},
 ): OrderLifecyclePresentation {
+  const backendPresentation = normalizeBackendOrderPresentation(context.backendPresentation ?? order);
+  if (backendPresentation) {
+    return backendPresentation;
+  }
+
   if (!order) {
     return {
       label: '加载中',
@@ -198,6 +207,53 @@ export function getOrderLifecyclePresentation(
     tone: 'slate',
     nextActions: [{ key: 'detail', label: '查看详情' }],
   };
+}
+
+function normalizeBackendOrderPresentation(
+  input?: Partial<Pick<SalesOrder, 'statusLabel' | 'statusDescription' | 'nextStep' | 'failureReason' | 'availableActions'>> | null,
+): OrderLifecyclePresentation | null {
+  if (!input?.statusLabel || !input.statusDescription || !input.nextStep) {
+    return null;
+  }
+
+  return {
+    label: input.statusLabel,
+    description: input.statusDescription,
+    nextStep: input.nextStep,
+    failureReason: input.failureReason ?? undefined,
+    tab: resolveTabFromBackendLabel(input.statusLabel),
+    tone: resolveToneFromBackendLabel(input.statusLabel, input.failureReason),
+    nextActions: (input.availableActions ?? ['DETAIL']).map((action) => ({
+      key: mapBackendOrderAction(action),
+      label: action,
+    })),
+  };
+}
+
+function mapBackendOrderAction(action: string): OrderLifecycleAction['key'] {
+  const normalized = action.toUpperCase();
+  if (normalized === 'PAY') return 'pay';
+  if (normalized === 'CANCEL') return 'cancel';
+  if (normalized === 'REFUND' || normalized === 'APPLY_REFUND') return 'refund';
+  if (normalized === 'REPURCHASE') return 'repurchase';
+  if (normalized === 'CONTACT_MERCHANT') return 'contact';
+  return 'detail';
+}
+
+function resolveTabFromBackendLabel(label: string): OrderLifecyclePresentation['tab'] {
+  if (label.includes('待支付') || label.includes('支付中')) return 'pending';
+  if (label.includes('完成') || label.includes('已退款')) return 'completed';
+  if (label.includes('取消') || label.includes('关闭') || label.includes('支付失败')) return 'closed';
+  if (label.includes('退款') || label.includes('发货') || label.includes('履约') || label.includes('已支付')) return 'processing';
+  return 'all';
+}
+
+function resolveToneFromBackendLabel(label: string, failureReason?: string | null): OrderLifecycleTone {
+  if (failureReason || label.includes('失败') || label.includes('驳回')) return 'red';
+  if (label.includes('完成') || label.includes('已退款') || label.includes('已发货')) return 'green';
+  if (label.includes('待支付') || label.includes('待审核')) return 'orange';
+  if (label.includes('取消') || label.includes('关闭')) return 'slate';
+  return 'blue';
 }
 
 function resolveRefundLifecycle(refunds?: OrderLifecycleContext['refunds']): OrderLifecyclePresentation | null {

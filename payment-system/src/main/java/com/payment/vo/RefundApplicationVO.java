@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 退款申请视图对象，过滤内部字段，金额转为分（Long）。
  */
@@ -29,6 +31,11 @@ public class RefundApplicationVO {
     private Long refundableAmount;
     private Boolean quickRefundSuggested;
     private String refundSuggestion;
+    private String statusLabel;
+    private String statusDescription;
+    private String nextStep;
+    private String failureReason;
+    private List<String> availableActions;
     private String auditTime;
     private String completeTime;
     private String createTime;
@@ -38,6 +45,7 @@ public class RefundApplicationVO {
         if (app == null) {
             return null;
         }
+        StatusPresentation presentation = RefundStatusPresentation.from(app);
         return RefundApplicationVO.builder()
                 .id(app.getId())
                 .refundNo(app.getRefundNo())
@@ -53,6 +61,11 @@ public class RefundApplicationVO {
                 .refundableAmount(VoConverterUtil.toFen(app.getRefundableAmount()))
                 .quickRefundSuggested(app.getQuickRefundSuggested())
                 .refundSuggestion(app.getRefundSuggestion())
+                .statusLabel(presentation.statusLabel())
+                .statusDescription(presentation.statusDescription())
+                .nextStep(presentation.nextStep())
+                .failureReason(presentation.failureReason())
+                .availableActions(presentation.availableActions())
                 .auditTime(VoConverterUtil.formatTime(app.getAuditTime()))
                 .completeTime(VoConverterUtil.formatTime(app.getCompleteTime()))
                 .createTime(VoConverterUtil.formatTime(app.getCreateTime()))

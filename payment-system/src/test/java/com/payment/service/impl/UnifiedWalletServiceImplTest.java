@@ -12,7 +12,9 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,12 +30,13 @@ class UnifiedWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"));
-        when(accountMapper.updateById(any(UnifiedWalletAccount.class)))
+        when(accountMapper.update(isNull(), any()))
                 .thenReturn(0)
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.credit(1L, new BigDecimal("10.00"), "TEST", "BIZ-1", "retry"));
-        verify(accountMapper, times(2)).updateById(any(UnifiedWalletAccount.class));
+        verify(accountMapper, times(2)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(UnifiedWalletAccount.class));
         verify(logMapper, times(1)).insert(any(UnifiedWalletLog.class));
     }
 
@@ -46,11 +49,12 @@ class UnifiedWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildUnifiedAccount(1L, "100.00"))
                 .thenReturn(buildUnifiedAccount(1L, "10.00"));
-        when(accountMapper.updateById(any(UnifiedWalletAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.debit(1L, new BigDecimal("80.00"), "TEST", "BIZ-2", "debit"));
-        verify(accountMapper, times(1)).updateById(any(UnifiedWalletAccount.class));
+        verify(accountMapper, times(1)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(UnifiedWalletAccount.class));
     }
 
     private UnifiedWalletAccount buildUnifiedAccount(Long platformUserId, String balance) {

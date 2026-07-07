@@ -69,6 +69,11 @@ export interface SalesOrder {
   expireTime?: string | null;
   createTime?: string | null;
   updateTime?: string | null;
+  statusLabel?: string | null;
+  statusDescription?: string | null;
+  nextStep?: string | null;
+  failureReason?: string | null;
+  availableActions?: string[] | null;
 }
 
 export interface SalesOrderItem {
@@ -96,4 +101,9 @@ export interface SalesOrderDetail {
   paymentBillStatus?: string | null;
   paymentBillStatusRemark?: string | null;
   paymentBillExpireTime?: string | null;
+  statusLabel?: string | null;
+  statusDescription?: string | null;
+  nextStep?: string | null;
+  failureReason?: string | null;
+  availableActions?: string[] | null;
 }

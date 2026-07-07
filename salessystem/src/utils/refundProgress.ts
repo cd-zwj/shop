@@ -11,7 +11,7 @@ export interface RefundProgressPresentation {
 
 type RefundProgressInput = Partial<Pick<
   Refund,
-  'refundStatus' | 'rejectReason' | 'refundSuggestion' | 'deliveryStatus'
+  'refundStatus' | 'rejectReason' | 'refundSuggestion' | 'deliveryStatus' | 'statusLabel' | 'statusDescription' | 'nextStep' | 'failureReason'
 >>;
 
 const ACTIVE_REFUND_STATUSES = new Set(['PENDING', 'APPROVED', 'PROCESSING', 'COMPLETED']);
@@ -39,6 +39,15 @@ export function getRefundStatusLabel(status?: string | null) {
 }
 
 export function getRefundProgressPresentation(refund: RefundProgressInput): RefundProgressPresentation {
+  if (refund.statusLabel && refund.statusDescription && refund.nextStep) {
+    return {
+      label: refund.statusLabel,
+      description: refund.failureReason ? `失败原因：${refund.failureReason}` : refund.statusDescription,
+      nextStep: refund.nextStep,
+      tone: resolveBackendRefundTone(refund.statusLabel, refund.failureReason),
+    };
+  }
+
   const status = refund.refundStatus;
   const suggestion = refund.refundSuggestion?.trim();
 
@@ -102,6 +111,14 @@ export function getRefundProgressPresentation(refund: RefundProgressInput): Refu
     nextStep: '建议联系商户核对售后处理进度。',
     tone: 'slate',
   };
+}
+
+function resolveBackendRefundTone(label: string, failureReason?: string | null): RefundProgressTone {
+  if (failureReason || label.includes('失败') || label.includes('驳回')) return 'red';
+  if (label.includes('完成')) return 'green';
+  if (label.includes('待')) return 'orange';
+  if (label.includes('取消')) return 'slate';
+  return 'blue';
 }
 
 export function getRefundToneClass(tone: RefundProgressTone) {

@@ -52,6 +52,11 @@ public class SalesOrderDetailVO {
     private String paymentBillStatus;
     private String paymentBillStatusRemark;
     private String paymentBillExpireTime;
+    private String statusLabel;
+    private String statusDescription;
+    private String nextStep;
+    private String failureReason;
+    private List<String> availableActions;
 
     @Data
     @Builder
@@ -74,6 +79,11 @@ public class SalesOrderDetailVO {
             return null;
         }
         SalesOrder order = detailVO.getOrder();
+        StatusPresentation presentation = OrderStatusPresentation.from(
+                order,
+                detailVO.getItems(),
+                detailVO.getPaymentBillStatus(),
+                detailVO.getPaymentBillStatusRemark());
         SalesOrderDetailVO vo = SalesOrderDetailVO.builder()
                 .id(order.getId())
                 .orderNo(order.getOrderNo())
@@ -106,6 +116,11 @@ public class SalesOrderDetailVO {
                 .paymentBillStatus(detailVO.getPaymentBillStatus())
                 .paymentBillStatusRemark(detailVO.getPaymentBillStatusRemark())
                 .paymentBillExpireTime(VoConverterUtil.formatTime(detailVO.getPaymentBillExpireTime()))
+                .statusLabel(presentation.statusLabel())
+                .statusDescription(presentation.statusDescription())
+                .nextStep(presentation.nextStep())
+                .failureReason(presentation.failureReason())
+                .availableActions(presentation.availableActions())
                 .build();
 
         if (detailVO.getItems() != null) {

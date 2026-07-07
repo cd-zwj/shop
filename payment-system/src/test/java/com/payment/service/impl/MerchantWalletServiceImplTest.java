@@ -12,7 +12,9 @@ import java.math.BigDecimal;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,12 +30,13 @@ class MerchantWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildMerchantAccount(1L, 2L, "50.00"))
                 .thenReturn(buildMerchantAccount(1L, 2L, "50.00"));
-        when(accountMapper.updateById(any(MerchantWalletAccount.class)))
+        when(accountMapper.update(isNull(), any()))
                 .thenReturn(0)
                 .thenReturn(1);
 
         assertDoesNotThrow(() -> service.credit(1L, 2L, new BigDecimal("20.00"), "TEST", "BIZ-3", "retry"));
-        verify(accountMapper, times(2)).updateById(any(MerchantWalletAccount.class));
+        verify(accountMapper, times(2)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MerchantWalletAccount.class));
         verify(logMapper, times(1)).insert(any(MerchantWalletLog.class));
     }
 
@@ -46,11 +49,12 @@ class MerchantWalletServiceImplTest {
         when(accountMapper.selectOne(any()))
                 .thenReturn(buildMerchantAccount(1L, 2L, "60.00"))
                 .thenReturn(buildMerchantAccount(1L, 2L, "5.00"));
-        when(accountMapper.updateById(any(MerchantWalletAccount.class))).thenReturn(0);
+        when(accountMapper.update(isNull(), any())).thenReturn(0);
 
         assertThrows(BusinessException.class,
                 () -> service.debit(1L, 2L, new BigDecimal("20.00"), "TEST", "BIZ-4", "debit"));
-        verify(accountMapper, times(1)).updateById(any(MerchantWalletAccount.class));
+        verify(accountMapper, times(1)).update(isNull(), any());
+        verify(accountMapper, never()).updateById(any(MerchantWalletAccount.class));
     }
 
     private MerchantWalletAccount buildMerchantAccount(Long tenantId, Long platformUserId, String balance) {

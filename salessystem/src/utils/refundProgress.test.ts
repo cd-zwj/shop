@@ -13,6 +13,21 @@ describe('refundProgress', () => {
     expect(presentation.nextStep).toContain('商家审核');
   });
 
+  it('prefers backend refund presentation when available', () => {
+    const presentation = getRefundProgressPresentation({
+      refundStatus: 'PENDING',
+      statusLabel: '退款失败',
+      statusDescription: '失败原因：交付撤销失败',
+      nextStep: '下一步：联系商户处理。',
+      failureReason: '交付撤销失败',
+    });
+
+    expect(presentation.label).toBe('退款失败');
+    expect(presentation.description).toContain('交付撤销失败');
+    expect(presentation.nextStep).toContain('联系商户');
+    expect(presentation.tone).toBe('red');
+  });
+
   it('shows reject reason for rejected refunds', () => {
     const presentation = getRefundProgressPresentation({
       refundStatus: 'REJECTED',

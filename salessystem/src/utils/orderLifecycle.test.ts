@@ -92,6 +92,22 @@ describe('orderLifecycle', () => {
     }).failureReason).toContain('余额不足');
   });
 
+  it('prefers backend order presentation when the API provides it', () => {
+    const presentation = getOrderLifecyclePresentation({
+      orderStatus: 'CREATED',
+      payStatus: 'WAIT_PAY',
+      statusLabel: '支付失败',
+      statusDescription: '失败原因：渠道返回余额不足',
+      nextStep: '下一步：重新发起支付。',
+      failureReason: '渠道返回余额不足',
+      availableActions: ['PAY', 'CONTACT_MERCHANT'],
+    });
+
+    expect(presentation.label).toBe('支付失败');
+    expect(presentation.failureReason).toBe('渠道返回余额不足');
+    expect(presentation.nextActions.map((action) => action.key)).toEqual(['pay', 'contact']);
+  });
+
   it('uses delivery records to distinguish paid fulfillment states', () => {
     const baseOrder = { orderStatus: 'PAID', payStatus: 'SUCCESS' };
 

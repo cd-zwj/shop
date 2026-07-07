@@ -19,6 +19,11 @@ export interface Refund {
   refundableAmount: number | null;
   quickRefundSuggested: boolean | null;
   refundSuggestion: string | null;
+  statusLabel?: string | null;
+  statusDescription?: string | null;
+  nextStep?: string | null;
+  failureReason?: string | null;
+  availableActions?: string[] | null;
   reason: string;
   description: string | null;
   rejectReason: string | null;

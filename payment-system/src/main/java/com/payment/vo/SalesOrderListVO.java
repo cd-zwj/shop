@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * 用户端订单列表视图对象，隐藏内部字段。
  */
@@ -32,11 +34,17 @@ public class SalesOrderListVO {
     private String expireTime;
     private String createTime;
     private String updateTime;
+    private String statusLabel;
+    private String statusDescription;
+    private String nextStep;
+    private String failureReason;
+    private List<String> availableActions;
 
     public static SalesOrderListVO from(SalesOrder order) {
         if (order == null) {
             return null;
         }
+        StatusPresentation presentation = OrderStatusPresentation.from(order);
         return SalesOrderListVO.builder()
                 .id(order.getId())
                 .orderNo(order.getOrderNo())
@@ -55,6 +63,11 @@ public class SalesOrderListVO {
                 .expireTime(VoConverterUtil.formatTime(order.getExpireTime()))
                 .createTime(VoConverterUtil.formatTime(order.getCreateTime()))
                 .updateTime(VoConverterUtil.formatTime(order.getUpdateTime()))
+                .statusLabel(presentation.statusLabel())
+                .statusDescription(presentation.statusDescription())
+                .nextStep(presentation.nextStep())
+                .failureReason(presentation.failureReason())
+                .availableActions(presentation.availableActions())
                 .build();
     }
 }
