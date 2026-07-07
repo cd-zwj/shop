@@ -23,6 +23,7 @@ import type { PageResult } from '../../types/api';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { Pagination } from '../../components/Pagination';
+import { summarizeMerchantTransactions } from '../../utils/merchantFinancePresentation';
 
 const DEFAULT_SUMMARY: MerchantWalletSummary = {
   tenantId: 0,
@@ -149,6 +150,11 @@ export default function MerchantFinance() {
   const pendingWithdrawals = useMemo(
     () => withdrawals.filter((item) => item.status === 0),
     [withdrawals],
+  );
+
+  const transactionSummary = useMemo(
+    () => summarizeMerchantTransactions(transactions),
+    [transactions],
   );
 
   return (
@@ -452,6 +458,45 @@ export default function MerchantFinance() {
               </button>
             )}
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {[
+            {
+              label: '当前页收款',
+              value: formatCurrency(transactionSummary.paymentIncome),
+              tone: 'text-green-600',
+            },
+            {
+              label: '当前页充值',
+              value: formatCurrency(transactionSummary.rechargeIncome),
+              tone: 'text-blue-600',
+            },
+            {
+              label: '当前页退款',
+              value: formatCurrency(transactionSummary.refundAmount),
+              tone: 'text-red-600',
+            },
+            {
+              label: '当前页提现',
+              value: formatCurrency(transactionSummary.withdrawalAmount),
+              tone: 'text-orange-600',
+            },
+            {
+              label: '当前页净变动',
+              value: formatCurrency(transactionSummary.netChange),
+              tone: transactionSummary.netChange >= 0 ? 'text-green-600' : 'text-red-600',
+            },
+          ].map((item) => (
+            <div key={item.label} className="rounded-[24px] bg-slate-50 p-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {item.label}
+              </p>
+              <p className={cn('mt-2 text-lg font-black tracking-tight', item.tone)}>
+                {item.value}
+              </p>
+            </div>
+          ))}
         </div>
 
         {txLoading ? (
