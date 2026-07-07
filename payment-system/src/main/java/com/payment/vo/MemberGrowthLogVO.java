@@ -1,5 +1,7 @@
 package com.payment.vo;
 
+import com.payment.dto.AssetTracePresentation;
+import com.payment.dto.AssetTracePresentations;
 import com.payment.entity.MemberGrowthLog;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +26,7 @@ public class MemberGrowthLogVO {
     private String bizNo;
     private String remark;
     private String createTime;
+    private AssetTracePresentation trace;
 
     public static MemberGrowthLogVO from(MemberGrowthLog log) {
         if (log == null) {
@@ -39,6 +42,7 @@ public class MemberGrowthLogVO {
                 .bizNo(log.getBizNo())
                 .remark(log.getRemark())
                 .createTime(VoConverterUtil.formatTime(log.getCreateTime()))
+                .trace(AssetTracePresentations.growth(log))
                 .build();
     }
 }

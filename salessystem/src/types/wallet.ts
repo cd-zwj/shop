@@ -1,5 +1,20 @@
 import type { PaymentChannelCode } from './payment';
 
+export type AssetTraceTone = 'positive' | 'negative' | 'neutral';
+
+export interface AssetTracePresentation {
+  title?: string | null;
+  source?: string | null;
+  effect?: string | null;
+  balance?: string | null;
+  status?: string | null;
+  hint?: string | null;
+  actionLabel?: string | null;
+  actionPath?: string | null;
+  inactiveActionLabel?: string | null;
+  tone?: AssetTraceTone | null;
+}
+
 export interface WalletAccount {
   walletType: string;
   tenantId: number | null;
@@ -19,6 +34,7 @@ export interface WalletLog {
   balanceAfter: number;
   remark?: string | null;
   createTime?: string | null;
+  trace?: AssetTracePresentation | null;
 }
 
 export interface TenantAssetSummary {

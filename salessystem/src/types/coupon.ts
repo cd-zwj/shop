@@ -1,3 +1,5 @@
+import type { AssetTracePresentation } from './wallet';
+
 export interface CouponTemplate {
   id: number;
   tenantId: number;
@@ -36,6 +38,7 @@ export interface UserCoupon {
   expireTime: string;
   usedTime: string | null;
   orderNo?: string | null;
+  trace?: AssetTracePresentation | null;
 }
 
 export interface CouponReceiveResult {

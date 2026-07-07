@@ -56,6 +56,36 @@ describe('assetTracePresentation', () => {
     expect(presentation.tone).toBe('negative');
   });
 
+  it('prefers backend points trace when provided', () => {
+    const log: PointsLog = {
+      id: 8,
+      tenantId: 10,
+      userId: 20,
+      points: 120,
+      balance: 520,
+      type: 'GRANT',
+      reason: '本地原因',
+      orderNo: null,
+      createTime: '2026-07-06T10:30:00',
+      trace: {
+        title: '后端积分标题',
+        source: '后端来源',
+        effect: '+120 积分',
+        balance: '400 -> 520',
+        actionLabel: '查看订单',
+        actionPath: '/order/SO_BACKEND',
+        tone: 'positive',
+      },
+    };
+
+    expect(getPointsTracePresentation(log)).toMatchObject({
+      title: '后端积分标题',
+      source: '后端来源',
+      actionPath: '/order/SO_BACKEND',
+      tone: 'positive',
+    });
+  });
+
   it('explains growth changes with before and after values', () => {
     const log: GrowthLog = {
       id: 3,
@@ -78,6 +108,30 @@ describe('assetTracePresentation', () => {
       actionLabel: '查看订单',
       tone: 'positive',
     });
+  });
+
+  it('prefers backend growth trace when provided', () => {
+    const log: GrowthLog = {
+      id: 9,
+      changeType: 'EARN',
+      changeGrowth: 20,
+      growthBefore: 100,
+      growthAfter: 120,
+      bizType: 'ORDER',
+      bizNo: 'SO_LOCAL',
+      remark: null,
+      createTime: '2026-07-06T12:00:00',
+      trace: {
+        title: '后端成长标题',
+        source: '后端成长来源',
+        effect: '+20 成长值',
+        balance: '100 -> 120',
+        tone: 'positive',
+      },
+    };
+
+    expect(getGrowthTracePresentation(log).title).toBe('后端成长标题');
+    expect(getGrowthTracePresentation(log).source).toBe('后端成长来源');
   });
 
   it('explains usable coupon origin and suggested action', () => {
@@ -133,6 +187,37 @@ describe('assetTracePresentation', () => {
     expect(presentation.actionPath).toBeUndefined();
     expect(presentation.inactiveActionLabel).toBe('已使用');
     expect(presentation.tone).toBe('neutral');
+  });
+
+  it('prefers backend coupon trace when provided', () => {
+    const coupon: UserCoupon = {
+      id: 10,
+      couponNo: 'CP20260706005',
+      couponTemplateId: 44,
+      tenantId: 10,
+      status: 'USED',
+      name: '满减券',
+      couponType: 'FIXED',
+      thresholdAmount: 100,
+      discountAmount: 20,
+      discountRate: null,
+      maxDiscountAmount: null,
+      receiveTime: '2026-07-01T09:00:00',
+      expireTime: '2026-07-31T23:59:59',
+      usedTime: '2026-07-06T13:10:00',
+      trace: {
+        source: '后端优惠券来源',
+        status: '已使用',
+        actionLabel: '查看订单',
+        actionPath: '/order/SO_BACKEND_COUPON',
+        tone: 'neutral',
+      },
+    };
+
+    const presentation = getCouponTracePresentation(coupon);
+
+    expect(presentation.source).toBe('后端优惠券来源');
+    expect(presentation.actionPath).toBe('/order/SO_BACKEND_COUPON');
   });
 
   it('links used coupon lifecycle to the order that consumed it', () => {

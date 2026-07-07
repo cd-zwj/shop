@@ -83,6 +83,7 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
             vo.setBalanceAfter(log.getBalanceAfter());
             vo.setRemark(log.getRemark());
             vo.setCreateTime(log.getCreateTime());
+            vo.attachTrace();
             return vo;
         }).collect(Collectors.toList()));
         return result;

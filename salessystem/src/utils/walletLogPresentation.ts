@@ -35,21 +35,21 @@ const BIZ_TYPE_LABELS: Record<string, string> = {
 
 export function getWalletLogPresentation(log: WalletLog): WalletLogPresentation {
   const amount = Number(log.changeAmount || 0);
-  const direction = getDirection(amount);
-  const label = getBizTypeLabel(log.bizType);
-  const source = getSourceText(log);
+  const direction = getTraceDirection(log.trace?.tone) ?? getDirection(amount);
+  const label = log.trace?.title || getBizTypeLabel(log.bizType);
+  const source = log.trace?.source || getSourceText(log);
   const action = getWalletLogAction(log);
 
   return {
     title: label,
     source,
-    amountText: `${amount > 0 ? '+' : ''}${formatCurrency(amount)}`,
-    balanceText: `余额 ${formatCurrency(log.balanceBefore)} -> ${formatCurrency(log.balanceAfter)}`,
+    amountText: log.trace?.effect || `${amount > 0 ? '+' : ''}${formatCurrency(amount)}`,
+    balanceText: log.trace?.balance || `余额 ${formatCurrency(log.balanceBefore)} -> ${formatCurrency(log.balanceAfter)}`,
     direction,
     badgeClass: getBadgeClass(direction),
     initials: getInitials(log.bizType, direction),
-    actionLabel: action?.label,
-    actionPath: action?.path,
+    actionLabel: log.trace?.actionLabel || action?.label,
+    actionPath: log.trace?.actionPath || action?.path,
   };
 }
 
@@ -77,6 +77,13 @@ function getDirection(amount: number): WalletLogDirection {
     return 'expense';
   }
   return 'neutral';
+}
+
+function getTraceDirection(tone?: string | null): WalletLogDirection | null {
+  if (tone === 'positive') return 'income';
+  if (tone === 'negative') return 'expense';
+  if (tone === 'neutral') return 'neutral';
+  return null;
 }
 
 function getBizTypeLabel(bizType?: string | null) {

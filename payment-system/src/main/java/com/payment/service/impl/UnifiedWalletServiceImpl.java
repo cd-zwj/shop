@@ -73,6 +73,7 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
             vo.setBalanceAfter(log.getBalanceAfter());
             vo.setRemark(log.getRemark());
             vo.setCreateTime(log.getCreateTime());
+            vo.attachTrace();
             return vo;
         }).collect(Collectors.toList()));
         return result;

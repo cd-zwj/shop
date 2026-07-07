@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.config.RabbitMQConfig;
+import com.payment.dto.AssetTracePresentations;
 import com.payment.dto.AppCouponReceiveVO;
 import com.payment.dto.AppCouponTemplateVO;
 import com.payment.dto.AppUserCouponVO;
@@ -1000,6 +1001,7 @@ public class CouponServiceImpl implements CouponService {
             vo.setDiscountRate(template.getDiscountRate());
             vo.setMaxDiscountAmount(template.getMaxDiscountAmount());
         }
+        vo.setTrace(AssetTracePresentations.coupon(coupon, template));
         return vo;
     }
 

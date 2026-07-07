@@ -30,6 +30,21 @@ const GROWTH_CHANGE_TYPE_LABELS: Record<string, string> = {
 };
 
 export function getPointsTracePresentation(log: PointsLog): AssetTracePresentation {
+  if (log.trace) {
+    return {
+      title: log.trace.title ?? undefined,
+      source: log.trace.source || '来源：积分变动',
+      effect: log.trace.effect ?? undefined,
+      balance: log.trace.balance ?? undefined,
+      status: log.trace.status ?? undefined,
+      hint: log.trace.hint ?? undefined,
+      actionLabel: log.trace.actionLabel ?? undefined,
+      actionPath: log.trace.actionPath ?? undefined,
+      inactiveActionLabel: log.trace.inactiveActionLabel ?? undefined,
+      tone: log.trace.tone ?? 'neutral',
+    };
+  }
+
   const orderNo = log.orderNo?.trim();
   const points = Math.abs(log.points);
   const isGrant = log.points >= 0 || log.type === 'GRANT';
@@ -48,6 +63,21 @@ export function getPointsTracePresentation(log: PointsLog): AssetTracePresentati
 }
 
 export function getGrowthTracePresentation(log: GrowthLog): AssetTracePresentation {
+  if (log.trace) {
+    return {
+      title: log.trace.title ?? undefined,
+      source: log.trace.source || '来源：成长值变动',
+      effect: log.trace.effect ?? undefined,
+      balance: log.trace.balance ?? undefined,
+      status: log.trace.status ?? undefined,
+      hint: log.trace.hint ?? undefined,
+      actionLabel: log.trace.actionLabel ?? undefined,
+      actionPath: log.trace.actionPath ?? undefined,
+      inactiveActionLabel: log.trace.inactiveActionLabel ?? undefined,
+      tone: log.trace.tone ?? 'neutral',
+    };
+  }
+
   const bizLabel = GROWTH_BIZ_TYPE_LABELS[log.bizType] || log.bizType || '成长值变动';
   const isEarn = log.changeType === 'EARN' || log.changeGrowth > 0;
   const isDeduct = log.changeType === 'DEDUCT' || log.changeGrowth < 0;
@@ -66,6 +96,21 @@ export function getGrowthTracePresentation(log: GrowthLog): AssetTracePresentati
 }
 
 export function getCouponTracePresentation(coupon: UserCoupon): AssetTracePresentation {
+  if (coupon.trace) {
+    return {
+      title: coupon.trace.title ?? undefined,
+      source: coupon.trace.source || `领取时间 ${formatDateTime(coupon.receiveTime)}`,
+      effect: coupon.trace.effect ?? undefined,
+      balance: coupon.trace.balance ?? undefined,
+      status: coupon.trace.status ?? undefined,
+      hint: coupon.trace.hint ?? undefined,
+      actionLabel: coupon.trace.actionLabel ?? undefined,
+      actionPath: coupon.trace.actionPath ?? undefined,
+      inactiveActionLabel: coupon.trace.inactiveActionLabel ?? undefined,
+      tone: coupon.trace.tone ?? 'neutral',
+    };
+  }
+
   if (coupon.status === 'USED') {
     const orderNo = coupon.orderNo?.trim();
     return {

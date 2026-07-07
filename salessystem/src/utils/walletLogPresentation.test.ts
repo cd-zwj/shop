@@ -92,4 +92,27 @@ describe('walletLogPresentation', () => {
     expect(entries[1].actionLabel).toBe('查看支付状态');
     expect(entries[1].actionPath).toBe('/payment/status?bizNo=WR202607060001&source=recharge');
   });
+
+  it('prefers backend trace presentation when provided', () => {
+    const presentation = getWalletLogPresentation({
+      ...baseLog,
+      trace: {
+        title: '后端订单支付',
+        source: '来源：后端追溯',
+        effect: '-80.00',
+        balance: '100.00 -> 20.00',
+        actionLabel: '后端动作',
+        actionPath: '/order/BACKEND',
+        tone: 'negative',
+      },
+    });
+
+    expect(presentation.title).toBe('后端订单支付');
+    expect(presentation.source).toBe('来源：后端追溯');
+    expect(presentation.amountText).toBe('-80.00');
+    expect(presentation.balanceText).toBe('100.00 -> 20.00');
+    expect(presentation.actionLabel).toBe('后端动作');
+    expect(presentation.actionPath).toBe('/order/BACKEND');
+    expect(presentation.direction).toBe('expense');
+  });
 });

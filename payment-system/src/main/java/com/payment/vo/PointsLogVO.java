@@ -1,5 +1,7 @@
 package com.payment.vo;
 
+import com.payment.dto.AssetTracePresentation;
+import com.payment.dto.AssetTracePresentations;
 import com.payment.entity.MemberPointsLog;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,6 +30,7 @@ public class PointsLogVO {
     private String releaseTime;
     private String releaseReason;
     private String createTime;
+    private AssetTracePresentation trace;
 
     public static PointsLogVO from(MemberPointsLog log) {
         if (log == null) {
@@ -47,6 +50,7 @@ public class PointsLogVO {
                 .releaseTime(VoConverterUtil.formatTime(log.getReleaseTime()))
                 .releaseReason(log.getReleaseReason())
                 .createTime(VoConverterUtil.formatTime(log.getCreateTime()))
+                .trace(AssetTracePresentations.points(log))
                 .build();
     }
 }

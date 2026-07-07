@@ -20,6 +20,7 @@ interface BackendUserCoupon {
   receiveTime?: string | null;
   expireTime?: string | null;
   useTime?: string | null;
+  trace?: import('../../types/wallet').AssetTracePresentation | null;
 }
 
 export const appCouponService = {
@@ -78,6 +79,7 @@ function normalizeUserCoupon(coupon: BackendUserCoupon): UserCoupon {
     expireTime: coupon.expireTime || '',
     usedTime: coupon.useTime ?? null,
     orderNo: coupon.orderNo ?? null,
+    trace: coupon.trace ?? null,
   };
 }
 

@@ -28,4 +28,10 @@ public class WalletLogVO {
     private String remark;
     /** 创建时间 */
     private LocalDateTime createTime;
+    /** 用户端资产追溯展示字段 */
+    private AssetTracePresentation trace;
+
+    public void attachTrace() {
+        this.trace = AssetTracePresentations.wallet(this);
+    }
 }

@@ -40,4 +40,6 @@ public class AppUserCouponVO {
     private LocalDateTime expireTime;
     /** 使用时间 */
     private LocalDateTime useTime;
+    /** 用户端优惠券追溯展示字段 */
+    private AssetTracePresentation trace;
 }

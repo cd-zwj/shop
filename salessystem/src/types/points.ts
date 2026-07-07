@@ -1,3 +1,5 @@
+import type { AssetTracePresentation } from './wallet';
+
 export interface PointsBalance {
   id: number;
   points: number;
@@ -20,6 +22,7 @@ export interface PointsLog {
   expireTime?: string;
   orderNo: string | null;
   createTime: string;
+  trace?: AssetTracePresentation | null;
 }
 
 export interface ExchangeProduct {

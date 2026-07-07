@@ -410,6 +410,8 @@ class CouponServiceImplTest {
 
         assertEquals(1, result.size());
         assertEquals("SO202607060001", result.get(0).getOrderNo());
+        assertEquals("使用订单 SO202607060001", result.get(0).getTrace().getSource());
+        assertEquals("/order/SO202607060001", result.get(0).getTrace().getActionPath());
     }
 
     @Test

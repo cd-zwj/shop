@@ -46,6 +46,12 @@ describe('appCouponService', () => {
         expireTime: '2026-07-31T23:59:59',
         useTime: '2026-07-06T10:00:00',
         orderNo: 'SO202607060001',
+        trace: {
+          source: '使用订单 SO202607060001',
+          actionPath: '/order/SO202607060001',
+          actionLabel: '查看订单',
+          tone: 'neutral',
+        },
       },
     ]);
 
@@ -68,6 +74,12 @@ describe('appCouponService', () => {
         expireTime: '2026-07-31T23:59:59',
         usedTime: '2026-07-06T10:00:00',
         orderNo: 'SO202607060001',
+        trace: {
+          source: '使用订单 SO202607060001',
+          actionPath: '/order/SO202607060001',
+          actionLabel: '查看订单',
+          tone: 'neutral',
+        },
       },
     ]);
   });

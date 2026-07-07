@@ -1,3 +1,5 @@
+import type { AssetTracePresentation } from './wallet';
+
 /** 成长值概览 — 对应后端 MemberGrowthAccountVO */
 export interface GrowthOverview {
   totalGrowth: number;
@@ -18,4 +20,5 @@ export interface GrowthLog {
   bizNo: string | null;
   remark: string | null;
   createTime: string;
+  trace?: AssetTracePresentation | null;
 }
