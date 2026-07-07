@@ -52,15 +52,18 @@ class V1MerchantSupportServiceTest {
     }
 
     @Test
-    void cashierShouldAccessOrdersAndRefundsOnly() {
+    void cashierShouldAccessOrdersOnly() {
         when(tenantEmployeeMapper.selectOne(any())).thenReturn(employee(" cashier "));
 
         assertDoesNotThrow(() -> service.requirePermission(1L, 100L, MerchantPermission.ORDER_MANAGE));
-        assertDoesNotThrow(() -> service.requirePermission(1L, 100L, MerchantPermission.REFUND_MANAGE));
 
-        BusinessException ex = assertThrows(BusinessException.class,
+        BusinessException refundEx = assertThrows(BusinessException.class,
+                () -> service.requirePermission(1L, 100L, MerchantPermission.REFUND_MANAGE));
+        assertEquals("当前员工无权操作该商户模块", refundEx.getMessage());
+
+        BusinessException financeEx = assertThrows(BusinessException.class,
                 () -> service.requirePermission(1L, 100L, MerchantPermission.FINANCE_VIEW));
-        assertEquals("当前员工无权操作该商户模块", ex.getMessage());
+        assertEquals("当前员工无权操作该商户模块", financeEx.getMessage());
     }
 
     @Test
