@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import MerchantDashboard from './MerchantDashboard';
+import { merchantAnalyticsService } from '../../services/modules/merchantAnalytics';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import { merchantProductService } from '../../services/modules/merchantProduct';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
@@ -34,6 +35,12 @@ vi.mock('../../services/modules/merchantOrder', () => ({
   },
 }));
 
+vi.mock('../../services/modules/merchantAnalytics', () => ({
+  merchantAnalyticsService: {
+    getProductSalesRank: vi.fn(),
+  },
+}));
+
 vi.mock('../../services/modules/merchantProduct', () => ({
   merchantProductService: {
     listProducts: vi.fn(),
@@ -53,6 +60,7 @@ vi.mock('../../services/modules/merchantWorkbench', () => ({
 }));
 
 const mockedOrderService = vi.mocked(merchantOrderService);
+const mockedAnalyticsService = vi.mocked(merchantAnalyticsService);
 const mockedProductService = vi.mocked(merchantProductService);
 const mockedRefundService = vi.mocked(merchantRefundService);
 const mockedWorkbenchService = vi.mocked(merchantWorkbenchService);
@@ -106,6 +114,7 @@ describe('MerchantDashboard', () => {
     mockedProductService.listProducts.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
     mockedOrderService.listOrders.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
     mockedRefundService.listRefunds.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
+    mockedAnalyticsService.getProductSalesRank.mockResolvedValue([]);
     mockedWorkbenchService.getTodoSummary.mockResolvedValue({
       totalCount: 12,
       items: [
@@ -153,6 +162,7 @@ describe('MerchantDashboard', () => {
       pages: 1,
     });
     mockedRefundService.listRefunds.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
+    mockedAnalyticsService.getProductSalesRank.mockResolvedValue([]);
     mockedWorkbenchService.getTodoSummary.mockRejectedValue(new Error('待办接口暂不可用'));
 
     const element = await renderDashboard();
@@ -164,6 +174,16 @@ describe('MerchantDashboard', () => {
 
   it('renders local operations analytics from loaded orders and refunds', async () => {
     mockedProductService.listProducts.mockResolvedValue({ records: [], total: 0, page: 1, size: 50, pages: 0 });
+    mockedAnalyticsService.getProductSalesRank.mockResolvedValue([
+      {
+        productId: 10,
+        productCode: '10',
+        productName: '爆款咖啡',
+        productImage: null,
+        salesQuantity: 8,
+        salesAmount: 320,
+      },
+    ]);
     mockedOrderService.listOrders.mockResolvedValue({
       records: [
         { id: 1, orderNo: 'SO1', tenantId: 9, platformUserId: 88, orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 100 },
@@ -214,5 +234,10 @@ describe('MerchantDashboard', () => {
     expect(element.textContent).toContain('50% / 2 位下单用户');
     expect(element.textContent).toContain('支付转化');
     expect(element.textContent).toContain('67%');
+    expect(mockedAnalyticsService.getProductSalesRank).toHaveBeenCalledWith(9, { limit: 5 });
+    expect(element.textContent).toContain('商品销量排行');
+    expect(element.textContent).toContain('爆款咖啡');
+    expect(element.textContent).toContain('销量 8 件');
+    expect(element.textContent).toContain('¥320.00');
   });
 });

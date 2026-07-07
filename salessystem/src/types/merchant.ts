@@ -110,6 +110,21 @@ export interface MerchantWorkbenchTodoSummary {
   items: MerchantWorkbenchTodoItem[];
 }
 
+export interface MerchantProductSalesRankItem {
+  productId: number;
+  productCode?: string | null;
+  productName: string;
+  productImage?: string | null;
+  salesQuantity: number;
+  salesAmount: number;
+}
+
+export interface MerchantAnalyticsFilters {
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}
+
 export interface MerchantWalletSummary {
   tenantId: number;
   availableBalance: number;

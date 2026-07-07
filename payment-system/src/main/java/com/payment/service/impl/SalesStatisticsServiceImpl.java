@@ -5,6 +5,7 @@ import com.payment.dto.SalesOverviewDTO;
 import com.payment.dto.SalesQueryDTO;
 import com.payment.dto.SalesTrendDTO;
 import com.payment.mapper.PaymentOrderMapper;
+import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.service.SalesStatisticsService;
 import com.payment.util.ExcelUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,9 @@ public class SalesStatisticsServiceImpl implements SalesStatisticsService {
     
     @Autowired
     private PaymentOrderMapper paymentOrderMapper;
+
+    @Autowired
+    private SalesOrderItemMapper salesOrderItemMapper;
     
     /**
      * 获取指定租户的销售数据概览（今日/本月/累计销售额和订单数）
@@ -113,6 +117,23 @@ public class SalesStatisticsServiceImpl implements SalesStatisticsService {
         List<ProductSalesRankDTO> rankList = paymentOrderMapper.selectProductSalesRank(tenantId, startTime, endTime, resultLimit);
         log.info("商品销售排行查询完成，共{}条记录", rankList.size());
         
+        return rankList;
+    }
+
+    @Override
+    public List<ProductSalesRankDTO> getV1ProductSalesRank(Long tenantId, SalesQueryDTO query, Integer limit) {
+        log.info("获取 V1 商品销售排行，租户ID: {}, 查询条件: {}, 限制数量: {}", tenantId, query, limit);
+
+        LocalDate startDate = query.getStartDate() != null ? query.getStartDate() : LocalDate.now().minusDays(30);
+        LocalDate endDate = query.getEndDate() != null ? query.getEndDate() : LocalDate.now();
+
+        LocalDateTime startTime = LocalDateTime.of(startDate, LocalTime.MIN);
+        LocalDateTime endTime = LocalDateTime.of(endDate.plusDays(1), LocalTime.MIN);
+        Integer resultLimit = limit != null && limit > 0 ? Math.min(limit, 50) : 10;
+
+        List<ProductSalesRankDTO> rankList = salesOrderItemMapper.selectV1ProductSalesRank(
+                tenantId, startTime, endTime, resultLimit);
+        log.info("V1 商品销售排行查询完成，共{}条记录", rankList.size());
         return rankList;
     }
     

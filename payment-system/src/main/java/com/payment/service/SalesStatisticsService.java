@@ -45,6 +45,16 @@ public interface SalesStatisticsService {
     List<ProductSalesRankDTO> getProductSalesRank(Long tenantId, SalesQueryDTO query, Integer limit);
 
     /**
+     * 获取 V1 销售订单体系下的商品销售排行。
+     *
+     * @param tenantId 租户ID
+     * @param query    查询条件，包含起止日期
+     * @param limit    返回数量限制
+     * @return 商品销售排行列表
+     */
+    List<ProductSalesRankDTO> getV1ProductSalesRank(Long tenantId, SalesQueryDTO query, Integer limit);
+
+    /**
      * 导出销售报表为Excel文件。
      *
      * @param tenantId 租户ID

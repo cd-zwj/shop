@@ -20,11 +20,12 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { merchantAnalyticsService } from '../../services/modules/merchantAnalytics';
 import { merchantOrderService } from '../../services/modules/merchantOrder';
 import { merchantProductService } from '../../services/modules/merchantProduct';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
 import { merchantWorkbenchService } from '../../services/modules/merchantWorkbench';
-import type { MerchantOrder, MerchantProduct, MerchantWorkbenchTodoItem } from '../../types/merchant';
+import type { MerchantOrder, MerchantProduct, MerchantProductSalesRankItem, MerchantWorkbenchTodoItem } from '../../types/merchant';
 import type { Refund } from '../../types/refund';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
@@ -39,6 +40,7 @@ export default function MerchantDashboard() {
   const [products, setProducts] = useState<MerchantProduct[]>([]);
   const [orders, setOrders] = useState<MerchantOrder[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [productSalesRank, setProductSalesRank] = useState<MerchantProductSalesRankItem[]>([]);
   const [remoteWorkItems, setRemoteWorkItems] = useState<MerchantWorkbenchTodoItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -56,23 +58,26 @@ export default function MerchantDashboard() {
       }
 
       try {
-        const [productPage, orderPage, refundPage, todoSummary] = await Promise.all([
+        const [productPage, orderPage, refundPage, todoSummary, productRank] = await Promise.all([
           merchantProductService.listProducts(tenantId, { current: 1, size: 50 }),
           merchantOrderService.listOrders(tenantId, { current: 1, size: 50 }),
           merchantRefundService.listRefunds(tenantId, undefined, 1, 50),
           merchantWorkbenchService.getTodoSummary(tenantId).catch(() => null),
+          merchantAnalyticsService.getProductSalesRank(tenantId, { limit: 5 }).catch(() => []),
         ]);
 
         if (!isMounted) return;
         setProducts(productPage.records ?? []);
         setOrders(orderPage.records ?? []);
         setRefunds(refundPage.records ?? []);
+        setProductSalesRank(productRank ?? []);
         setRemoteWorkItems(todoSummary?.items ?? null);
       } catch (loadError) {
         if (!isMounted) return;
         setProducts([]);
         setOrders([]);
         setRefunds([]);
+        setProductSalesRank([]);
         setRemoteWorkItems(null);
         setError(getErrorMessage(loadError, '商户仪表盘数据加载失败，请稍后重试'));
       } finally {
@@ -283,6 +288,69 @@ export default function MerchantDashboard() {
               </p>
             </div>
           ))}
+        </div>
+
+        <div className="mt-6 rounded-[28px] border border-slate-100 bg-white p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                商品销量排行
+              </h3>
+              <p className="mt-1 text-xs font-medium text-slate-500">
+                默认统计最近 30 天已支付订单。
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/merchant/products')}
+              className="shrink-0 text-xs font-black text-primary"
+            >
+              商品管理
+            </button>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="h-11 animate-pulse rounded-2xl bg-slate-50" />
+              ))}
+            </div>
+          ) : productSalesRank.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-6 text-center text-xs font-medium text-slate-400">
+              最近 30 天暂无已支付商品销量数据。
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {productSalesRank.map((item, index) => (
+                <div
+                  key={`${item.productId}-${index}`}
+                  className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-white text-xs font-black text-slate-500">
+                      {index + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-slate-800">
+                        {item.productName}
+                      </p>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                        销量 {item.salesQuantity} 件
+                      </p>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-black text-slate-900">
+                      {formatCurrency(item.salesAmount)}
+                    </p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      GMV
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
