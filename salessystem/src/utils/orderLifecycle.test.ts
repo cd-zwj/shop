@@ -92,6 +92,32 @@ describe('orderLifecycle', () => {
     }).failureReason).toContain('余额不足');
   });
 
+  it('uses closed or expired payment bill state before generic pending payment state', () => {
+    const closed = getOrderLifecyclePresentation(
+      { orderStatus: 'CREATED', payStatus: 'WAIT_PAY' },
+      {
+        paymentBillStatus: 'CLOSED',
+        paymentBillStatusRemark: '用户主动关闭支付页',
+      },
+    );
+
+    expect(closed.label).toBe('支付已关闭');
+    expect(closed.failureReason).toContain('用户主动关闭支付页');
+    expect(closed.nextActions.map((action) => action.key)).toContain('pay');
+    expect(closed.nextActions.map((action) => action.key)).toContain('contact');
+
+    const expired = getOrderLifecyclePresentation(
+      { orderStatus: 'CREATED', payStatus: 'WAIT_PAY' },
+      {
+        paymentBillStatus: 'EXPIRED',
+      },
+    );
+
+    expect(expired.label).toBe('支付已过期');
+    expect(expired.nextStep).toContain('重新发起支付');
+    expect(expired.nextActions.map((action) => action.key)).toContain('pay');
+  });
+
   it('prefers backend order presentation when the API provides it', () => {
     const presentation = getOrderLifecyclePresentation({
       orderStatus: 'CREATED',

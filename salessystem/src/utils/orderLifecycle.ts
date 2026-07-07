@@ -163,6 +163,25 @@ export function getOrderLifecyclePresentation(
     };
   }
 
+  if (context.paymentBillStatus === 'CLOSED' || context.paymentBillStatus === 'EXPIRED') {
+    const isExpiredPayment = context.paymentBillStatus === 'EXPIRED';
+    const failureReason = context.paymentBillStatusRemark?.trim()
+      || (isExpiredPayment ? '支付单已超过可支付时间' : '支付单已关闭，原链接不可继续使用');
+
+    return {
+      label: isExpiredPayment ? '支付已过期' : '支付已关闭',
+      description: `${isExpiredPayment ? '过期说明' : '关闭原因'}：${failureReason}`,
+      nextStep: '下一步：重新发起支付，系统会创建新的本地支付单；如状态有疑问可联系商户核对。',
+      failureReason,
+      tab: 'pending',
+      tone: 'orange',
+      nextActions: [
+        { key: 'pay', label: '重新支付' },
+        { key: 'contact', label: '联系商户' },
+      ],
+    };
+  }
+
   if (order.payStatus === 'PAYING' || context.paymentBillStatus === 'PAYING') {
     return {
       label: '支付中',
