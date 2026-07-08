@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -33,6 +33,9 @@ import {
   openAlipayPaymentWindow,
   saveAlipayPaymentPayload,
 } from '../utils/alipayPayment';
+import { getErrorMessage } from '../utils/errorMessage';
+
+type PaymentStatusViewKey = 'success' | 'pending' | 'failed' | 'queryError';
 
 export default function PaymentStatus() {
   const navigate = useNavigate();
@@ -49,9 +52,15 @@ export default function PaymentStatus() {
   const [isRepurchasing, setIsRepurchasing] = useState(false);
   const [isRetryingPayment, setIsRetryingPayment] = useState(false);
   const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const paymentBillRef = useRef<PaymentBill | null>(null);
 
   const effectiveBillNo = paymentBill?.billNo ?? billNo;
   const savedPayload = readAlipayPaymentPayload(effectiveBillNo);
+
+  useEffect(() => {
+    paymentBillRef.current = paymentBill;
+  }, [paymentBill]);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,7 +73,8 @@ export default function PaymentStatus() {
       }
 
       try {
-        const syncBillNo = paymentBill?.billNo ?? billNo;
+        const currentBill = paymentBillRef.current;
+        const syncBillNo = currentBill?.billNo ?? billNo;
         const bill = sync && syncBillNo
           ? await appPaymentBillService.syncPaymentBill(syncBillNo)
           : billNo
@@ -73,9 +83,10 @@ export default function PaymentStatus() {
         if (!isMounted) return;
         setPaymentBill(bill);
         setError('');
-      } catch {
+      } catch (err: unknown) {
         if (!isMounted) return;
-        setError('支付状态查询失败，请稍后重试');
+        setPaymentBill(null);
+        setError(`支付状态查询失败：${getErrorMessage(err, '请稍后重试')}`);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -88,7 +99,8 @@ export default function PaymentStatus() {
 
     let timer: number | undefined;
     timer = window.setInterval(() => {
-      if (isMounted && (billNo || paymentBill?.billNo || bizNo) && paymentBill?.payStatus !== 'SUCCESS' && paymentBill?.payStatus !== 'FAILED' && paymentBill?.payStatus !== 'CLOSED') {
+      const currentBill = paymentBillRef.current;
+      if (isMounted && (billNo || currentBill?.billNo || bizNo) && currentBill?.payStatus !== 'SUCCESS' && currentBill?.payStatus !== 'FAILED' && currentBill?.payStatus !== 'CLOSED') {
         void loadBill(true);
       }
     }, 10000);
@@ -99,7 +111,7 @@ export default function PaymentStatus() {
         window.clearInterval(timer);
       }
     };
-  }, [billNo, bizNo, paymentBill?.billNo, paymentBill?.payStatus, source]);
+  }, [billNo, bizNo, reloadKey, source]);
 
   async function handleRefresh() {
     const syncBillNo = paymentBill?.billNo ?? billNo;
@@ -120,12 +132,16 @@ export default function PaymentStatus() {
     }
   }
 
-  const statusKey = useMemo(() => {
+  const statusKey = useMemo<PaymentStatusViewKey>(() => {
+    if (!isLoading && !paymentBill && error) {
+      return 'queryError';
+    }
+
     const presentation = getPaymentStatusPresentation(paymentBill);
     if (presentation.state === 'success') return 'success';
     if (presentation.state === 'pending') return 'pending';
     return 'failed';
-  }, [paymentBill]);
+  }, [error, isLoading, paymentBill]);
 
   const statusPresentation = useMemo(
     () => getPaymentStatusPresentation(paymentBill),
@@ -148,7 +164,14 @@ export default function PaymentStatus() {
     return '';
   }, [reusedFlag, source]);
 
-  const content = {
+  const content: Record<PaymentStatusViewKey, {
+    icon: typeof CheckCircle2;
+    color: string;
+    title: string;
+    desc: string;
+    primaryAction: string;
+    primaryPath: string | null;
+  }> = {
     success: {
       icon: CheckCircle2,
       color: 'border-green-100 bg-green-50 text-green-500 shadow-green-200/50',
@@ -173,13 +196,27 @@ export default function PaymentStatus() {
       primaryAction: source === 'recharge' ? '重新充值' : '返回订单',
       primaryPath: source === 'recharge' ? '/recharge' : orderNo ? `/order/${encodeURIComponent(orderNo)}` : '/orders',
     },
-  }[statusKey];
+    queryError: {
+      icon: RefreshCcw,
+      color: 'border-red-100 bg-red-50 text-red-500 shadow-red-200/50',
+      title: '支付状态查询失败',
+      desc: error || '当前无法确认支付状态，请重试查询或返回订单稍后查看。',
+      primaryAction: '重试查询',
+      primaryPath: null,
+    },
+  };
+
+  const currentContent = content[statusKey];
 
   const failureActions = useMemo(
     () => getPaymentFailureActions(statusPresentation.state, orderNo),
     [orderNo, statusPresentation.state],
   );
-  const primaryActionLabel = source === 'order' ? failureActions.primaryLabel : content.primaryAction;
+  const primaryActionLabel = statusKey === 'queryError'
+    ? currentContent.primaryAction
+    : source === 'order'
+      ? failureActions.primaryLabel
+      : currentContent.primaryAction;
   const canContactMerchant = source === 'order'
     && statusKey === 'failed'
     && Boolean(paymentBill?.tenantId);
@@ -258,12 +295,12 @@ export default function PaymentStatus() {
         animate={{ opacity: 1, scale: 1 }}
         className="relative z-10 flex w-full max-w-md flex-col items-center text-center"
       >
-        <div className={cn('mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border-4 shadow-2xl transition-all duration-700', content.color)}>
-          <content.icon size={56} className={statusKey === 'pending' ? 'animate-pulse-subtle' : ''} />
+        <div className={cn('mb-8 flex h-32 w-32 items-center justify-center rounded-[40px] border-4 shadow-2xl transition-all duration-700', currentContent.color)}>
+          <currentContent.icon size={56} className={statusKey === 'pending' ? 'animate-pulse-subtle' : ''} />
         </div>
 
-        <h1 className="mb-4 text-4xl font-black tracking-tighter text-slate-900">{content.title}</h1>
-        <p className="mb-8 font-medium leading-relaxed text-slate-500">{content.desc}</p>
+        <h1 className="mb-4 text-4xl font-black tracking-tighter text-slate-900">{currentContent.title}</h1>
+        <p className="mb-8 font-medium leading-relaxed text-slate-500">{currentContent.desc}</p>
 
         {error && (
           <div className="mb-6 w-full rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-left text-sm font-medium text-red-600">
@@ -335,12 +372,16 @@ export default function PaymentStatus() {
           )}
           <button
             onClick={() => {
+              if (statusKey === 'queryError') {
+                setReloadKey((current) => current + 1);
+                return;
+              }
               if (failureActions.showRetryPayment && source === 'order') {
                 void handleRetryPayment();
                 return;
               }
-              if (content.primaryPath) {
-                navigate(content.primaryPath);
+              if (currentContent.primaryPath) {
+                navigate(currentContent.primaryPath);
                 return;
               }
               void handleRefresh();
