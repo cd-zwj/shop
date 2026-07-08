@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Landmark,
   List,
+  RefreshCw,
   ShieldCheck,
   Wallet,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { Pagination } from '../../components/Pagination';
 import { buildMerchantReconciliation, summarizeMerchantTransactions } from '../../utils/merchantFinancePresentation';
+import { getErrorMessage } from '../../utils/errorMessage';
 
 const DEFAULT_SUMMARY: MerchantWalletSummary = {
   tenantId: 0,
@@ -64,6 +66,8 @@ export default function MerchantFinance() {
   const [txStartDate, setTxStartDate] = useState('');
   const [txEndDate, setTxEndDate] = useState('');
   const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError] = useState('');
+  const [txReloadKey, setTxReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -114,6 +118,7 @@ export default function MerchantFinance() {
     if (!tenantId) return undefined;
     let isMounted = true;
     setTxLoading(true);
+    setTxError('');
 
     merchantFinanceService
       .listTransactions(tenantId, {
@@ -127,11 +132,13 @@ export default function MerchantFinance() {
         if (!isMounted) return;
         setTransactions(res.records ?? []);
         setTxTotal(res.total ?? 0);
+        setTxError('');
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!isMounted) return;
         setTransactions([]);
         setTxTotal(0);
+        setTxError(getErrorMessage(err, '收支流水加载失败，请稍后重试'));
       })
       .finally(() => {
         if (isMounted) setTxLoading(false);
@@ -140,7 +147,7 @@ export default function MerchantFinance() {
     return () => {
       isMounted = false;
     };
-  }, [tenantId, txPage, txTypeFilter, txStartDate, txEndDate]);
+  }, [tenantId, txPage, txTypeFilter, txStartDate, txEndDate, txReloadKey]);
 
   const enabledRechargeRules = useMemo(
     () => rechargeRules.filter((rule) => Number(rule.status) === 1),
@@ -544,17 +551,34 @@ export default function MerchantFinance() {
           ))}
         </div>
 
+        {txError && (
+          <div className="flex flex-col gap-4 rounded-[28px] border border-red-100 bg-red-50 px-5 py-4 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 shrink-0" />
+              <span className="text-sm font-bold">{txError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setTxReloadKey((key) => key + 1)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-colors hover:bg-red-100"
+            >
+              <RefreshCw className="h-4 w-4" />
+              重试
+            </button>
+          </div>
+        )}
+
         {txLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="h-14 rounded-2xl bg-slate-50 animate-pulse" />
             ))}
           </div>
-        ) : transactions.length === 0 ? (
+        ) : transactions.length === 0 && !txError ? (
           <div className="rounded-[28px] border border-dashed border-slate-200 px-6 py-12 text-center text-sm font-medium text-slate-400">
             暂无收支流水记录。
           </div>
-        ) : (
+        ) : transactions.length > 0 ? (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -601,7 +625,7 @@ export default function MerchantFinance() {
               className="pt-2"
             />
           </>
-        )}
+        ) : null}
       </section>
     </div>
   );
