@@ -1,6 +1,7 @@
 package com.payment.vo;
 
 import com.payment.entity.SalesOrder;
+import com.payment.entity.SalesOrderItem;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -39,12 +40,20 @@ public class SalesOrderListVO {
     private String nextStep;
     private String failureReason;
     private List<String> availableActions;
+    private String deliveryStatus;
+    private OrderDeliverySummaryVO deliverySummary;
 
     public static SalesOrderListVO from(SalesOrder order) {
+        return from(order, List.of());
+    }
+
+    public static SalesOrderListVO from(SalesOrder order, List<SalesOrderItem> items) {
         if (order == null) {
             return null;
         }
-        StatusPresentation presentation = OrderStatusPresentation.from(order);
+        List<SalesOrderItem> safeItems = items == null ? List.of() : items;
+        StatusPresentation presentation = OrderStatusPresentation.from(order, safeItems, null, null);
+        OrderDeliverySummaryVO deliverySummary = OrderDeliverySummaryVO.from(safeItems);
         return SalesOrderListVO.builder()
                 .id(order.getId())
                 .orderNo(order.getOrderNo())
@@ -68,6 +77,8 @@ public class SalesOrderListVO {
                 .nextStep(presentation.nextStep())
                 .failureReason(presentation.failureReason())
                 .availableActions(presentation.availableActions())
+                .deliveryStatus(deliverySummary.getPrimaryStatus())
+                .deliverySummary(deliverySummary)
                 .build();
     }
 }

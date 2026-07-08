@@ -1,16 +1,27 @@
 package com.payment.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.entity.SalesOrder;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
 
 /**
  * 销售订单数据访问接口，提供销售订单表（sales_order）的 CRUD 操作。
  */
 @Mapper
 public interface SalesOrderMapper extends BaseMapper<SalesOrder> {
+
+    Page<SalesOrder> selectMerchantOrders(Page<SalesOrder> page,
+                                          @Param("tenantId") Long tenantId,
+                                          @Param("orderStatus") String orderStatus,
+                                          @Param("payStatus") String payStatus,
+                                          @Param("keyword") String keyword,
+                                          @Param("fulfillmentStatus") String fulfillmentStatus,
+                                          @Param("deliveryStatuses") List<String> deliveryStatuses);
 
     @Select("""
             SELECT COUNT(1)

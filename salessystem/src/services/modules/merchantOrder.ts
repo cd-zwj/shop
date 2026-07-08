@@ -17,6 +17,8 @@ export const merchantOrderService = {
         size: filters.size ?? 10,
         orderStatus: filters.orderStatus || undefined,
         payStatus: filters.payStatus || undefined,
+        fulfillmentStatus: filters.fulfillmentStatus || undefined,
+        deliveryStatus: filters.deliveryStatus || undefined,
         keyword: filters.keyword || undefined,
       },
       authRole: 'merchant',

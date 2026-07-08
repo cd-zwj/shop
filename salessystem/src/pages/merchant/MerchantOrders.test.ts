@@ -53,7 +53,7 @@ async function flushAsyncWork() {
   });
 }
 
-async function renderMerchantOrders() {
+async function renderMerchantOrders(initialEntry = '/merchant/orders') {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -62,7 +62,7 @@ async function renderMerchantOrders() {
     root?.render(
       React.createElement(
         MemoryRouter,
-        { initialEntries: ['/merchant/orders'] },
+        { initialEntries: [initialEntry] },
         React.createElement(
           Routes,
           null,
@@ -145,6 +145,31 @@ describe('MerchantOrders', () => {
     expect(mockShowToast).toHaveBeenCalledWith('订单 CSV 已导出', 'success');
 
     clickSpy.mockRestore();
+  });
+
+  it('uses fulfillment status when switching to shipping tab', async () => {
+    mockedMerchantOrderService.listOrders.mockResolvedValue({
+      records: [],
+      total: 0,
+      page: 1,
+      size: 100,
+      pages: 0,
+    });
+
+    const element = await renderMerchantOrders();
+    const shippingTab = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('待履约'));
+    expect(shippingTab).toBeTruthy();
+
+    await act(async () => {
+      shippingTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedMerchantOrderService.listOrders).toHaveBeenLastCalledWith(9, expect.objectContaining({
+      payStatus: 'SUCCESS',
+      fulfillmentStatus: 'PENDING',
+    }));
   });
 });
 

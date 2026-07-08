@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.payment.mapper.SalesOrderMapper">
+
+    <select id="selectMerchantOrders" resultType="com.payment.entity.SalesOrder">
+        SELECT so.*
+        FROM sales_order so
+        WHERE so.tenant_id = #{tenantId}
+          AND so.deleted = 0
+        <if test="orderStatus != null and orderStatus != ''">
+          AND so.order_status = #{orderStatus}
+        </if>
+        <if test="payStatus != null and payStatus != ''">
+          AND so.pay_status = #{payStatus}
+        </if>
+        <if test="keyword != null and keyword != ''">
+          AND (
+            so.order_no LIKE CONCAT('%', #{keyword}, '%')
+            OR so.subject LIKE CONCAT('%', #{keyword}, '%')
+          )
+        </if>
+        <if test="deliveryStatuses != null and deliveryStatuses.size() > 0">
+          AND EXISTS (
+            SELECT 1
+            FROM sales_order_item soi
+            WHERE soi.tenant_id = so.tenant_id
+              AND soi.order_no = so.order_no
+              AND (
+                soi.delivery_status IN
+                <foreach collection="deliveryStatuses" item="status" open="(" close=")" separator=",">
+                    #{status}
+                </foreach>
+                <if test="deliveryStatuses.contains('PENDING')">
+                  OR soi.delivery_status IS NULL
+                </if>
+              )
+          )
+        </if>
+        <if test="fulfillmentStatus == 'PENDING'">
+          AND EXISTS (
+            SELECT 1
+            FROM sales_order_item soi
+            WHERE soi.tenant_id = so.tenant_id
+              AND soi.order_no = so.order_no
+              AND (soi.delivery_status IS NULL OR soi.delivery_status IN ('PENDING', 'DELIVERING'))
+          )
+        </if>
+        <if test="fulfillmentStatus == 'COMPLETED'">
+          AND EXISTS (
+            SELECT 1
+            FROM sales_order_item soi
+            WHERE soi.tenant_id = so.tenant_id
+              AND soi.order_no = so.order_no
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM sales_order_item soi
+            WHERE soi.tenant_id = so.tenant_id
+              AND soi.order_no = so.order_no
+              AND (soi.delivery_status IS NULL OR soi.delivery_status NOT IN ('DELIVERED', 'CONFIRMED'))
+          )
+        </if>
+        <if test="fulfillmentStatus == 'ABNORMAL'">
+          AND (
+            so.pay_status = 'FAILED'
+            OR EXISTS (
+              SELECT 1
+              FROM sales_order_item soi
+              WHERE soi.tenant_id = so.tenant_id
+                AND soi.order_no = so.order_no
+                AND soi.delivery_status IN ('FAILED', 'REVOKE_FAILED')
+            )
+          )
+        </if>
+        ORDER BY so.create_time DESC
+    </select>
+
+</mapper>

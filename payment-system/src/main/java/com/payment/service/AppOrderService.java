@@ -7,6 +7,7 @@ import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.enums.PaymentChannelCodeEnum;
+import com.payment.vo.SalesOrderListVO;
 
 import java.util.List;
 
@@ -83,6 +84,50 @@ public interface AppOrderService {
      * @return 订单分页结果
      */
     Page<SalesOrder> listMerchantOrders(Long tenantId, Integer current, Integer size, String orderStatus, String payStatus, String keyword);
+
+    /**
+     * 分页查询商户订单列表，支持按履约状态筛选。
+     *
+     * @param tenantId          租户ID
+     * @param current           当前页码
+     * @param size              每页条数
+     * @param orderStatus       订单状态筛选（可为null）
+     * @param payStatus         支付状态筛选（可为null）
+     * @param keyword           关键字搜索（可为null，匹配订单号等）
+     * @param fulfillmentStatus 履约状态分组：PENDING / COMPLETED / ABNORMAL（可为null）
+     * @param deliveryStatus    单个交付状态筛选（可为null）
+     * @return 订单分页结果
+     */
+    Page<SalesOrder> listMerchantOrders(Long tenantId,
+                                        Integer current,
+                                        Integer size,
+                                        String orderStatus,
+                                        String payStatus,
+                                        String keyword,
+                                        String fulfillmentStatus,
+                                        String deliveryStatus);
+
+    /**
+     * 分页查询商户订单列表视图，附带订单项交付汇总和展示文案。
+     *
+     * @param tenantId          租户ID
+     * @param current           当前页码
+     * @param size              每页条数
+     * @param orderStatus       订单状态筛选（可为null）
+     * @param payStatus         支付状态筛选（可为null）
+     * @param keyword           关键字搜索（可为null，匹配订单号等）
+     * @param fulfillmentStatus 履约状态分组：PENDING / COMPLETED / ABNORMAL（可为null）
+     * @param deliveryStatus    单个交付状态筛选（可为null）
+     * @return 订单列表视图分页结果
+     */
+    Page<SalesOrderListVO> listMerchantOrderViews(Long tenantId,
+                                                  Integer current,
+                                                  Integer size,
+                                                  String orderStatus,
+                                                  String payStatus,
+                                                  String keyword,
+                                                  String fulfillmentStatus,
+                                                  String deliveryStatus);
 
     /**
      * 查询指定订单的订单项列表。

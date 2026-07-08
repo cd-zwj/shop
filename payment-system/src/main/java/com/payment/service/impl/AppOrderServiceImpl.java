@@ -27,6 +27,7 @@ import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentBizTypeEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
+import com.payment.enums.DeliveryStatusEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.DiscountSourceEnum;
 import com.payment.mapper.PointsRuleMapper;
@@ -50,6 +51,7 @@ import com.payment.service.WithdrawalService;
 import com.payment.util.BizNoGenerator;
 import com.payment.util.TenantContextHolder;
 import com.payment.vo.VoConverterUtil;
+import com.payment.vo.SalesOrderListVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -338,15 +340,106 @@ public class AppOrderServiceImpl implements AppOrderService {
      */
     @Override
     public Page<SalesOrder> listMerchantOrders(Long tenantId, Integer current, Integer size, String orderStatus, String payStatus, String keyword) {
-        return salesOrderMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getTenantId, tenantId)
-                .eq(SalesOrder::getDeleted, 0)
-                .eq(orderStatus != null && !orderStatus.isBlank(), SalesOrder::getOrderStatus, orderStatus)
-                .eq(payStatus != null && !payStatus.isBlank(), SalesOrder::getPayStatus, payStatus)
-                .and(keyword != null && !keyword.isBlank(), wrapper -> wrapper.like(SalesOrder::getOrderNo, keyword)
-                        .or()
-                        .like(SalesOrder::getSubject, keyword))
-                .orderByDesc(SalesOrder::getCreateTime));
+        return listMerchantOrders(tenantId, current, size, orderStatus, payStatus, keyword, null, null);
+    }
+
+    @Override
+    public Page<SalesOrder> listMerchantOrders(Long tenantId,
+                                               Integer current,
+                                               Integer size,
+                                               String orderStatus,
+                                               String payStatus,
+                                               String keyword,
+                                               String fulfillmentStatus,
+                                               String deliveryStatus) {
+        String normalizedFulfillmentStatus = normalizeFulfillmentStatus(fulfillmentStatus);
+        List<String> deliveryStatuses = normalizeDeliveryStatuses(deliveryStatus);
+        return salesOrderMapper.selectMerchantOrders(
+                new Page<>(current, size),
+                tenantId,
+                trimToNull(orderStatus),
+                trimToNull(payStatus),
+                trimToNull(keyword),
+                normalizedFulfillmentStatus,
+                deliveryStatuses);
+    }
+
+    @Override
+    public Page<SalesOrderListVO> listMerchantOrderViews(Long tenantId,
+                                                         Integer current,
+                                                         Integer size,
+                                                         String orderStatus,
+                                                         String payStatus,
+                                                         String keyword,
+                                                         String fulfillmentStatus,
+                                                         String deliveryStatus) {
+        Page<SalesOrder> orderPage = listMerchantOrders(
+                tenantId, current, size, orderStatus, payStatus, keyword, fulfillmentStatus, deliveryStatus);
+        List<SalesOrder> orders = orderPage.getRecords() == null ? List.of() : orderPage.getRecords();
+        Map<String, List<SalesOrderItem>> itemsByOrderNo = listItemsByOrderNo(orders);
+        List<SalesOrderListVO> records = orders.stream()
+                .map(order -> SalesOrderListVO.from(order, itemsByOrderNo.getOrDefault(order.getOrderNo(), List.of())))
+                .toList();
+
+        Page<SalesOrderListVO> result = new Page<>(orderPage.getCurrent(), orderPage.getSize(), orderPage.getTotal());
+        result.setRecords(records);
+        return result;
+    }
+
+    private Map<String, List<SalesOrderItem>> listItemsByOrderNo(List<SalesOrder> orders) {
+        List<String> orderNos = orders.stream()
+                .map(SalesOrder::getOrderNo)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList();
+        if (orderNos.isEmpty()) {
+            return Map.of();
+        }
+
+        return salesOrderItemMapper.selectByOrderNos(orderNos).stream()
+                .collect(Collectors.groupingBy(SalesOrderItem::getOrderNo));
+    }
+
+    private String normalizeFulfillmentStatus(String fulfillmentStatus) {
+        String normalized = trimToNull(fulfillmentStatus);
+        if (normalized == null) {
+            return null;
+        }
+        return switch (normalized.toUpperCase()) {
+            case "PENDING", "COMPLETED", "ABNORMAL" -> normalized.toUpperCase();
+            default -> null;
+        };
+    }
+
+    private List<String> normalizeDeliveryStatuses(String deliveryStatus) {
+        String normalized = trimToNull(deliveryStatus);
+        if (normalized == null) {
+            return List.of();
+        }
+
+        return java.util.Arrays.stream(normalized.split(","))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .map(String::toUpperCase)
+                .filter(this::isKnownDeliveryStatus)
+                .distinct()
+                .toList();
+    }
+
+    private boolean isKnownDeliveryStatus(String deliveryStatus) {
+        try {
+            DeliveryStatusEnum.valueOf(deliveryStatus);
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim();
     }
 
     /**

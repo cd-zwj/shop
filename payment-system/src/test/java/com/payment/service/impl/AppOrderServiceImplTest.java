@@ -1,5 +1,6 @@
 package com.payment.service.impl;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.AppCreateOrderDTO;
 import com.payment.dto.AppCreateOrderItemDTO;
@@ -48,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -582,6 +584,89 @@ class AppOrderServiceImplTest {
     }
 
     @Test
+    void listMerchantOrderViewsShouldFilterByFulfillmentStatusAndExposeDeliverySummary() {
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
+        TenantEmployeeMapper tenantEmployeeMapper = mock(TenantEmployeeMapper.class);
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        ProductMapper productMapper = mock(ProductMapper.class);
+        UnifiedWalletService unifiedWalletService = mock(UnifiedWalletService.class);
+        MerchantWalletService merchantWalletService = mock(MerchantWalletService.class);
+        PaymentBillV1Service paymentBillV1Service = mock(PaymentBillV1Service.class);
+        WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
+        PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
+        OrderPricingService orderPricingService = mock(OrderPricingService.class);
+        CouponService couponService = mock(CouponService.class);
+        PromotionService promotionService = mock(PromotionService.class);
+        OrderDiscountSnapshotMapper orderDiscountSnapshotMapper = mock(OrderDiscountSnapshotMapper.class);
+        UserBehaviorLogService userBehaviorLogService = mock(UserBehaviorLogService.class);
+        com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
+
+        AppOrderServiceImpl service = new AppOrderServiceImpl(
+                salesOrderMapper,
+                salesOrderItemMapper,
+                tenantEmployeeMapper,
+                tenantMemberMapper,
+                productMapper,
+                unifiedWalletService,
+                merchantWalletService,
+                paymentBillV1Service,
+                withdrawalService,
+                memberPointsAccountService,
+                pointsRuleMapper,
+                orderPricingService,
+                couponService,
+                promotionService,
+                orderDiscountSnapshotMapper,
+                userBehaviorLogService,
+                orderDeliveryService
+        );
+
+        SalesOrder order = new SalesOrder();
+        order.setId(201L);
+        order.setOrderNo("SO_FULFILL_001");
+        order.setTenantId(9L);
+        order.setPlatformUserId(100L);
+        order.setOrderStatus(OrderStatusEnum.PAID.name());
+        order.setPayStatus(PayStatusEnum.SUCCESS.name());
+        order.setTotalAmount(new BigDecimal("20.00"));
+        order.setSubject("待履约商品");
+
+        Page<SalesOrder> orderPage = new Page<>(1, 10, 1);
+        orderPage.setRecords(List.of(order));
+        when(salesOrderMapper.selectMerchantOrders(
+                any(),
+                eq(9L),
+                isNull(),
+                eq(PayStatusEnum.SUCCESS.name()),
+                eq("SO_FULFILL"),
+                eq("PENDING"),
+                eq(List.of())))
+                .thenReturn(orderPage);
+        when(salesOrderItemMapper.selectByOrderNos(List.of("SO_FULFILL_001")))
+                .thenReturn(List.of(buildOrderItem("SO_FULFILL_001", "PENDING")));
+
+        Page<com.payment.vo.SalesOrderListVO> result = service.listMerchantOrderViews(
+                9L,
+                1,
+                10,
+                null,
+                PayStatusEnum.SUCCESS.name(),
+                "SO_FULFILL",
+                "pending",
+                null);
+
+        assertEquals(1, result.getRecords().size());
+        com.payment.vo.SalesOrderListVO vo = result.getRecords().get(0);
+        assertEquals("SO_FULFILL_001", vo.getOrderNo());
+        assertEquals("待发货", vo.getStatusLabel());
+        assertEquals("PENDING", vo.getDeliveryStatus());
+        assertNotNull(vo.getDeliverySummary());
+        assertEquals(1, vo.getDeliverySummary().getPendingCount());
+    }
+
+    @Test
     void getOrderDetailShouldExposeLatestPaymentBillFailureContext() {
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
@@ -882,6 +967,15 @@ class AppOrderServiceImplTest {
         address.setIsDefault(1);
         address.setDeleted(0);
         return address;
+    }
+
+    private SalesOrderItem buildOrderItem(String orderNo, String deliveryStatus) {
+        SalesOrderItem item = new SalesOrderItem();
+        item.setId(1L);
+        item.setOrderNo(orderNo);
+        item.setTenantId(9L);
+        item.setDeliveryStatus(deliveryStatus);
+        return item;
     }
 
     private OrderPricingResultVO buildPricingResult(String totalAmount, String payableAmount) {

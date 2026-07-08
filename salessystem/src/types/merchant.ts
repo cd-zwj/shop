@@ -98,6 +98,8 @@ export interface MerchantOrderFilters {
   size?: number;
   orderStatus?: string;
   payStatus?: string;
+  fulfillmentStatus?: 'PENDING' | 'COMPLETED' | 'ABNORMAL' | string;
+  deliveryStatus?: string;
   keyword?: string;
 }
 

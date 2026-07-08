@@ -53,9 +53,9 @@ export default function MerchantOrders() {
     () => ({
       all: {},
       pending: { orderStatus: 'CREATED' },
-      shipping: { payStatus: 'SUCCESS' },
-      completed: { orderStatus: 'CLOSED' },
-      abnormal: { payStatus: 'FAILED' },
+      shipping: { payStatus: 'SUCCESS', fulfillmentStatus: 'PENDING' },
+      completed: { payStatus: 'SUCCESS', fulfillmentStatus: 'COMPLETED' },
+      abnormal: { fulfillmentStatus: 'ABNORMAL' },
     }),
     [],
   );
@@ -205,7 +205,9 @@ export default function MerchantOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {(isLoading ? Array.from<MerchantOrder | undefined>({ length: 4 }) : orders).map((order, index) => {                const lifecycle = getOrderLifecyclePresentation(order);
+              {(isLoading ? Array.from<MerchantOrder | undefined>({ length: 4 }) : orders).map((order, index) => {
+                const lifecycle = getOrderLifecyclePresentation(order);
+                const deliverySummary = order?.deliverySummary;
                 return (
                   <tr
                     key={order ? order.orderNo : index}
@@ -224,6 +226,11 @@ export default function MerchantOrders() {
                           <span className="mt-1 text-xs font-bold uppercase text-slate-400">
                             {order ? order.subject || `tenant ${order.tenantId}` : '加载中'}
                           </span>
+                          {deliverySummary && deliverySummary.totalCount > 0 && (
+                            <span className="mt-2 text-[10px] font-bold text-slate-400">
+                              交付项 {deliverySummary.totalCount} · 待处理 {deliverySummary.pendingCount + deliverySummary.deliveringCount} · 异常 {deliverySummary.failedCount + deliverySummary.revokeFailedCount}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>

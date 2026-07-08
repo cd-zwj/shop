@@ -74,6 +74,20 @@ export interface SalesOrder {
   nextStep?: string | null;
   failureReason?: string | null;
   availableActions?: string[] | null;
+  deliveryStatus?: string | null;
+  deliverySummary?: OrderDeliverySummary | null;
+}
+
+export interface OrderDeliverySummary {
+  totalCount: number;
+  pendingCount: number;
+  deliveringCount: number;
+  deliveredCount: number;
+  confirmedCount: number;
+  failedCount: number;
+  revokedCount: number;
+  revokeFailedCount: number;
+  primaryStatus?: string | null;
 }
 
 export interface SalesOrderItem {

@@ -26,6 +26,14 @@ public interface SalesOrderItemMapper extends BaseMapper<SalesOrderItem> {
     List<SalesOrderItem> selectByOrderNo(String orderNo);
 
     /**
+     * 根据订单编号列表查询订单明细列表。
+     *
+     * @param orderNos 订单编号列表
+     * @return 订单明细列表
+     */
+    List<SalesOrderItem> selectByOrderNos(@Param("orderNos") List<String> orderNos);
+
+    /**
      * 根据订单 ID 查询订单明细列表，按主键升序排列。
      *
      * @param orderId 订单 ID

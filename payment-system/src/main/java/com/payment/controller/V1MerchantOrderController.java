@@ -7,7 +7,6 @@ import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.OrderDeliveryRecord;
-import com.payment.entity.SalesOrder;
 import com.payment.service.AppOrderService;
 import com.payment.service.delivery.OrderDeliveryService;
 import com.payment.service.impl.V1MerchantSupportService;
@@ -42,6 +41,8 @@ public class V1MerchantOrderController {
      * @param orderStatus 订单状态筛选（可选）
      * @param payStatus   支付状态筛选（可选）
      * @param keyword     搜索关键字（可选）
+     * @param fulfillmentStatus 履约状态分组筛选（可选）
+     * @param deliveryStatus 单个或逗号分隔交付状态筛选（可选）
      * @return 订单分页列表
      */
     @SaCheckLogin(type = "merchant")
@@ -51,12 +52,15 @@ public class V1MerchantOrderController {
                                                       @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
                                                       @RequestParam(required = false) String orderStatus,
                                                       @RequestParam(required = false) String payStatus,
-                                                      @RequestParam(required = false) String keyword) {
+                                                      @RequestParam(required = false) String keyword,
+                                                      @RequestParam(required = false) String fulfillmentStatus,
+                                                      @RequestParam(required = false) String deliveryStatus) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
 
-        Page<SalesOrder> result = appOrderService.listMerchantOrders(tenantId, current, size, orderStatus, payStatus, keyword);
-        return Result.success(PageResult.from(result, SalesOrderListVO::from));
+        Page<SalesOrderListVO> result = appOrderService.listMerchantOrderViews(
+                tenantId, current, size, orderStatus, payStatus, keyword, fulfillmentStatus, deliveryStatus);
+        return Result.success(PageResult.from(result));
     }
 
     /**

@@ -3,12 +3,26 @@
 <mapper namespace="com.payment.mapper.SalesOrderItemMapper">
 
     <insert id="insertBatch" parameterType="java.util.List">
-        INSERT INTO sales_order_item (order_id, order_no, tenant_id, product_id, product_name, price, quantity, subtotal)
+        INSERT INTO sales_order_item (
+            order_id, order_no, tenant_id, product_id, product_name,
+            price, quantity, subtotal, product_type, delivery_status
+        )
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.orderId}, #{item.orderNo}, #{item.tenantId}, #{item.productId},
-             #{item.productName}, #{item.price}, #{item.quantity}, #{item.subtotal})
+             #{item.productName}, #{item.price}, #{item.quantity}, #{item.subtotal},
+             #{item.productType}, #{item.deliveryStatus})
         </foreach>
     </insert>
+
+    <select id="selectByOrderNos" resultType="com.payment.entity.SalesOrderItem">
+        SELECT *
+        FROM sales_order_item
+        WHERE order_no IN
+        <foreach collection="orderNos" item="orderNo" open="(" close=")" separator=",">
+            #{orderNo}
+        </foreach>
+        ORDER BY order_no ASC, id ASC
+    </select>
 
 </mapper>
