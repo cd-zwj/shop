@@ -53,6 +53,32 @@ async function renderWallet() {
 }
 
 describe('UserWallet', () => {
+  it('shows merchant wallet detail entry for tenant assets', async () => {
+    mockedWalletService.getUnifiedWallet.mockResolvedValue({
+      walletType: 'UNIFIED',
+      tenantId: null,
+      availableAmount: 500,
+      frozenAmount: 0,
+      totalRecharge: 500,
+      totalConsume: 0,
+    });
+    mockedWalletService.getUnifiedWalletLogs.mockResolvedValue({ records: [], total: 0, page: 1, size: 5, pages: 0 });
+    mockedWalletService.listTenantAssetSummaries.mockResolvedValue([{
+      tenantId: 9,
+      tenantName: '本地测试店',
+      walletAvailableAmount: 120,
+      walletFrozenAmount: 0,
+      points: 88,
+      expiringSoonPoints: 0,
+    }]);
+
+    const element = await renderWallet();
+
+    expect(element.textContent).toContain('本地测试店');
+    expect(element.textContent).toContain('商户钱包 ¥120.00');
+    expect(element.textContent).toContain('钱包明细');
+  });
+
   it('shows a retryable error state when asset loading fails', async () => {
     mockedWalletService.getUnifiedWallet.mockRejectedValue(new Error('资产服务不可用'));
     mockedWalletService.getUnifiedWalletLogs.mockResolvedValue({ records: [], total: 0, page: 1, size: 5 });

@@ -13,6 +13,7 @@ const Cart = lazy(() => import('../pages/Cart'));
 const UserWallet = lazy(() => import('../pages/Wallet'));
 const Recharge = lazy(() => import('../pages/Recharge'));
 const ConsumptionHistory = lazy(() => import('../pages/History'));
+const MerchantWalletDetail = lazy(() => import('../pages/MerchantWalletDetail'));
 const Login = lazy(() => import('../pages/Login'));
 const Register = lazy(() => import('../pages/Register'));
 const ResetPassword = lazy(() => import('../pages/ResetPassword'));
@@ -101,6 +102,7 @@ export function AppRoutes() {
         <Route path="/product/:id" element={<AuthGuard><ProductDetails /></AuthGuard>} />
         <Route path="/cart" element={<AuthGuard><Cart /></AuthGuard>} />
         <Route path="/wallet" element={<AuthGuard><UserWallet /></AuthGuard>} />
+        <Route path="/wallet/tenants/:tenantId" element={<AuthGuard><MerchantWalletDetail /></AuthGuard>} />
         <Route path="/recharge" element={<AuthGuard><Recharge /></AuthGuard>} />
         <Route path="/history" element={<AuthGuard><ConsumptionHistory /></AuthGuard>} />
         <Route path="/orders" element={<AuthGuard><UserOrders /></AuthGuard>} />

@@ -211,6 +211,7 @@ test.describe('本地全流程冒烟测试', () => {
     await expectPageReady(page, `/product/${products[0].id}`, /E2E|加入|购买|商品/);
     await expectPageReady(page, '/cart', /购物车|结算|空/);
     await expectPageReady(page, '/wallet', /钱包|余额/);
+    await expectPageReady(page, `/wallet/tenants/${tenantId}`, /商户钱包明细|钱包流水|商户/);
     await expectPageReady(page, '/orders', /订单|暂无/);
     await expectPageReady(page, '/coupons', /优惠券|E2E|暂无/);
     await expectPageReady(page, `/points/${tenantId}`, /积分|500|暂无/);

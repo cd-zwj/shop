@@ -205,6 +205,13 @@ export default function UserWallet() {
               <div className="flex flex-wrap gap-2 sm:justify-end">
                 <button
                   type="button"
+                  onClick={() => navigate(`/wallet/tenants/${asset.tenantId}`)}
+                  className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                >
+                  钱包明细
+                </button>
+                <button
+                  type="button"
                   onClick={() => navigate(`/points/${asset.tenantId}`)}
                   className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
                 >
