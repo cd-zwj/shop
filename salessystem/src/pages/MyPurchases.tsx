@@ -19,6 +19,8 @@ import {
   getPurchaseDeliveryPresentation,
   parseDeliveryPayload,
 } from '../utils/purchaseDelivery';
+import { getErrorMessage } from '../utils/errorMessage';
+import { getPageTotalPages } from '../utils/pageResult';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
@@ -34,6 +36,8 @@ const TABS: { key: 'ALL' | DeliveryStatus; label: string }[] = [
   { key: 'REVOKED', label: '已撤销' },
   { key: 'REVOKE_FAILED', label: '撤销失败' },
 ];
+
+const PAGE_SIZE = 50;
 
 const STATUS_STYLE: Record<DeliveryStatus, { label: string; cls: string }> = {
   PENDING: { label: '待交付', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -68,6 +72,8 @@ export default function MyPurchases() {
   const [items, setItems] = useState<PurchaseRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const orderNoFilter = searchParams.get('orderNo')?.trim() || '';
 
   const load = useCallback(async () => {
@@ -76,20 +82,22 @@ export default function MyPurchases() {
     try {
       const res = await appPurchasesService.list(
         tab === 'ALL' ? undefined : tab,
-        1,
-        50,
+        currentPage,
+        PAGE_SIZE,
         orderNoFilter || undefined,
       );
       setItems(res.records || []);
+      setTotalPages(Math.max(1, getPageTotalPages(res)));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '加载失败';
+      const msg = getErrorMessage(err, '加载失败');
       setItems([]);
+      setTotalPages(1);
       setLoadError(msg);
       showToast(msg, 'error');
     } finally {
       setLoading(false);
     }
-  }, [orderNoFilter, tab, showToast]);
+  }, [currentPage, orderNoFilter, tab, showToast]);
 
   const visibleItems = useMemo(
     () => orderNoFilter ? items.filter((item) => item.orderNo === orderNoFilter) : items,
@@ -99,6 +107,16 @@ export default function MyPurchases() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleTabChange = (nextTab: 'ALL' | DeliveryStatus) => {
+    setTab(nextTab);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    if (nextPage < 1 || nextPage > totalPages || nextPage === currentPage) return;
+    setCurrentPage(nextPage);
+  };
 
   async function handleConfirm(id: number) {
     try {
@@ -140,7 +158,7 @@ export default function MyPurchases() {
           {TABS.map((t) => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => handleTabChange(t.key)}
               className={cn(
                 'flex-shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition-all',
                 tab === t.key ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50',
@@ -198,6 +216,30 @@ export default function MyPurchases() {
           ))
         )}
       </section>
+
+      {!loadError && totalPages > 1 && (
+        <section className="flex items-center justify-center gap-3 px-4">
+          <button
+            type="button"
+            aria-label="上一页"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage <= 1 || loading}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            上一页
+          </button>
+          <span className="min-w-16 text-center text-sm font-black text-slate-600">{currentPage} / {totalPages}</span>
+          <button
+            type="button"
+            aria-label="下一页"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages || loading}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            下一页
+          </button>
+        </section>
+      )}
     </div>
   );
 }
