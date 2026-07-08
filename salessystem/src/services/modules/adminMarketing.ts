@@ -7,6 +7,7 @@ import type {
   PromotionActivity,
   ActivityRule,
   ActivityRuleCreatePayload,
+  ActivityRuleType,
 } from '../../types/marketing';
 
 export const adminMarketingService = {
@@ -64,38 +65,47 @@ export const adminMarketingService = {
 
   // Promotion Activities
   getActivities(status?: string) {
-    return request<PromotionActivity[]>({
+    return request<BackendPromotionActivity[]>({
       url: `/v1/admin/marketing/activities`,
       method: 'get',
       params: { status },
       authRole: 'admin',
-    });
+    }).then((activities) => activities.map(normalizeActivity));
   },
 
   createActivity(payload: { name: string; activityType: string; startTime: string; endTime: string; description?: string }) {
-    return request<PromotionActivity>({
+    return request<BackendPromotionActivity>({
       url: `/v1/admin/marketing/activities`,
       method: 'post',
-      data: payload,
+      data: {
+        activityName: payload.name,
+        activityType: normalizeActivityType(payload.activityType),
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        description: payload.description,
+      },
       authRole: 'admin',
-    });
+    }).then(normalizeActivity);
   },
 
   getActivityRules(activityId: number) {
-    return request<ActivityRule[]>({
+    return request<BackendActivityRule[]>({
       url: `/v1/admin/marketing/activities/${activityId}/rules`,
       method: 'get',
       authRole: 'admin',
-    });
+    }).then((rules) => rules.map(normalizeActivityRule));
   },
 
   addActivityRule(activityId: number, payload: ActivityRuleCreatePayload) {
-    return request<ActivityRule>({
+    return request<BackendActivityRule>({
       url: `/v1/admin/marketing/activities/${activityId}/rules`,
       method: 'post',
-      data: payload,
+      data: {
+        ...payload,
+        ruleType: normalizeActivityType(payload.ruleType),
+      },
       authRole: 'admin',
-    });
+    }).then(normalizeActivityRule);
   },
 
   activateActivity(activityId: number) {
@@ -114,3 +124,36 @@ export const adminMarketingService = {
     });
   },
 };
+
+interface BackendPromotionActivity extends Omit<PromotionActivity, 'name' | 'ownerType'> {
+  activityName?: string | null;
+  activityScope?: 'PLATFORM' | 'TENANT' | string | null;
+  name?: string;
+  ownerType?: 'PLATFORM' | 'TENANT';
+}
+
+type BackendActivityRule = ActivityRule;
+
+function normalizeActivity(activity: BackendPromotionActivity): PromotionActivity {
+  return {
+    ...activity,
+    ownerType: normalizeOwnerType(activity.ownerType ?? activity.activityScope),
+    name: activity.name ?? activity.activityName ?? '',
+    activityType: normalizeActivityType(activity.activityType),
+  };
+}
+
+function normalizeActivityRule(rule: BackendActivityRule): ActivityRule {
+  return {
+    ...rule,
+    ruleType: normalizeActivityType(rule.ruleType),
+  };
+}
+
+function normalizeOwnerType(ownerType?: string | null): 'PLATFORM' | 'TENANT' {
+  return ownerType === 'TENANT' ? 'TENANT' : 'PLATFORM';
+}
+
+function normalizeActivityType(activityType: string): ActivityRuleType {
+  return activityType === 'FULL_DISCOUNT' ? 'DISCOUNT_RATE' : activityType as ActivityRuleType;
+}
