@@ -6,6 +6,7 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,12 +22,14 @@ public class DisabledVectorStoreConfig {
     @Bean
     @Primary
     @Qualifier("leafVectorStore")
+    @ConditionalOnMissingBean(name = "leafVectorStore")
     public VectorStore leafVectorStore() {
         return new DisabledVectorStore("leafVectorStore");
     }
 
     @Bean
     @Qualifier("summaryVectorStore")
+    @ConditionalOnMissingBean(name = "summaryVectorStore")
     public VectorStore summaryVectorStore() {
         return new DisabledVectorStore("summaryVectorStore");
     }

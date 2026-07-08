@@ -7,6 +7,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 class DisabledVectorStoreConfigTest {
 
@@ -34,6 +35,21 @@ class DisabledVectorStoreConfigTest {
                 .run(context -> {
                     assertThat(context).doesNotHaveBean("leafVectorStore");
                     assertThat(context).doesNotHaveBean("summaryVectorStore");
+                });
+    }
+
+    @Test
+    void disabledVectorStoresShouldBackOffWhenNamedVectorStoresAlreadyExist() {
+        VectorStore leaf = mock(VectorStore.class);
+        VectorStore summary = mock(VectorStore.class);
+
+        new ApplicationContextRunner()
+                .withBean("leafVectorStore", VectorStore.class, () -> leaf)
+                .withBean("summaryVectorStore", VectorStore.class, () -> summary)
+                .withUserConfiguration(DisabledVectorStoreConfig.class)
+                .run(context -> {
+                    assertThat(context.getBean("leafVectorStore", VectorStore.class)).isSameAs(leaf);
+                    assertThat(context.getBean("summaryVectorStore", VectorStore.class)).isSameAs(summary);
                 });
     }
 }
