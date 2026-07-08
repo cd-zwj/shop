@@ -13,6 +13,7 @@ import {
   getRefundToneClass,
   isRefundApplicationActive,
 } from '../utils/refundProgress';
+import { getErrorMessage } from '../utils/errorMessage';
 
 export default function ApplyRefund() {
   const { orderNo } = useParams<{ orderNo: string }>();
@@ -44,6 +45,7 @@ export default function ApplyRefund() {
   const loadData = useCallback(async () => {
     if (!orderNo) return;
     setIsLoading(true);
+    setError('');
     try {
       const detail = await appOrderService.getOrder(orderNo);
       setOrderDetail(detail);
@@ -54,7 +56,7 @@ export default function ApplyRefund() {
       const filtered = refundsResult.records.filter((r) => r.orderNo === orderNo);
       setRefunds(filtered);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载退款信息失败');
+      setError(getErrorMessage(err, '加载退款信息失败，请稍后重试'));
     } finally {
       setIsLoading(false);
     }
@@ -90,7 +92,7 @@ export default function ApplyRefund() {
       showToast('退款申请已提交，请等待商家审核', 'success');
       await loadData();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '提交退款申请失败', 'error');
+      showToast(getErrorMessage(err, '提交退款申请失败'), 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -103,7 +105,7 @@ export default function ApplyRefund() {
       showToast('已成功取消该退款申请', 'success');
       await loadData();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : '取消退款失败', 'error');
+      showToast(getErrorMessage(err, '取消退款失败'), 'error');
     }
   };
 
@@ -126,9 +128,22 @@ export default function ApplyRefund() {
         <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-500" />
         <h2 className="mb-2 text-xl font-bold text-slate-900">数据加载失败</h2>
         <p className="mb-6 text-sm text-slate-500">{error || '未查找到对应的订单信息'}</p>
-        <button onClick={() => navigate(-1)} className="rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white">
-          返回上一页
-        </button>
+        <div className="flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => void loadData()}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white"
+          >
+            <RotateCcw size={16} /> 重试加载
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-bold text-white"
+          >
+            返回上一页
+          </button>
+        </div>
       </div>
     );
   }
