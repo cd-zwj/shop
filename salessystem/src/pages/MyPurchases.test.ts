@@ -26,7 +26,7 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 async function flushAsyncWork() {
@@ -65,6 +65,50 @@ async function renderMyPurchases(initialEntry = '/my-purchases') {
 }
 
 describe('MyPurchases', () => {
+  it('paginates purchase records using total and size when backend omits pages', async () => {
+    mockedPurchasesService.list
+      .mockResolvedValueOnce({
+        records: [buildPurchase({
+          id: 17,
+          productName: '第一页资料包',
+          productType: 'VIRTUAL',
+          status: 'DELIVERED',
+          payload: JSON.stringify({ contentUrl: 'http://localhost/assets/page-1.zip' }),
+        })],
+        total: 75,
+        page: 1,
+        size: 50,
+      })
+      .mockResolvedValueOnce({
+        records: [buildPurchase({
+          id: 18,
+          productName: '第二页兑换码',
+          productType: 'CARD_KEY',
+          status: 'DELIVERED',
+          payload: JSON.stringify({ code: 'PAGE-2-CODE' }),
+        })],
+        total: 75,
+        page: 2,
+        size: 50,
+      });
+
+    const element = await renderMyPurchases();
+
+    expect(element.textContent).toContain('第一页资料包');
+    expect(element.textContent).toContain('1 / 2');
+    const nextButton = element.querySelector('button[aria-label="下一页"]');
+    expect(nextButton).toBeTruthy();
+
+    await act(async () => {
+      nextButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedPurchasesService.list).toHaveBeenLastCalledWith(undefined, 2, 50, undefined);
+    expect(element.textContent).toContain('第二页兑换码');
+    expect(element.textContent).toContain('2 / 2');
+  });
+
   it('shows a retryable error state when purchase delivery records fail to load', async () => {
     mockedPurchasesService.list
       .mockRejectedValueOnce(new Error('交付记录服务不可用'))
