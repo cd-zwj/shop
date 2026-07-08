@@ -62,6 +62,38 @@ async function renderGrowthCenter() {
 }
 
 describe('GrowthCenter', () => {
+  it('calculates pagination from total and size when backend omits pages', async () => {
+    mockedGrowthService.getGrowthOverview.mockResolvedValue({
+      totalGrowth: 120,
+      levelId: 1,
+      levelName: '普通会员',
+      nextLevelGrowth: 500,
+    });
+    mockedGrowthService.getGrowthLogs.mockResolvedValue({
+      records: [{
+        id: 1,
+        changeType: 'EARN',
+        changeGrowth: 10,
+        growthBefore: 110,
+        growthAfter: 120,
+        bizType: 'ORDER',
+        bizNo: 'SO202607080001',
+        remark: '订单消费',
+        createTime: '2026-07-08T10:00:00',
+      }],
+      total: 21,
+      page: 1,
+      size: 20,
+    });
+
+    const element = await renderGrowthCenter();
+
+    expect(element.textContent).toContain('订单消费');
+    expect(element.textContent).toContain('1 / 2');
+    expect(Array.from(element.querySelectorAll('button'))
+      .some((button) => button.textContent?.includes('下一页'))).toBe(true);
+  });
+
   it('shows a retryable error state when growth assets fail to load', async () => {
     mockedGrowthService.getGrowthOverview
       .mockRejectedValueOnce(new Error('成长值服务不可用'))

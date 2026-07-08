@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { cn } from '../lib/utils';
 import { getGrowthTracePresentation } from '../utils/assetTracePresentation';
 import { getErrorMessage } from '../utils/errorMessage';
+import { getPageTotalPages } from '../utils/pageResult';
 
 export default function GrowthCenter() {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function GrowthCenter() {
 
       const logsData = await appGrowthService.getGrowthLogs(tenantId, page, 20);
       setLogs(logsData.records ?? []);
-      setTotalPages(logsData.pages ?? 1);
+      setTotalPages(Math.max(1, getPageTotalPages(logsData)));
       setCurrentPage(page);
     } catch (e: unknown) {
       const message = getErrorMessage(e, '获取成长值数据失败');
