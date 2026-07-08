@@ -7,6 +7,7 @@ import type {
   PromotionActivity,
   ActivityRule,
   ActivityRuleCreatePayload,
+  ActivityRuleType,
   MemberLevel,
   MemberTag,
   MarketingEffectSummary,
@@ -84,38 +85,47 @@ export const merchantMarketingService = {
 
   // 营销活动
   getActivities(tenantId: number, status?: string) {
-    return request<PromotionActivity[]>({
+    return request<BackendPromotionActivity[]>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/activities`,
       method: 'get',
       params: { status },
       authRole: 'merchant',
-    });
+    }).then((activities) => activities.map(normalizeActivity));
   },
 
   createActivity(tenantId: number, payload: { name: string; activityType: string; startTime: string; endTime: string; description?: string }) {
-    return request<PromotionActivity>({
+    return request<BackendPromotionActivity>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/activities`,
       method: 'post',
-      data: payload,
+      data: {
+        activityName: payload.name,
+        activityType: normalizeActivityType(payload.activityType),
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        description: payload.description,
+      },
       authRole: 'merchant',
-    });
+    }).then(normalizeActivity);
   },
 
   getActivityRules(tenantId: number, activityId: number) {
-    return request<ActivityRule[]>({
+    return request<BackendActivityRule[]>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/activities/${activityId}/rules`,
       method: 'get',
       authRole: 'merchant',
-    });
+    }).then((rules) => rules.map(normalizeActivityRule));
   },
 
   addActivityRule(tenantId: number, activityId: number, payload: ActivityRuleCreatePayload) {
-    return request<ActivityRule>({
+    return request<BackendActivityRule>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/activities/${activityId}/rules`,
       method: 'post',
-      data: payload,
+      data: {
+        ...payload,
+        ruleType: normalizeActivityType(payload.ruleType),
+      },
       authRole: 'merchant',
-    });
+    }).then(normalizeActivityRule);
   },
 
   activateActivity(tenantId: number, activityId: number) {
@@ -169,3 +179,36 @@ export const merchantMarketingService = {
     });
   },
 };
+
+interface BackendPromotionActivity extends Omit<PromotionActivity, 'name' | 'ownerType'> {
+  activityName?: string | null;
+  activityScope?: 'PLATFORM' | 'TENANT' | string | null;
+  name?: string;
+  ownerType?: 'PLATFORM' | 'TENANT';
+}
+
+type BackendActivityRule = ActivityRule;
+
+function normalizeActivity(activity: BackendPromotionActivity): PromotionActivity {
+  return {
+    ...activity,
+    ownerType: normalizeOwnerType(activity.ownerType ?? activity.activityScope),
+    name: activity.name ?? activity.activityName ?? '',
+    activityType: normalizeActivityType(activity.activityType),
+  };
+}
+
+function normalizeActivityRule(rule: BackendActivityRule): ActivityRule {
+  return {
+    ...rule,
+    ruleType: normalizeActivityType(rule.ruleType),
+  };
+}
+
+function normalizeOwnerType(ownerType?: string | null): 'PLATFORM' | 'TENANT' {
+  return ownerType === 'PLATFORM' ? 'PLATFORM' : 'TENANT';
+}
+
+function normalizeActivityType(activityType: string): ActivityRuleType {
+  return activityType === 'FULL_DISCOUNT' ? 'DISCOUNT_RATE' : activityType as ActivityRuleType;
+}

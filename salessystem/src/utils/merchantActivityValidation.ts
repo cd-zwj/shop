@@ -1,4 +1,4 @@
-import type { ActivityRuleCreatePayload } from '../types/marketing';
+import type { ActivityRule, ActivityRuleCreatePayload } from '../types/marketing';
 
 export type ActivityDraftValue = number | string | null | undefined;
 
@@ -54,7 +54,7 @@ export function validateMerchantActivityRuleDraft(draft: MerchantActivityRuleDra
     }
   }
 
-  if (draft.ruleType === 'FULL_DISCOUNT') {
+  if (draft.ruleType === 'DISCOUNT_RATE' || draft.ruleType === 'FULL_DISCOUNT') {
     if (thresholdAmount <= 0) {
       issues.push('请输入满折消费门槛');
     }
@@ -76,6 +76,56 @@ export function validateMerchantActivityRuleDraft(draft: MerchantActivityRuleDra
   }
 
   return issues;
+}
+
+export function detectMerchantActivityRuleConflicts(
+  existingRules: ActivityRule[],
+  draft: MerchantActivityRuleDraft,
+) {
+  const issues: string[] = [];
+  const priority = toNumber(draft.priority);
+  const ruleType = normalizeRuleType(draft.ruleType);
+  const thresholdAmount = toNumber(draft.thresholdAmount);
+  const productId = toNumber(draft.productId);
+  const categoryCode = draft.categoryCode.trim().toLowerCase();
+
+  if (existingRules.some((rule) => Number(rule.priority ?? 0) === priority)) {
+    issues.push('已有相同优先级的活动规则，可能导致用户结算时命中顺序不清晰');
+  }
+
+  if (ruleType === 'FULL_REDUCTION' && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'FULL_REDUCTION'
+    && Number(rule.thresholdAmount ?? 0) === thresholdAmount,
+  )) {
+    issues.push('已有相同门槛的满减规则，请调整门槛或合并规则');
+  }
+
+  if (ruleType === 'DISCOUNT_RATE' && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'DISCOUNT_RATE'
+    && Number(rule.thresholdAmount ?? 0) === thresholdAmount,
+  )) {
+    issues.push('已有相同门槛的满折规则，请调整门槛或合并规则');
+  }
+
+  if (ruleType === 'BUY_X_GET_Y' && productId > 0 && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'BUY_X_GET_Y'
+    && Number(rule.productId ?? 0) === productId,
+  )) {
+    issues.push('该商品已有买赠规则，请避免重复发放权益');
+  }
+
+  if (ruleType === 'CATEGORY_DISCOUNT' && categoryCode && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'CATEGORY_DISCOUNT'
+    && String(rule.categoryCode ?? '').trim().toLowerCase() === categoryCode,
+  )) {
+    issues.push('该分类已有折扣规则，请避免同一分类重复配置');
+  }
+
+  return issues;
+}
+
+export function normalizeRuleType(ruleType: ActivityRuleCreatePayload['ruleType'] | string) {
+  return ruleType === 'FULL_DISCOUNT' ? 'DISCOUNT_RATE' : ruleType;
 }
 
 function validateDiscountRate(discountRate: number, issues: string[]) {

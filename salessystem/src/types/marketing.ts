@@ -59,12 +59,14 @@ export interface CouponScopeCreatePayload {
   tenantId?: number;
 }
 
+export type ActivityRuleType = 'FULL_REDUCTION' | 'DISCOUNT_RATE' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT';
+
 export interface PromotionActivity {
   id: number;
   tenantId: number | null;
   ownerType: 'PLATFORM' | 'TENANT';
   name: string;
-  activityType: string;
+  activityType: ActivityRuleType | string;
   startTime: string;
   endTime: string;
   status: string; // DRAFT | ACTIVE | DISABLED
@@ -75,7 +77,7 @@ export interface PromotionActivity {
 export interface ActivityRule {
   id: number;
   activityId: number;
-  ruleType: 'FULL_REDUCTION' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT';
+  ruleType: ActivityRuleType;
   thresholdAmount?: number | null;
   discountAmount?: number | null;
   discountRate?: number | null;
@@ -86,7 +88,7 @@ export interface ActivityRule {
 }
 
 export interface ActivityRuleCreatePayload {
-  ruleType: 'FULL_REDUCTION' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT';
+  ruleType: ActivityRuleType;
   thresholdAmount?: number;
   discountAmount?: number;
   discountRate?: number;

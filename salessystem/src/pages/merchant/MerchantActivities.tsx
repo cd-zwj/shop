@@ -15,9 +15,11 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
-import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload } from '../../types/marketing';
+import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload, ActivityRuleType } from '../../types/marketing';
 import { cn } from '../../lib/utils';
 import {
+  detectMerchantActivityRuleConflicts,
+  normalizeRuleType,
   validateMerchantActivityDraft,
   validateMerchantActivityRuleDraft,
 } from '../../utils/merchantActivityValidation';
@@ -39,7 +41,7 @@ export default function MerchantActivities() {
   // Create Activity Modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState('');
-  const [activityType, setActivityType] = useState('PROMOTION');
+  const [activityType, setActivityType] = useState<ActivityRuleType>('FULL_REDUCTION');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [description, setDescription] = useState('');
@@ -48,7 +50,7 @@ export default function MerchantActivities() {
   // Create Rule Modal
   const [isCreateRuleOpen, setIsCreateRuleOpen] = useState(false);
   const [targetActivity, setTargetActivity] = useState<PromotionActivity | null>(null);
-  const [ruleType, setRuleType] = useState<'FULL_REDUCTION' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT'>('FULL_REDUCTION');
+  const [ruleType, setRuleType] = useState<ActivityRuleType>('FULL_REDUCTION');
   const [thresholdAmount, setThresholdAmount] = useState<number | ''>('');
   const [discountAmount, setDiscountAmount] = useState<number | ''>('');
   const [discountRate, setDiscountRate] = useState<number | ''>('');
@@ -147,7 +149,7 @@ export default function MerchantActivities() {
 
   const resetActivityForm = () => {
     setName('');
-    setActivityType('PROMOTION');
+    setActivityType('FULL_REDUCTION');
     setStartTime('');
     setEndTime('');
     setDescription('');
@@ -170,6 +172,22 @@ export default function MerchantActivities() {
 
     if (validationIssues.length > 0) {
       showToast(validationIssues.join('；'), 'error');
+      return;
+    }
+
+    const conflictIssues = detectMerchantActivityRuleConflicts(activityRules[targetActivity.id] || [], {
+      ruleType,
+      thresholdAmount,
+      discountAmount,
+      discountRate,
+      productId,
+      categoryCode,
+      ruleConfigJson,
+      priority,
+    });
+
+    if (conflictIssues.length > 0) {
+      showToast(conflictIssues.join('；'), 'error');
       return;
     }
 
@@ -199,7 +217,7 @@ export default function MerchantActivities() {
     }
   };
 
-  const resetRuleForm = (keepType?: 'FULL_REDUCTION' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT') => {
+  const resetRuleForm = (keepType?: ActivityRuleType) => {
     setRuleType(keepType || 'FULL_REDUCTION');
     setThresholdAmount('');
     setDiscountAmount('');
@@ -371,6 +389,7 @@ export default function MerchantActivities() {
                             <button
                               onClick={() => {
                                 setTargetActivity(act);
+                                resetRuleForm(resolveRuleTypeForActivity(act.activityType));
                                 setIsCreateRuleOpen(true);
                               }}
                               className="flex items-center gap-1 text-xs text-primary font-bold hover:underline"
@@ -393,20 +412,20 @@ export default function MerchantActivities() {
                                   <div className="flex items-center gap-3">
                                     <div className="rounded-xl bg-indigo-50 p-2 text-indigo-600">
                                       {rule.ruleType === 'FULL_REDUCTION' && <Layers size={16} />}
-                                      {rule.ruleType === 'FULL_DISCOUNT' && <Percent size={16} />}
+                                      {isDiscountRule(rule.ruleType) && <Percent size={16} />}
                                       {rule.ruleType === 'BUY_X_GET_Y' && <Gift size={16} />}
                                       {rule.ruleType === 'CATEGORY_DISCOUNT' && <FolderTree size={16} />}
                                     </div>
                                     <div>
                                       <p className="text-xs font-black text-slate-800">
                                         {rule.ruleType === 'FULL_REDUCTION' && '阶梯满减规则'}
-                                        {rule.ruleType === 'FULL_DISCOUNT' && '阶梯满折规则'}
+                                        {isDiscountRule(rule.ruleType) && '阶梯满折规则'}
                                         {rule.ruleType === 'BUY_X_GET_Y' && '买赠规则'}
                                         {rule.ruleType === 'CATEGORY_DISCOUNT' && '品类折扣规则'}
                                       </p>
                                       <p className="text-[11px] font-bold text-slate-400 mt-0.5">
                                         {rule.ruleType === 'FULL_REDUCTION' && `消费满 ¥${rule.thresholdAmount} 减免 ¥${rule.discountAmount}`}
-                                        {rule.ruleType === 'FULL_DISCOUNT' && `消费满 ¥${rule.thresholdAmount} 享受 ${(rule.discountRate ?? 1) * 10} 折`}
+                                        {isDiscountRule(rule.ruleType) && `消费满 ¥${rule.thresholdAmount} 享受 ${(rule.discountRate ?? 1) * 10} 折`}
                                         {rule.ruleType === 'BUY_X_GET_Y' && `购买商品 ID #${rule.productId}，配置: ${rule.ruleConfigJson || '买X赠Y'}`}
                                         {rule.ruleType === 'CATEGORY_DISCOUNT' && `限制商品品类 [${rule.categoryCode}]，折扣 ${(rule.discountRate ?? 1) * 10} 折`}
                                       </p>
@@ -460,6 +479,19 @@ export default function MerchantActivities() {
                     className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-semibold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                     required
                   />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="actType" className="text-xs font-bold text-slate-700">活动类型</label>
+                  <select
+                    id="actType"
+                    value={activityType}
+                    onChange={(event) => setActivityType(event.target.value as ActivityRuleType)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="FULL_REDUCTION">满减活动</option>
+                    <option value="DISCOUNT_RATE">折扣活动</option>
+                  </select>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -551,20 +583,19 @@ export default function MerchantActivities() {
                   <select
                     value={ruleType}
                     onChange={(e) => {
-                      const val = e.target.value as 'FULL_REDUCTION' | 'FULL_DISCOUNT' | 'BUY_X_GET_Y' | 'CATEGORY_DISCOUNT';
+                      const val = e.target.value as ActivityRuleType;
                       resetRuleForm(val);
                     }}
                     className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm font-bold text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                   >
-                    <option value="FULL_REDUCTION">满减规则 (FULL_REDUCTION)</option>
-                    <option value="FULL_DISCOUNT">满折规则 (FULL_DISCOUNT)</option>
-                    <option value="BUY_X_GET_Y">买赠规则 (BUY_X_GET_Y)</option>
-                    <option value="CATEGORY_DISCOUNT">分类折扣 (CATEGORY_DISCOUNT)</option>
+                    {getRuleTypeOptions(targetActivity.activityType).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
                   </select>
                 </div>
 
                 {/* Conditional Fields based on ruleType */}
-                {(ruleType === 'FULL_REDUCTION' || ruleType === 'FULL_DISCOUNT') && (
+                {(ruleType === 'FULL_REDUCTION' || isDiscountRule(ruleType)) && (
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="threshold" className="text-xs font-bold text-slate-700">消费门槛金额 (元)</label>
                     <input
@@ -598,7 +629,7 @@ export default function MerchantActivities() {
                   </div>
                 )}
 
-                {(ruleType === 'FULL_DISCOUNT' || ruleType === 'CATEGORY_DISCOUNT') && (
+                {(isDiscountRule(ruleType) || ruleType === 'CATEGORY_DISCOUNT') && (
                   <div className="flex flex-col gap-1.5">
                     <label htmlFor="rate" className="text-xs font-bold text-slate-700">打折比例 (如0.85 = 85折)</label>
                     <input
@@ -700,4 +731,21 @@ export default function MerchantActivities() {
       </AnimatePresence>
     </div>
   );
+}
+
+function isDiscountRule(ruleType: ActivityRuleType | string) {
+  return normalizeRuleType(ruleType) === 'DISCOUNT_RATE';
+}
+
+function resolveRuleTypeForActivity(activityType: ActivityRuleType | string): ActivityRuleType {
+  const normalized = normalizeRuleType(activityType);
+  return normalized === 'DISCOUNT_RATE' ? 'DISCOUNT_RATE' : 'FULL_REDUCTION';
+}
+
+function getRuleTypeOptions(activityType: ActivityRuleType | string) {
+  const ruleType = resolveRuleTypeForActivity(activityType);
+  if (ruleType === 'DISCOUNT_RATE') {
+    return [{ value: 'DISCOUNT_RATE' as const, label: '满折规则 (DISCOUNT_RATE)' }];
+  }
+  return [{ value: 'FULL_REDUCTION' as const, label: '满减规则 (FULL_REDUCTION)' }];
 }
