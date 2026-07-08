@@ -111,6 +111,57 @@ class PromotionServiceImplTest {
     }
 
     @Test
+    void addRuleShouldRejectDuplicatePriorityInSameActivity() {
+        PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
+        when(activityMapper.selectById(11L)).thenReturn(activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name()));
+        when(ruleMapper.selectList(any())).thenReturn(List.of(
+                rule(21L, 11L, "FULL_REDUCTION", "80.00", "10.00", null, null, null, 10)
+        ));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.addRule(ruleCreateDTO()));
+
+        assertEquals("已有相同优先级的活动规则", ex.getMessage());
+    }
+
+    @Test
+    void addRuleShouldRejectDuplicateThresholdForReductionAndDiscountRules() {
+        PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
+        when(activityMapper.selectById(11L)).thenReturn(activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name()));
+        when(ruleMapper.selectList(any())).thenReturn(List.of(
+                rule(21L, 11L, "FULL_REDUCTION", "100.00", "10.00", null, null, null, 1)
+        ));
+        ActivityRuleCreateDTO reduction = ruleCreateDTO();
+        reduction.setPriority(2);
+
+        BusinessException reductionEx = assertThrows(BusinessException.class, () -> service.addRule(reduction));
+
+        assertEquals("已有相同门槛的满减规则", reductionEx.getMessage());
+
+        PromotionActivityMapper discountActivityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper discountRuleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl discountService = new PromotionServiceImpl(discountActivityMapper, discountRuleMapper);
+        when(discountActivityMapper.selectById(12L)).thenReturn(activeActivity(12L, 9L, ActivityTypeEnum.DISCOUNT_RATE.name()));
+        when(discountRuleMapper.selectList(any())).thenReturn(List.of(
+                rule(31L, 12L, "DISCOUNT_RATE", "200.00", null, "0.80", null, null, 1)
+        ));
+        ActivityRuleCreateDTO discount = ruleCreateDTO();
+        discount.setActivityId(12L);
+        discount.setRuleType(ActivityTypeEnum.DISCOUNT_RATE.name());
+        discount.setThresholdAmount(new BigDecimal("200.00"));
+        discount.setDiscountAmount(null);
+        discount.setDiscountRate(new BigDecimal("0.70"));
+        discount.setPriority(2);
+
+        BusinessException discountEx = assertThrows(BusinessException.class, () -> discountService.addRule(discount));
+
+        assertEquals("已有相同门槛的满折规则", discountEx.getMessage());
+    }
+
+    @Test
     void activateActivityShouldSetActive() {
         PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
         ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);

@@ -189,6 +189,7 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException("活动规则类型必须与活动类型一致");
         }
         validateRule(ruleType, dto);
+        validateRuleConflicts(ruleType, dto);
 
         ActivityRule rule = new ActivityRule();
         rule.setActivityId(activity.getId());
@@ -316,6 +317,38 @@ public class PromotionServiceImpl implements PromotionService {
             return;
         }
         throw new BusinessException("当前活动规则暂不支持自动计算");
+    }
+
+    /** 校验同一活动内的规则冲突，避免结算命中顺序和优惠含义不清晰。 */
+    private void validateRuleConflicts(ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
+        List<ActivityRule> existingRules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
+                .eq(ActivityRule::getActivityId, dto.getActivityId())
+                .eq(ActivityRule::getDeleted, 0));
+        if (existingRules == null || existingRules.isEmpty()) {
+            return;
+        }
+
+        int priority = dto.getPriority() == null ? 0 : dto.getPriority();
+        boolean duplicatePriority = existingRules.stream()
+                .map(ActivityRule::getPriority)
+                .map(value -> value == null ? 0 : value)
+                .anyMatch(value -> value == priority);
+        if (duplicatePriority) {
+            throw new BusinessException("已有相同优先级的活动规则");
+        }
+
+        BigDecimal threshold = safe(dto.getThresholdAmount());
+        boolean duplicateThreshold = existingRules.stream()
+                .filter(rule -> ruleType.name().equals(rule.getRuleType()))
+                .map(ActivityRule::getThresholdAmount)
+                .map(this::safe)
+                .anyMatch(value -> value.compareTo(threshold) == 0);
+        if (duplicateThreshold && ruleType == ActivityTypeEnum.FULL_REDUCTION) {
+            throw new BusinessException("已有相同门槛的满减规则");
+        }
+        if (duplicateThreshold && ruleType == ActivityTypeEnum.DISCOUNT_RATE) {
+            throw new BusinessException("已有相同门槛的满折规则");
+        }
     }
 
     /**
