@@ -79,6 +79,49 @@ async function renderPaymentStatus() {
 }
 
 describe('PaymentStatus', () => {
+  it('shows a retryable query error without treating it as payment failure', async () => {
+    mockedPaymentBillService.getPaymentBill
+      .mockRejectedValueOnce(new Error('支付单查询超时'))
+      .mockResolvedValueOnce({
+        id: 1,
+        billNo: 'PB001',
+        bizType: 'ORDER',
+        bizNo: 'SO001',
+        tenantId: 9,
+        platformUserId: 3,
+        channelCode: 'ALIPAY_PAGE',
+        channelMode: 'PAGE',
+        payAmount: 9900,
+        payStatus: 'PAYING',
+        thirdPartyBillNo: null,
+        callbackStatus: 'INIT',
+        statusRemark: null,
+        expireTime: null,
+        extensionJson: null,
+        createTime: '2026-07-06T10:00:00',
+        updateTime: '2026-07-06T10:01:00',
+      });
+
+    const element = await renderPaymentStatus();
+
+    expect(element.textContent).toContain('支付状态查询失败');
+    expect(element.textContent).toContain('支付单查询超时');
+    expect(element.textContent).not.toContain('重新支付');
+
+    const retryButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('重试查询'));
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedPaymentBillService.getPaymentBill).toHaveBeenCalledTimes(2);
+    expect(element.textContent).toContain('交易确认中');
+    expect(element.textContent).not.toContain('支付状态查询失败');
+  });
+
   it('shows retry and merchant contact actions when order payment fails', async () => {
     mockedPaymentBillService.getPaymentBill.mockResolvedValue({
       id: 1,
