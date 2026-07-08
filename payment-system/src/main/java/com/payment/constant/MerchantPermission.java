@@ -19,6 +19,7 @@ public enum MerchantPermission {
     WITHDRAWAL_MANAGE("withdrawal:manage"),
     MARKETING_MANAGE("marketing:manage"),
     RULE_MANAGE("rule:manage"),
+    EMPLOYEE_MANAGE("employee:manage"),
     AI_USE("ai:use");
 
     private static final Set<MerchantPermission> ALL_PERMISSIONS = EnumSet.allOf(MerchantPermission.class);

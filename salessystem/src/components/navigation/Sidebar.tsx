@@ -68,6 +68,7 @@ export function Sidebar() {
     { icon: Users, label: '会员等级标签', path: '/merchant/marketing/members', permission: 'marketing:manage' },
     { icon: HeartHandshake, label: '售后退款审核', path: '/merchant/refunds', permission: 'refund:manage' },
     { icon: Settings2, label: '规则配置', path: '/merchant/rules', permission: 'rule:manage' },
+    { icon: ShieldCheck, label: '员工与权限', path: '/merchant/employees', permission: 'employee:manage' },
     { icon: ArrowUpRight, label: '提现中心', path: '/merchant/withdrawals', permission: 'withdrawal:manage' },
     { icon: Bot, label: 'AI 经营助手', path: '/merchant/ai', permission: 'ai:use' },
   ];

@@ -8,6 +8,7 @@ export type MerchantPermission =
   | 'withdrawal:manage'
   | 'marketing:manage'
   | 'rule:manage'
+  | 'employee:manage'
   | 'ai:use';
 
 export interface MerchantMenuPermissionItem {
@@ -24,6 +25,7 @@ const ALL_PERMISSIONS: MerchantPermission[] = [
   'withdrawal:manage',
   'marketing:manage',
   'rule:manage',
+  'employee:manage',
   'ai:use',
 ];
 

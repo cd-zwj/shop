@@ -110,6 +110,22 @@ export interface MerchantWorkbenchTodoSummary {
   items: MerchantWorkbenchTodoItem[];
 }
 
+export type MerchantEmployeeRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'CASHIER' | 'FINANCE';
+
+export interface MerchantEmployee {
+  id: number;
+  tenantId: number;
+  platformUserId: number;
+  employeeNo?: string | null;
+  employeeRole: MerchantEmployeeRole | string;
+  status: 0 | 1 | number;
+  username?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  createTime?: string | null;
+  updateTime?: string | null;
+}
+
 export interface MerchantProductSalesRankItem {
   productId: number;
   productCode?: string | null;
