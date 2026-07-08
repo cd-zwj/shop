@@ -111,7 +111,9 @@ spring:
         options:
           model: text-embedding-v3
     vectorstore:
+      type: ${VECTORSTORE_TYPE:none}
       milvus:
+        enabled: ${MILVUS_ENABLED:false}
         initialize-schema: ${MILVUS_INITIALIZE_SCHEMA:true}
         database-name: ${MILVUS_DATABASE_NAME:default}
         leaf-collection-name: ${MILVUS_LEAF_COLLECTION_NAME:rag_leaf_vectors}
