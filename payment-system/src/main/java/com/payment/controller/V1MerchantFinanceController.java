@@ -1,7 +1,7 @@
 package com.payment.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
 import com.payment.dto.MerchantRechargeRuleVO;
@@ -159,7 +159,7 @@ public class V1MerchantFinanceController {
      * 全量查询后合并排序，手动分页以保证 total 准确。
      */
     @GetMapping("/transactions")
-    public Result<Page<MerchantTransactionVO>> listTransactions(
+    public Result<PageResult<MerchantTransactionVO>> listTransactions(
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String startDate,
@@ -193,13 +193,13 @@ public class V1MerchantFinanceController {
         });
 
         // 4. 手动分页（total = 合并后真实总数）
+        int safeCurrent = current == null || current < 1 ? 1 : current;
+        int safeSize = size == null || size < 1 ? 20 : size;
         int total = all.size();
-        int from = Math.min((current - 1) * size, total);
-        int to = Math.min(from + size, total);
+        int from = Math.min((safeCurrent - 1) * safeSize, total);
+        int to = Math.min(from + safeSize, total);
 
-        Page<MerchantTransactionVO> voPage = new Page<>(current, size, total);
-        voPage.setRecords(all.subList(from, to));
-        return Result.success(voPage);
+        return Result.success(new PageResult<>(all.subList(from, to), total, safeCurrent, safeSize));
     }
 
     /* ---------- private helpers ---------- */

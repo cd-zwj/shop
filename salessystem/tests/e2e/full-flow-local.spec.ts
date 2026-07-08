@@ -46,6 +46,27 @@ async function getCaptcha() {
   return { ...captcha, code };
 }
 
+async function reloadPageCaptcha(page: Page) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const captchaResponse = page.waitForResponse((response) =>
+      response.url().includes('/v1/auth/captcha') && response.status() === 200,
+    );
+    await page.getByRole('img', { name: '登录验证码' }).click();
+    const response = await captchaResponse;
+    const body = (await response.json()) as ApiEnvelope<CaptchaPayload | null>;
+    if (body.code === 200 && body.data?.captchaKey) {
+      const code = execFileSync('docker', ['exec', redisContainer, 'redis-cli', 'GET', `auth:captcha:${body.data.captchaKey}`], {
+        encoding: 'utf8',
+      }).trim();
+      if (code) {
+        return { ...body.data, code };
+      }
+    }
+  }
+
+  throw new Error('Unable to reload a valid page captcha');
+}
+
 async function loginToken(path: string, username: string, password: string) {
   const captcha = await getCaptcha();
   return requestJson<string>(path, {
@@ -161,16 +182,8 @@ test.describe('本地全流程冒烟测试', () => {
     }, { key: captcha.captchaKey });
 
     // The UI owns captchaKey state, so reload the captcha through the page and use the current key.
-    const captchaResponse = page.waitForResponse((response) =>
-      response.url().includes('/v1/auth/captcha') && response.status() === 200,
-    );
-    await page.getByRole('img', { name: '登录验证码' }).click();
-    const response = await captchaResponse;
-    const body = (await response.json()) as ApiEnvelope<CaptchaPayload>;
-    const code = execFileSync('docker', ['exec', redisContainer, 'redis-cli', 'GET', `auth:captcha:${body.data.captchaKey}`], {
-      encoding: 'utf8',
-    }).trim();
-    await page.getByPlaceholder('请输入图片中的字符').fill(code);
+    const pageCaptcha = await reloadPageCaptcha(page);
+    await page.getByPlaceholder('请输入图片中的字符').fill(pageCaptcha.code);
 
     await page.getByRole('button', { name: /确认登录/ }).click();
     await expect(page).toHaveURL(/\/$/);
@@ -228,7 +241,7 @@ test.describe('本地全流程冒烟测试', () => {
     await expectPageReady(page, '/merchant', /商户|工作台|订单/);
     await expectPageReady(page, '/merchant/products', /商品|新增|E2E/);
     await expectPageReady(page, '/merchant/orders', /订单|暂无/);
-    await expectPageReady(page, '/merchant/finance', /财务|余额|提现/);
+    await expectPageReady(page, '/merchant/finance', /财务|账务核对|余额|提现/);
     await expectPageReady(page, '/merchant/marketing/coupons', /优惠券|营销|暂无/);
     await expectPageReady(page, '/merchant/marketing/activities', /促销|活动|暂无/);
     await expectPageReady(page, '/merchant/marketing/members', /会员|等级|标签/);

@@ -23,7 +23,7 @@ import type { PageResult } from '../../types/api';
 import { cn } from '../../lib/utils';
 import { formatCurrency } from '../../utils/display';
 import { Pagination } from '../../components/Pagination';
-import { summarizeMerchantTransactions } from '../../utils/merchantFinancePresentation';
+import { buildMerchantReconciliation, summarizeMerchantTransactions } from '../../utils/merchantFinancePresentation';
 
 const DEFAULT_SUMMARY: MerchantWalletSummary = {
   tenantId: 0,
@@ -155,6 +155,10 @@ export default function MerchantFinance() {
   const transactionSummary = useMemo(
     () => summarizeMerchantTransactions(transactions),
     [transactions],
+  );
+  const reconciliation = useMemo(
+    () => buildMerchantReconciliation(summary, withdrawals, transactionSummary),
+    [summary, withdrawals, transactionSummary],
   );
 
   return (
@@ -404,6 +408,47 @@ export default function MerchantFinance() {
         </section>
       </div>
 
+      <section className="rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-slate-900">账务核对</h2>
+            <p className="mt-1 max-w-2xl text-sm font-medium leading-relaxed text-slate-500">
+              基于余额总表、提现记录和当前筛选流水做本地核对；外部支付渠道对账单暂不接入。
+            </p>
+          </div>
+          <span className={cn('w-fit rounded-2xl px-4 py-2 text-xs font-black', getReconciliationBadgeClass(reconciliation.status))}>
+            {reconciliation.statusLabel}
+          </span>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {[
+            { label: '账面余额', value: formatCurrency(reconciliation.ledgerBalance), hint: '可提现 + 冻结' },
+            { label: '收入留存', value: formatCurrency(reconciliation.retainedAmount), hint: '累计收入 - 累计提现' },
+            { label: '退款/调整差额', value: formatCurrency(reconciliation.adjustmentAmount), hint: '留存 - 账面余额' },
+            { label: '待审核提现', value: formatCurrency(reconciliation.pendingWithdrawalAmount), hint: '当前列表待审核合计' },
+            { label: '筛选页净变动', value: formatCurrency(reconciliation.currentPageNetChange), hint: '当前流水页合计' },
+          ].map((item) => (
+            <div key={item.label} className="rounded-[28px] bg-slate-50 p-5">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
+              <p className="mt-2 text-xl font-black tracking-tight text-slate-900">{item.value}</p>
+              <p className="mt-2 text-xs font-medium text-slate-500">{item.hint}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className={cn('mt-6 rounded-[28px] border px-5 py-4 text-sm font-medium leading-relaxed', getReconciliationPanelClass(reconciliation.status))}>
+          <p className="font-black">{reconciliation.statusDescription}</p>
+          {reconciliation.riskItems.length > 0 && (
+            <div className="mt-3 space-y-1 text-xs font-semibold">
+              {reconciliation.riskItems.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* 收支流水 */}
       <section className="flex flex-col gap-6 rounded-[40px] border border-slate-100 bg-white p-8 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -577,6 +622,26 @@ function getWithdrawalStatusClassName(status: number) {
         ? 'bg-red-100 text-red-700'
         : 'bg-orange-100 text-orange-700',
   );
+}
+
+function getReconciliationBadgeClass(status: 'balanced' | 'attention' | 'risk') {
+  if (status === 'risk') {
+    return 'bg-red-100 text-red-700';
+  }
+  if (status === 'attention') {
+    return 'bg-amber-100 text-amber-700';
+  }
+  return 'bg-green-100 text-green-700';
+}
+
+function getReconciliationPanelClass(status: 'balanced' | 'attention' | 'risk') {
+  if (status === 'risk') {
+    return 'border-red-100 bg-red-50 text-red-700';
+  }
+  if (status === 'attention') {
+    return 'border-amber-100 bg-amber-50 text-amber-700';
+  }
+  return 'border-green-100 bg-green-50 text-green-700';
 }
 
 function maskBankAccount(bankAccount?: string | null) {
