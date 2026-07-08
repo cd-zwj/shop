@@ -27,6 +27,7 @@
         <druid.version>1.2.23</druid.version>
         <hutool.version>5.8.24</hutool.version>
         <lombok.version>1.18.34</lombok.version>
+        <redisson.version>3.52.0</redisson.version>
         <spring-ai.version>1.1.8</spring-ai.version>
         <spring-ai-alibaba.version>1.1.2.3</spring-ai-alibaba.version>
     </properties>
@@ -81,7 +82,7 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>3.25.2</version>
+            <version>${redisson.version}</version>
         </dependency>
 
         <!-- Spring Boot RabbitMQ -->
@@ -138,7 +139,7 @@
             <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
             <version>${mybatis-plus.version}</version>
         </dependency>
-<!--        redisson 已由 redisson-spring-boot-starter:3.25.2 引入，移除重复声明 -->
+<!--        redisson 已由 redisson-spring-boot-starter 引入，移除重复声明 -->
 
         <!-- Druid连接池 -->
         <dependency>
