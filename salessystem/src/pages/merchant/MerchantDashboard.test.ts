@@ -123,7 +123,7 @@ describe('MerchantDashboard', () => {
           label: '待补偿任务',
           description: '真实后端补偿汇总',
           count: 7,
-          path: '/admin/compensation?type=compensation',
+          path: '/merchant/tasks?type=compensation',
           tone: 'red',
         },
         {
@@ -131,7 +131,7 @@ describe('MerchantDashboard', () => {
           label: '待重试任务',
           description: '真实后端重试汇总',
           count: 5,
-          path: '/admin/compensation?type=retry',
+          path: '/merchant/tasks?type=retry',
           tone: 'orange',
         },
       ],

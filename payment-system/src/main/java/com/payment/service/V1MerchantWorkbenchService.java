@@ -1,5 +1,7 @@
 package com.payment.service;
 
+import com.payment.common.PageResult;
+import com.payment.dto.MerchantWorkbenchTaskVO;
 import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
 
 /**
@@ -8,4 +10,6 @@ import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
 public interface V1MerchantWorkbenchService {
 
     MerchantWorkbenchTodoSummaryVO getTodoSummary(Long tenantId);
+
+    PageResult<MerchantWorkbenchTaskVO> listVisibleTasks(Long tenantId, String type, Integer pageNum, Integer pageSize);
 }

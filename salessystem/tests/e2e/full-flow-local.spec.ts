@@ -233,6 +233,8 @@ test.describe('本地全流程冒烟测试', () => {
     await expectPageReady(page, '/merchant/marketing/activities', /促销|活动|暂无/);
     await expectPageReady(page, '/merchant/marketing/members', /会员|等级|标签/);
     await expectPageReady(page, '/merchant/refunds', /退款|售后|暂无/);
+    await expectPageReady(page, '/merchant/tasks?type=compensation', /系统任务|任务列表|暂无/);
+    await expectPageReady(page, '/merchant/tasks?type=retry', /系统任务|任务列表|暂无/);
     await expectPageReady(page, '/merchant/rules', /规则|配置|充值/);
     await expectPageReady(page, '/merchant/withdrawals', /提现|财务|暂无/);
   });

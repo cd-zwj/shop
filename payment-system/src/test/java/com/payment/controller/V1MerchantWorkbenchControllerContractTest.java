@@ -1,6 +1,8 @@
 package com.payment.controller;
 
+import com.payment.common.PageResult;
 import com.payment.common.Result;
+import com.payment.dto.MerchantWorkbenchTaskVO;
 import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,5 +28,19 @@ class V1MerchantWorkbenchControllerContractTest {
         ParameterizedType resultType = (ParameterizedType) method.getGenericReturnType();
         assertEquals(Result.class, resultType.getRawType());
         assertEquals(MerchantWorkbenchTodoSummaryVO.class, resultType.getActualTypeArguments()[0]);
+    }
+
+    @Test
+    void controllerShouldExposeMerchantWorkbenchTaskListContract() throws NoSuchMethodException {
+        Method method = V1MerchantWorkbenchController.class.getMethod(
+                "listVisibleTasks", Long.class, String.class, Integer.class, Integer.class);
+
+        assertEquals("/tasks", method.getAnnotation(GetMapping.class).value()[0]);
+
+        ParameterizedType resultType = (ParameterizedType) method.getGenericReturnType();
+        assertEquals(Result.class, resultType.getRawType());
+        ParameterizedType pageType = (ParameterizedType) resultType.getActualTypeArguments()[0];
+        assertEquals(PageResult.class, pageType.getRawType());
+        assertEquals(MerchantWorkbenchTaskVO.class, pageType.getActualTypeArguments()[0]);
     }
 }

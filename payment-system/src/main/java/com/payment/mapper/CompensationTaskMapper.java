@@ -7,6 +7,8 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.util.List;
+
 /**
  * 补偿任务 Mapper 接口
  * <p>
@@ -55,4 +57,44 @@ public interface CompensationTaskMapper extends BaseMapper<CompensationTask> {
                   )
             """)
     Long countMerchantVisibleOpenTasks(@Param("tenantId") Long tenantId);
+
+    @InterceptorIgnore(tenantLine = "true")
+    @Select("""
+            SELECT ct.*
+            FROM compensation_task ct
+            WHERE ct.task_status IN ('PENDING', 'PROCESSING', 'FAIL')
+              AND (
+                    EXISTS (
+                        SELECT 1
+                        FROM sales_order so
+                        WHERE so.tenant_id = #{tenantId}
+                          AND so.deleted = 0
+                          AND so.order_no = ct.biz_no
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM payment_bill pb
+                        WHERE pb.tenant_id = #{tenantId}
+                          AND pb.bill_no = ct.biz_no
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM refund_order ro
+                        WHERE ro.tenant_id = #{tenantId}
+                          AND ro.deleted = 0
+                          AND (ro.refund_no = ct.biz_no OR ro.payment_bill_no = ct.biz_no)
+                    )
+                    OR EXISTS (
+                        SELECT 1
+                        FROM refund_application ra
+                        WHERE ra.tenant_id = #{tenantId}
+                          AND ra.refund_no = ct.biz_no
+                    )
+                  )
+            ORDER BY ct.update_time DESC, ct.id DESC
+            LIMIT #{size} OFFSET #{offset}
+            """)
+    List<CompensationTask> selectMerchantVisibleOpenTasks(@Param("tenantId") Long tenantId,
+                                                          @Param("size") Integer size,
+                                                          @Param("offset") Integer offset);
 }

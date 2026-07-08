@@ -1,6 +1,9 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.payment.common.BusinessException;
+import com.payment.common.PageResult;
+import com.payment.dto.MerchantWorkbenchTaskVO;
 import com.payment.dto.MerchantWorkbenchTodoItemVO;
 import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
 import com.payment.entity.RefundApplication;
@@ -18,6 +21,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Locale;
 
 /**
  * 本地优先的商户工作台待办统计。
@@ -54,10 +58,10 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
                         "/merchant/refunds?status=FAILED", "red"),
                 item("compensation", "待补偿任务", "订单、支付或退款补偿任务未结束，需要管理员介入或等待调度器继续处理。",
                         safeCount(compensationTaskMapper.countMerchantVisibleOpenTasks(tenantId)),
-                        "/admin/compensation?type=compensation", "red"),
+                        "/merchant/tasks?type=compensation", "red"),
                 item("retry", "待重试任务", "异步重试任务仍在排队、失败或已进入死信，需要排查原因并重试。",
                         safeCount(retryTaskMapper.countMerchantVisibleOpenTasks(tenantId)),
-                        "/admin/compensation?type=retry", "orange"),
+                        "/merchant/tasks?type=retry", "orange"),
                 item("stock", "低库存商品", "库存低于或等于 5 的上架商品，建议补货或下架。",
                         safeCount(productMapper.countActiveLowStockByTenant(tenantId, LOW_STOCK_THRESHOLD)),
                         "/merchant/products", "red")
@@ -72,6 +76,30 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
                 .totalCount(totalCount)
                 .items(items)
                 .build();
+    }
+
+    @Override
+    public PageResult<MerchantWorkbenchTaskVO> listVisibleTasks(Long tenantId, String type, Integer pageNum, Integer pageSize) {
+        String normalizedType = normalizeType(type);
+        int safePage = pageNum == null || pageNum < 1 ? 1 : pageNum;
+        int safeSize = pageSize == null || pageSize < 1 ? 20 : Math.min(pageSize, 100);
+        int offset = (safePage - 1) * safeSize;
+
+        if ("retry".equals(normalizedType)) {
+            List<MerchantWorkbenchTaskVO> records = retryTaskMapper
+                    .selectMerchantVisibleOpenTasks(tenantId, safeSize, offset)
+                    .stream()
+                    .map(MerchantWorkbenchTaskVO::fromRetry)
+                    .toList();
+            return new PageResult<>(records, safeCount(retryTaskMapper.countMerchantVisibleOpenTasks(tenantId)), safePage, safeSize);
+        }
+
+        List<MerchantWorkbenchTaskVO> records = compensationTaskMapper
+                .selectMerchantVisibleOpenTasks(tenantId, safeSize, offset)
+                .stream()
+                .map(MerchantWorkbenchTaskVO::fromCompensation)
+                .toList();
+        return new PageResult<>(records, safeCount(compensationTaskMapper.countMerchantVisibleOpenTasks(tenantId)), safePage, safeSize);
     }
 
     private Long countPendingPayments(Long tenantId) {
@@ -114,5 +142,15 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
 
     private Long safeCount(Long count) {
         return count == null ? 0L : count;
+    }
+
+    private String normalizeType(String type) {
+        if (type == null || type.isBlank() || "compensation".equalsIgnoreCase(type)) {
+            return "compensation";
+        }
+        if ("retry".equalsIgnoreCase(type)) {
+            return "retry";
+        }
+        throw new BusinessException("不支持的任务类型: " + type.toLowerCase(Locale.ROOT));
     }
 }

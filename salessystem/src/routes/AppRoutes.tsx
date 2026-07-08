@@ -62,6 +62,7 @@ const MerchantProductTaxonomy = lazy(() => import('../pages/merchant/MerchantPro
 const MerchantRules = lazy(() => import('../pages/merchant/MerchantRules'));
 const MerchantWithdraw = lazy(() => import('../pages/merchant/MerchantWithdraw'));
 const MerchantRefunds = lazy(() => import('../pages/merchant/MerchantRefunds'));
+const MerchantTasks = lazy(() => import('../pages/merchant/MerchantTasks'));
 const MerchantCoupons = lazy(() => import('../pages/merchant/MerchantCoupons'));
 const MerchantActivities = lazy(() => import('../pages/merchant/MerchantActivities'));
 const MerchantMembers = lazy(() => import('../pages/merchant/MerchantMembers'));
@@ -152,6 +153,7 @@ export function AppRoutes() {
         <Route path="/merchant/marketing/activities" element={merchantRoute(<MerchantActivities />, 'marketing:manage')} />
         <Route path="/merchant/marketing/members" element={merchantRoute(<MerchantMembers />, 'marketing:manage')} />
         <Route path="/merchant/refunds" element={merchantRoute(<MerchantRefunds />, 'refund:manage')} />
+        <Route path="/merchant/tasks" element={merchantRoute(<MerchantTasks />, 'dashboard:view')} />
         <Route path="/merchant/rules" element={merchantRoute(<MerchantRules />, 'rule:manage')} />
         <Route path="/merchant/employees" element={merchantRoute(<MerchantEmployees />, 'employee:manage')} />
         <Route path="/merchant/withdrawals" element={merchantRoute(<MerchantWithdraw />, 'withdrawal:manage')} />

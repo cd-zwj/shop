@@ -112,6 +112,26 @@ export interface MerchantWorkbenchTodoSummary {
   items: MerchantWorkbenchTodoItem[];
 }
 
+export type MerchantWorkbenchTaskSource = 'compensation' | 'retry';
+
+export interface MerchantWorkbenchTask {
+  taskSource: MerchantWorkbenchTaskSource | string;
+  id: number;
+  taskNo: string;
+  taskType?: string | null;
+  bizType?: string | null;
+  bizNo?: string | null;
+  taskStatus: string;
+  retryCount?: number | null;
+  maxRetryCount?: number | null;
+  nextRetryTime?: string | null;
+  lastError?: string | null;
+  createTime?: string | null;
+  updateTime?: string | null;
+  actionLabel?: string | null;
+  actionPath?: string | null;
+}
+
 export type MerchantEmployeeRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'CASHIER' | 'FINANCE';
 
 export interface MerchantEmployee {

@@ -1,6 +1,10 @@
 package com.payment.service.impl;
 
+import com.payment.common.PageResult;
+import com.payment.dto.MerchantWorkbenchTaskVO;
 import com.payment.dto.MerchantWorkbenchTodoSummaryVO;
+import com.payment.entity.CompensationTask;
+import com.payment.entity.RetryTask;
 import com.payment.mapper.CompensationTaskMapper;
 import com.payment.mapper.OrderDeliveryRecordMapper;
 import com.payment.mapper.ProductMapper;
@@ -10,6 +14,7 @@ import com.payment.mapper.SalesOrderMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -73,12 +78,70 @@ class V1MerchantWorkbenchServiceImplTest {
         assertEquals(7L, summary.getItems().get(7).getCount());
         assertEquals("/merchant/orders?tab=shipping", summary.getItems().get(1).getPath());
         assertEquals("red", summary.getItems().get(2).getTone());
-        assertEquals("/admin/compensation?type=compensation", summary.getItems().get(5).getPath());
-        assertEquals("/admin/compensation?type=retry", summary.getItems().get(6).getPath());
+        assertEquals("/merchant/tasks?type=compensation", summary.getItems().get(5).getPath());
+        assertEquals("/merchant/tasks?type=retry", summary.getItems().get(6).getPath());
 
         verify(productMapper).countActiveLowStockByTenant(9L, 5);
         verify(compensationTaskMapper).countMerchantVisibleOpenTasks(9L);
         verify(retryTaskMapper).countMerchantVisibleOpenTasks(9L);
+    }
+
+    @Test
+    void listVisibleTasksShouldExposeCompensationTasksForMerchantReadOnlyView() {
+        CompensationTask task = new CompensationTask();
+        task.setId(11L);
+        task.setTaskNo("CT202607080001");
+        task.setBizType("MERCHANT_APPROVED_REFUND");
+        task.setBizNo("RA202607080001");
+        task.setTaskStatus("FAIL");
+        task.setRemark("Provider refund is not supported in phase 1");
+        task.setRetryCount(5);
+        task.setCreateTime(LocalDateTime.of(2026, 7, 8, 10, 0));
+        task.setUpdateTime(LocalDateTime.of(2026, 7, 8, 10, 5));
+        when(compensationTaskMapper.countMerchantVisibleOpenTasks(9L)).thenReturn(1L);
+        when(compensationTaskMapper.selectMerchantVisibleOpenTasks(9L, 20, 0)).thenReturn(List.of(task));
+
+        PageResult<MerchantWorkbenchTaskVO> page = service.listVisibleTasks(9L, "compensation", 1, 20);
+
+        assertEquals(1L, page.getTotal());
+        assertEquals("compensation", page.getRecords().get(0).getTaskSource());
+        assertEquals("CT202607080001", page.getRecords().get(0).getTaskNo());
+        assertEquals("MERCHANT_APPROVED_REFUND", page.getRecords().get(0).getBizType());
+        assertEquals("RA202607080001", page.getRecords().get(0).getBizNo());
+        assertEquals("FAIL", page.getRecords().get(0).getTaskStatus());
+        assertEquals("Provider refund is not supported in phase 1", page.getRecords().get(0).getLastError());
+        assertEquals("查看退款单", page.getRecords().get(0).getActionLabel());
+        assertEquals("/merchant/refunds?status=FAILED", page.getRecords().get(0).getActionPath());
+    }
+
+    @Test
+    void listVisibleTasksShouldExposeRetryTasksForMerchantReadOnlyView() {
+        RetryTask task = new RetryTask();
+        task.setId(21L);
+        task.setTaskNo("RT202607080001");
+        task.setTaskType("ORDER_CLOSE");
+        task.setBizType("ORDER");
+        task.setBizNo("SO202607080001");
+        task.setTaskStatus("DEAD");
+        task.setRetryCount(16);
+        task.setMaxRetryCount(16);
+        task.setNextRetryTime(LocalDateTime.of(2026, 7, 8, 11, 0));
+        task.setLastErrorMessage("Order close failed");
+        task.setCreateTime(LocalDateTime.of(2026, 7, 8, 10, 0));
+        task.setUpdateTime(LocalDateTime.of(2026, 7, 8, 10, 5));
+        when(retryTaskMapper.countMerchantVisibleOpenTasks(9L)).thenReturn(1L);
+        when(retryTaskMapper.selectMerchantVisibleOpenTasks(9L, 10, 10)).thenReturn(List.of(task));
+
+        PageResult<MerchantWorkbenchTaskVO> page = service.listVisibleTasks(9L, "retry", 2, 10);
+
+        assertEquals(1L, page.getTotal());
+        assertEquals(2, page.getPage());
+        assertEquals("retry", page.getRecords().get(0).getTaskSource());
+        assertEquals("ORDER_CLOSE", page.getRecords().get(0).getTaskType());
+        assertEquals("DEAD", page.getRecords().get(0).getTaskStatus());
+        assertEquals("Order close failed", page.getRecords().get(0).getLastError());
+        assertEquals("查看异常订单", page.getRecords().get(0).getActionLabel());
+        assertEquals("/merchant/orders?tab=abnormal", page.getRecords().get(0).getActionPath());
     }
 
     @Test
