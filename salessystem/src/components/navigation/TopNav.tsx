@@ -1,15 +1,52 @@
 import { ArrowLeft, Bell, LogOut, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { appNotificationService } from '../../services/modules/appNotification';
 
 export function TopNav({ title }: { title: string }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { currentRole, logout } = useAuth();
+  const [unreadCount, setUnreadCount] = useState<number | null>(null);
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
   const isLogin = location.pathname === '/login';
   const isResetPassword = location.pathname === '/reset-password';
+  const shouldShowUnreadCount = currentRole === 'user' && !isLogin && !isResetPassword;
+  const hasUnreadNotifications = unreadCount !== null && unreadCount > 0;
+  const notificationLabel = hasUnreadNotifications
+    ? `消息通知，${unreadCount} 条未读`
+    : '消息通知';
+  const notificationBadgeText = unreadCount && unreadCount > 99 ? '99+' : String(unreadCount);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!shouldShowUnreadCount) {
+      setUnreadCount(null);
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    appNotificationService
+      .getUnreadCount()
+      .then((data) => {
+        if (!isMounted) return;
+        const count = Number.isFinite(data.count) ? data.count : 0;
+        setUnreadCount(Math.max(0, count));
+      })
+      .catch(() => {
+        if (isMounted) {
+          setUnreadCount(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname, shouldShowUnreadCount]);
 
   if (isLogin || isResetPassword) return null;
 
@@ -55,9 +92,20 @@ export function TopNav({ title }: { title: string }) {
         <button className="p-2 text-slate-600 hover:bg-slate-50 rounded-full relative">
           <Search className="w-5 h-5 transition-opacity" />
         </button>
-        <button className="p-2 text-slate-600 hover:bg-slate-50 rounded-full relative">
+        <button
+          aria-label={notificationLabel}
+          onClick={() => navigate('/notifications')}
+          className="p-2 text-slate-600 hover:bg-slate-50 rounded-full relative"
+        >
           <Bell className="w-5 h-5" />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-white" />
+          {hasUnreadNotifications && (
+            <span
+              data-testid="top-nav-notification-count"
+              className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full border border-white bg-error px-1 text-[10px] font-black leading-none text-white"
+            >
+              {notificationBadgeText}
+            </span>
+          )}
         </button>
       </div>
     </header>
