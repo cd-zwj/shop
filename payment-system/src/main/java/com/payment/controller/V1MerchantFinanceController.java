@@ -73,6 +73,7 @@ public class V1MerchantFinanceController {
         vo.setFrozenBalance(balance == null ? java.math.BigDecimal.ZERO : balance.getFrozenBalance());
         vo.setTotalIncome(balance == null ? java.math.BigDecimal.ZERO : balance.getTotalIncome());
         vo.setTotalWithdrawal(balance == null ? java.math.BigDecimal.ZERO : balance.getTotalWithdrawal());
+        vo.setTotalPlatformFee(balance == null ? java.math.BigDecimal.ZERO : balance.getTotalPlatformFee());
         return Result.success(vo);
     }
 
@@ -306,6 +307,7 @@ public class V1MerchantFinanceController {
         vo.setChangeAmount(log.getChangeAmount());
         vo.setBalanceBefore(log.getBalanceBefore());
         vo.setBalanceAfter(log.getBalanceAfter());
+        vo.setFeeAmount(log.getFeeAmount());
         vo.setRemark(log.getRemark());
         vo.setCreateTime(log.getCreateTime() != null ? log.getCreateTime().toString() : null);
         return vo;

@@ -12,6 +12,7 @@ import { useToast } from '../../context/ToastContext';
 import { adminMarketingService } from '../../services/modules/adminMarketing';
 import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload } from '../../types/marketing';
 import { cn } from '../../lib/utils';
+import { validateMerchantCouponDraft } from '../../utils/merchantCouponValidation';
 
 interface AdminCouponsTabProps {
   statusFilter: string;
@@ -90,16 +91,26 @@ export default function AdminCouponsTab({ statusFilter }: AdminCouponsTabProps) 
 
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!couponName.trim()) {
-      showToast('请输入优惠券名称', 'error');
-      return;
-    }
-    if (couponType === 'FIXED' && !discountAmount) {
-      showToast('请输入满减面额', 'error');
-      return;
-    }
-    if (couponType === 'RATE' && !discountRate) {
-      showToast('请输入折扣比例', 'error');
+
+    const validationIssues = validateMerchantCouponDraft({
+      name: couponName,
+      couponType,
+      thresholdAmount,
+      discountAmount,
+      discountRate,
+      maxDiscountAmount,
+      totalStock,
+      perUserLimit,
+      validityType,
+      validDaysAfterReceive,
+      validStartTime,
+      validEndTime,
+      receiveStartTime,
+      receiveEndTime,
+    });
+
+    if (validationIssues.length > 0) {
+      showToast(validationIssues.join('；'), 'error');
       return;
     }
 
@@ -128,11 +139,6 @@ export default function AdminCouponsTab({ statusFilter }: AdminCouponsTabProps) 
       if (validityType === 'DAYS') {
         payload.validDaysAfterReceive = Number(validDaysAfterReceive);
       } else {
-        if (!validStartTime || !validEndTime) {
-          showToast('请选择有效期开始与结束时间', 'error');
-          setIsCouponSubmitting(false);
-          return;
-        }
         payload.validStartTime = new Date(validStartTime).toISOString();
         payload.validEndTime = new Date(validEndTime).toISOString();
       }

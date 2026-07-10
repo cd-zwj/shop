@@ -60,6 +60,12 @@ public class CouponTemplateVO implements Serializable {
     private Boolean canStackPoints;
     /** 是否可与其他优惠券叠加使用 */
     private Boolean canStackOtherCoupon;
+    /** 最低可用会员等级，空表示不限 */
+    private Integer requiredMemberLevel;
+    /** 必须具备的会员标签 ID，逗号或 JSON 数组格式 */
+    private String requiredMemberTagIds;
+    /** 命中后不可用的会员标签 ID，逗号或 JSON 数组格式 */
+    private String excludedMemberTagIds;
     /** 适用商品范围类型 */
     private String applicableProductScope;
     /** 适用商品范围 JSON（商品 ID 列表或分类列表） */

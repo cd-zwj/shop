@@ -52,4 +52,10 @@ public class CouponTemplateCreateDTO {
     private LocalDateTime validEndTime;
     /** 优惠券描述/使用说明 */
     private String description;
+    /** 最低可用会员等级，空表示不限 */
+    private Integer requiredMemberLevel;
+    /** 必须具备的会员标签 ID，逗号或 JSON 数组格式 */
+    private String requiredMemberTagIds;
+    /** 命中后不可用的会员标签 ID，逗号或 JSON 数组格式 */
+    private String excludedMemberTagIds;
 }

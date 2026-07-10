@@ -26,6 +26,7 @@ const DEFAULT_SUMMARY: MerchantWalletSummary = {
   frozenBalance: 0,
   totalIncome: 0,
   totalWithdrawal: 0,
+  totalPlatformFee: 0,
 };
 
 const EMPTY_FORM: MerchantWithdrawalApplyPayload = {

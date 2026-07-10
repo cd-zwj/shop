@@ -67,4 +67,16 @@ describe('purchaseDelivery', () => {
       value: undefined,
     });
   });
+
+  it('shows subscription expiry and benefit code from delivery payload', () => {
+    const presentation = getPurchaseDeliveryPresentation({
+      ...baseRecord,
+      productType: 'SUBSCRIPTION',
+      productName: 'VIP 权益包',
+      payload: '{"expireTime":"2026-08-19T10:00:00","benefitCode":"VIP_PLUS"}',
+    });
+
+    expect(presentation.guidance).toContain('有效期至');
+    expect(presentation.guidance).toContain('VIP_PLUS');
+  });
 });

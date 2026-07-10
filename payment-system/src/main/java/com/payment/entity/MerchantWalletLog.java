@@ -51,6 +51,11 @@ public class MerchantWalletLog implements Serializable {
     private BigDecimal changeAmount;
 
     /**
+     * 平台服务费（元），订单结算流水中记录本单抽成金额
+     */
+    private BigDecimal feeAmount;
+
+    /**
      * 变动前余额（元），记录本次操作之前的账户可用余额
      */
     private BigDecimal balanceBefore;

@@ -7,6 +7,8 @@ export interface GrowthOverview {
   levelName: string;
   /** null 表示已达最高等级 */
   nextLevelGrowth: number | null;
+  discountRate?: number | null;
+  benefitJson?: string | null;
 }
 
 /** 成长值变动日志 — 对应后端 MemberGrowthLogVO */

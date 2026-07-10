@@ -24,4 +24,7 @@ public class V1MerchantBalanceVO {
 
     /** 累计提现总额 */
     private BigDecimal totalWithdrawal;
+
+    /** 累计平台服务费总额 */
+    private BigDecimal totalPlatformFee;
 }

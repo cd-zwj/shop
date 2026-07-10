@@ -62,9 +62,9 @@ export interface MerchantProductChangeLog {
   fieldName: 'price' | 'stock' | string;
   oldValue?: string | null;
   newValue?: string | null;
-  operatorId?: number | null;
-  remark?: string | null;
-  createTime?: string | null;
+ operatorId?: number | null;
+remark?: string | null;
+createTime?: string | null;
 }
 
 export type MerchantCardKeyStatus = 'AVAILABLE' | 'USED' | 'RETURNED' | 'DISABLED';
@@ -168,7 +168,8 @@ export interface MerchantWalletSummary {
   availableBalance: number;
   frozenBalance: number;
   totalIncome: number;
-  totalWithdrawal: number;
+ totalWithdrawal: number;
+  totalPlatformFee: number;
 }
 
 export interface MerchantPointsRule {
@@ -233,10 +234,11 @@ export interface MerchantTransaction {
   bizType: string;
   bizNo?: string | null;
   changeAmount: number;
-  balanceBefore?: number | null;
-  balanceAfter?: number | null;
-  remark?: string | null;
-  createTime?: string | null;
+ balanceBefore?: number | null;
+ balanceAfter?: number | null;
+  feeAmount?: number | null;
+ remark?: string | null;
+ createTime?: string | null;
 }
 
 export interface MerchantTransactionFilters {

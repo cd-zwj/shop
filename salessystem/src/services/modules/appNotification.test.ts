@@ -36,4 +36,14 @@ describe('appNotificationService', () => {
       authRole: 'user',
     });
   });
+
+  it('requests the current user unread notification count', () => {
+    appNotificationService.getUnreadCount();
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      url: '/v1/app/notifications/unread-count',
+      method: 'get',
+      authRole: 'user',
+    });
+  });
 });

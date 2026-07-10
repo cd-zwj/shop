@@ -26,6 +26,9 @@ public class MerchantTransactionVO {
     /** 变动后余额 */
     private java.math.BigDecimal balanceAfter;
 
+    /** 平台服务费金额 */
+    private java.math.BigDecimal feeAmount;
+
     /** 备注 */
     private String remark;
 

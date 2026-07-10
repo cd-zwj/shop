@@ -131,6 +131,7 @@ class PromotionServiceImplTest {
         ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
         PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
         when(activityMapper.selectById(11L)).thenReturn(activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name()));
+        when(activityMapper.selectList(any())).thenReturn(List.of());
         when(ruleMapper.selectList(any())).thenReturn(List.of(
                 rule(21L, 11L, "FULL_REDUCTION", "100.00", "10.00", null, null, null, 1)
         ));
@@ -145,6 +146,7 @@ class PromotionServiceImplTest {
         ActivityRuleMapper discountRuleMapper = mock(ActivityRuleMapper.class);
         PromotionServiceImpl discountService = new PromotionServiceImpl(discountActivityMapper, discountRuleMapper);
         when(discountActivityMapper.selectById(12L)).thenReturn(activeActivity(12L, 9L, ActivityTypeEnum.DISCOUNT_RATE.name()));
+        when(discountActivityMapper.selectList(any())).thenReturn(List.of());
         when(discountRuleMapper.selectList(any())).thenReturn(List.of(
                 rule(31L, 12L, "DISCOUNT_RATE", "200.00", null, "0.80", null, null, 1)
         ));
@@ -159,6 +161,59 @@ class PromotionServiceImplTest {
         BusinessException discountEx = assertThrows(BusinessException.class, () -> discountService.addRule(discount));
 
         assertEquals("已有相同门槛的满折规则", discountEx.getMessage());
+    }
+
+    @Test
+    void addRuleShouldRejectCrossActivityPriorityConflictWhenWindowsOverlap() {
+        PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
+        PromotionActivity current = activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name());
+        PromotionActivity other = activeActivity(12L, 9L, ActivityTypeEnum.FULL_REDUCTION.name());
+        when(activityMapper.selectById(11L)).thenReturn(current);
+        when(activityMapper.selectList(any())).thenReturn(List.of(other));
+        when(ruleMapper.selectList(any()))
+                .thenReturn(List.of())
+                .thenReturn(List.of(rule(31L, 12L, "FULL_REDUCTION", "80.00", "10.00", null, null, null, 10)));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.addRule(ruleCreateDTO()));
+
+        assertEquals("存在其他活动使用相同优先级的规则，请避免跨活动命中顺序不清晰", ex.getMessage());
+    }
+
+    @Test
+    void addRuleShouldRejectCrossActivityThresholdConflictWhenWindowsOverlap() {
+        PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
+        PromotionActivity current = activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name());
+        PromotionActivity other = activeActivity(12L, 9L, ActivityTypeEnum.FULL_REDUCTION.name());
+        when(activityMapper.selectById(11L)).thenReturn(current);
+        when(activityMapper.selectList(any())).thenReturn(List.of(other));
+        when(ruleMapper.selectList(any()))
+                .thenReturn(List.of())
+                .thenReturn(List.of(rule(31L, 12L, "FULL_REDUCTION", "100.00", "5.00", null, null, null, 2)));
+        ActivityRuleCreateDTO dto = ruleCreateDTO();
+        dto.setPriority(11);
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.addRule(dto));
+
+        assertEquals("存在其他活动配置了相同门槛的满减规则", ex.getMessage());
+    }
+
+    @Test
+    void addRuleShouldAllowCrossActivityReuseWhenNoOverlappingActivities() {
+        PromotionActivityMapper activityMapper = mock(PromotionActivityMapper.class);
+        ActivityRuleMapper ruleMapper = mock(ActivityRuleMapper.class);
+        PromotionServiceImpl service = new PromotionServiceImpl(activityMapper, ruleMapper);
+        when(activityMapper.selectById(11L)).thenReturn(activeActivity(11L, 9L, ActivityTypeEnum.FULL_REDUCTION.name()));
+        when(activityMapper.selectList(any())).thenReturn(List.of());
+        when(ruleMapper.selectList(any())).thenReturn(List.of());
+
+        ActivityRule result = service.addRule(ruleCreateDTO());
+
+        assertNotNull(result);
+        verify(ruleMapper).insert(any(ActivityRule.class));
     }
 
     @Test

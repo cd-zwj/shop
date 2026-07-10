@@ -10,6 +10,7 @@ function tx(overrides: Partial<MerchantTransaction>): MerchantTransaction {
     id: overrides.id ?? Math.random(),
     bizType: overrides.bizType ?? 'PAYMENT',
     changeAmount: overrides.changeAmount ?? 0,
+    feeAmount: overrides.feeAmount ?? null,
     ...overrides,
   };
 }
@@ -26,6 +27,7 @@ describe('summarizeMerchantTransactions', () => {
     ]);
 
     expect(summary).toEqual({
+      platformFeeIncome: 0,
       paymentIncome: 120,
       rechargeIncome: 50,
       refundAmount: 35,
@@ -49,6 +51,7 @@ describe('summarizeMerchantTransactions', () => {
 
   it('handles empty transaction lists', () => {
     expect(summarizeMerchantTransactions([])).toEqual({
+      platformFeeIncome: 0,
       paymentIncome: 0,
       rechargeIncome: 0,
       refundAmount: 0,
@@ -134,6 +137,7 @@ function walletSummary(overrides: Partial<MerchantWalletSummary>): MerchantWalle
     frozenBalance: 0,
     totalIncome: 0,
     totalWithdrawal: 0,
+    totalPlatformFee: 0,
     ...overrides,
   };
 }

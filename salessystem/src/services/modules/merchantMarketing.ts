@@ -45,7 +45,7 @@ export const merchantMarketingService = {
     return request<MerchantCouponTemplate>({
       url: `/v1/merchant/tenants/${tenantId}/marketing/coupons`,
       method: 'post',
-      data: payload,
+      data: normalizeCouponCreatePayload(payload),
       authRole: 'merchant',
     });
   },
@@ -211,4 +211,26 @@ function normalizeOwnerType(ownerType?: string | null): 'PLATFORM' | 'TENANT' {
 
 function normalizeActivityType(activityType: string): ActivityRuleType {
   return activityType === 'FULL_DISCOUNT' ? 'DISCOUNT_RATE' : activityType as ActivityRuleType;
+}
+
+function normalizeCouponCreatePayload(payload: CouponTemplateCreatePayload) {
+  return {
+    templateName: payload.name,
+    couponType: payload.couponType === 'RATE' ? 'DISCOUNT_RATE' : 'FULL_REDUCTION',
+    thresholdAmount: payload.thresholdAmount,
+    discountAmount: payload.discountAmount,
+    discountRate: payload.discountRate,
+    maxDiscountAmount: payload.maxDiscountAmount,
+    totalQuantity: payload.totalStock,
+    perUserLimit: payload.perUserLimit,
+    receiveStartTime: payload.receiveStartTime,
+    receiveEndTime: payload.receiveEndTime,
+    validStartTime: payload.validStartTime,
+    validEndTime: payload.validEndTime,
+    validDays: payload.validDaysAfterReceive,
+    description: payload.description,
+    requiredMemberLevel: payload.requiredMemberLevel,
+    requiredMemberTagIds: payload.requiredMemberTagIds,
+    excludedMemberTagIds: payload.excludedMemberTagIds,
+  };
 }

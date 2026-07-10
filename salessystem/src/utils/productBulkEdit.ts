@@ -1,5 +1,7 @@
 import type { MerchantProduct, MerchantProductUpsertPayload } from '../types/merchant';
 
+export const MAX_PRODUCT_STOCK = 999999;
+
 export type ProductStatusFilter = 'ALL' | 'active' | 'inactive' | 'out_of_stock';
 export type ProductEditableStatus = Exclude<ProductStatusFilter, 'ALL'>;
 
@@ -30,6 +32,9 @@ export function buildProductStockUpdatePayload(
 ): MerchantProductUpsertPayload {
   if (stock < 0) {
     throw new Error('库存不能小于 0');
+  }
+  if (stock > MAX_PRODUCT_STOCK) {
+    throw new Error(`库存不能超过 ${MAX_PRODUCT_STOCK}`);
   }
   return buildProductUpdatePayload(product, { stock });
 }

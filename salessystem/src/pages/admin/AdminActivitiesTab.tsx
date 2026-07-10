@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Sparkles,
@@ -18,6 +18,7 @@ import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload, Activi
 import { cn } from '../../lib/utils';
 import {
   detectMerchantActivityRuleConflicts,
+  detectMerchantCrossActivityRuleConflicts,
   normalizeRuleType,
   validateMerchantActivityDraft,
   validateMerchantActivityRuleDraft,
@@ -57,7 +58,7 @@ export default function AdminActivitiesTab({ statusFilter }: AdminActivitiesTabP
   const [rulePriority, setRulePriority] = useState<number>(0);
   const [isRuleSubmitting, setIsRuleSubmitting] = useState(false);
 
-  const loadActivities = async () => {
+  const loadActivities = useCallback(async () => {
     setIsLoading(true);
     try {
       const status = statusFilter === 'ALL' ? undefined : statusFilter;
@@ -68,33 +69,49 @@ export default function AdminActivitiesTab({ statusFilter }: AdminActivitiesTabP
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [statusFilter, showToast]);
 
   useEffect(() => {
     void loadActivities();
-  }, [statusFilter]);
+  }, [loadActivities]);
 
-  const loadRules = async (activityId: number) => {
+  const ensureRulesForActivities = useCallback(async (activityIds: number[]) => {
+    const missingIds = activityIds.filter((activityId) => activityRules[activityId] == null);
+    if (missingIds.length === 0) {
+      return undefined;
+    }
+
     setIsRulesLoading(true);
     try {
-      const data = await adminMarketingService.getActivityRules(activityId);
+      const results = await Promise.all(
+        missingIds.map(async (activityId) => ({
+          activityId,
+          rules: await adminMarketingService.getActivityRules(activityId),
+        })),
+      );
+      const loadedRules: Record<number, ActivityRule[]> = {};
+      results.forEach(({ activityId, rules }) => {
+        loadedRules[activityId] = rules || [];
+      });
       setActivityRules((prev) => ({
         ...prev,
-        [activityId]: data || [],
+        ...loadedRules,
       }));
+      return loadedRules;
     } catch (err) {
       showToast(err instanceof Error ? err.message : '获取活动规则失败', 'error');
+      return undefined;
     } finally {
       setIsRulesLoading(false);
     }
-  };
+  }, [activityRules, showToast]);
 
   const toggleExpandActivity = async (activityId: number) => {
     if (expandedActivityId === activityId) {
       setExpandedActivityId(null);
     } else {
       setExpandedActivityId(activityId);
-      await loadRules(activityId);
+      await ensureRulesForActivities([activityId]);
     }
   };
 
@@ -208,11 +225,39 @@ export default function AdminActivitiesTab({ statusFilter }: AdminActivitiesTabP
       if (ruleDiscountRate) payload.discountRate = Number(ruleDiscountRate);
       if (ruleConfigJson) payload.ruleConfigJson = ruleConfigJson.trim();
 
+      const loadedRules = await ensureRulesForActivities(activities
+        .filter((activity) => activity.status === 'DRAFT' || activity.status === 'ACTIVE')
+        .map((activity) => activity.id)) ?? {};
+
+      const crossConflictIssues = detectMerchantCrossActivityRuleConflicts(
+        activities,
+        {
+          ...activityRules,
+          ...loadedRules,
+        },
+        targetActivity,
+        {
+          ruleType,
+          thresholdAmount: ruleThreshold,
+          discountAmount: ruleDiscountAmount,
+          discountRate: ruleDiscountRate,
+          productId: '',
+          categoryCode: '',
+          ruleConfigJson,
+          priority: rulePriority,
+        },
+      );
+
+      if (crossConflictIssues.length > 0) {
+        showToast(crossConflictIssues.join('；'), 'error');
+        return;
+      }
+
       await adminMarketingService.addActivityRule(targetActivity.id, payload);
       showToast('添加活动规则成功', 'success');
       setIsRuleCreateOpen(false);
       resetRuleForm();
-      await loadRules(targetActivity.id);
+      await ensureRulesForActivities([targetActivity.id]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '创建规则失败', 'error');
     } finally {

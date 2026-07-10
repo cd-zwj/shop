@@ -14,7 +14,15 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantMarketingService } from '../../services/modules/merchantMarketing';
-import type { MerchantCouponTemplate, CouponScope, CouponTemplateCreatePayload, CouponScopeCreatePayload, MarketingEffectSummary } from '../../types/marketing';
+import type {
+  MerchantCouponTemplate,
+  CouponScope,
+  CouponTemplateCreatePayload,
+  CouponScopeCreatePayload,
+  MarketingEffectSummary,
+  MemberLevel,
+  MemberTag,
+} from '../../types/marketing';
 import { cn } from '../../lib/utils';
 import { validateMerchantCouponDraft } from '../../utils/merchantCouponValidation';
 
@@ -24,6 +32,8 @@ export default function MerchantCoupons() {
   const tenantId = merchantSession?.tenantId;
 
   const [templates, setTemplates] = useState<MerchantCouponTemplate[]>([]);
+  const [memberLevels, setMemberLevels] = useState<MemberLevel[]>([]);
+  const [memberTags, setMemberTags] = useState<MemberTag[]>([]);
   const [effectSummary, setEffectSummary] = useState<MarketingEffectSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string>('ALL'); // 全部、草稿、已上线、已下线
@@ -46,6 +56,9 @@ export default function MerchantCoupons() {
   const [receiveEndTime, setReceiveEndTime] = useState('');
   const [description, setDescription] = useState('');
   const [stackStrategy, setStackStrategy] = useState('EXCLUSIVE');
+  const [requiredMemberLevel, setRequiredMemberLevel] = useState<number | ''>('');
+  const [requiredMemberTagIds, setRequiredMemberTagIds] = useState('');
+  const [excludedMemberTagIds, setExcludedMemberTagIds] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // 优惠券适用范围弹窗
@@ -75,6 +88,12 @@ export default function MerchantCoupons() {
       setTemplates(data || []);
       const summary = await merchantMarketingService.getEffectSummary(tenantId);
       setEffectSummary(summary);
+      const [levels, tags] = await Promise.all([
+        merchantMarketingService.getMemberLevels(tenantId).catch(() => []),
+        merchantMarketingService.getMemberTags(tenantId).catch(() => []),
+      ]);
+      setMemberLevels(levels);
+      setMemberTags(tags);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '获取优惠券模板列表失败', 'error');
     } finally {
@@ -122,6 +141,9 @@ export default function MerchantCoupons() {
         perUserLimit: Number(perUserLimit),
         description: description.trim() || undefined,
         stackStrategy: stackStrategy || undefined,
+        requiredMemberLevel: requiredMemberLevel === '' ? undefined : Number(requiredMemberLevel),
+        requiredMemberTagIds: normalizeTagIds(requiredMemberTagIds),
+        excludedMemberTagIds: normalizeTagIds(excludedMemberTagIds),
       };
 
       if (couponType === 'FIXED') {
@@ -176,6 +198,9 @@ export default function MerchantCoupons() {
     setReceiveEndTime('');
     setDescription('');
     setStackStrategy('EXCLUSIVE');
+    setRequiredMemberLevel('');
+    setRequiredMemberTagIds('');
+    setExcludedMemberTagIds('');
   };
 
   const handleActivate = async (id: number) => {
@@ -278,6 +303,9 @@ export default function MerchantCoupons() {
         <EffectMetric label="领取数" value={effectSummary?.receivedCount ?? 0} />
         <EffectMetric label="使用数" value={effectSummary?.usedCount ?? 0} />
         <EffectMetric label="核销率" value={`${Math.round((effectSummary?.writeOffRate ?? 0) * 100)}%`} />
+        <EffectMetric label="活动数" value={effectSummary?.activityCount ?? 0} />
+        <EffectMetric label="生效活动" value={effectSummary?.activeActivityCount ?? 0} />
+        <EffectMetric label="活动优惠" value={`¥${Number(effectSummary?.activityDiscountAmount ?? 0).toFixed(2)}`} />
       </div>
 
       {/* 状态页签 */}
@@ -385,6 +413,11 @@ export default function MerchantCoupons() {
                   {tpl.description && (
                     <p className="bg-slate-50 p-2 rounded-xl text-slate-400 mt-2 font-normal">
                       {tpl.description}
+                    </p>
+                  )}
+                  {formatMemberRestriction(tpl) && (
+                    <p className="rounded-xl border border-blue-100 bg-blue-50 p-2 text-xs font-bold text-blue-700">
+                      {formatMemberRestriction(tpl)}
                     </p>
                   )}
                 </div>
@@ -678,6 +711,39 @@ export default function MerchantCoupons() {
                   />
                 </div>
 
+                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="requiredLevel" className="text-xs font-bold text-slate-700">最低会员等级 (选填)</label>
+                    <select
+                      id="requiredLevel"
+                      value={requiredMemberLevel}
+                      onChange={(e) => setRequiredMemberLevel(e.target.value ? Number(e.target.value) : '')}
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">不限会员等级</option>
+                      {memberLevels.map((level) => (
+                        <option key={level.id} value={level.level}>
+                          LV.{level.level} {level.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <TagIdInput
+                    id="requiredTags"
+                    label="必备会员标签 (选填)"
+                    value={requiredMemberTagIds}
+                    onChange={setRequiredMemberTagIds}
+                    tags={memberTags}
+                  />
+                  <TagIdInput
+                    id="excludedTags"
+                    label="排除会员标签 (选填)"
+                    value={excludedMemberTagIds}
+                    onChange={setExcludedMemberTagIds}
+                    tags={memberTags}
+                  />
+                </div>
+
                 <div className="flex items-center justify-end gap-3 border-t border-slate-50 pt-4">
                   <button
                     type="button"
@@ -851,4 +917,55 @@ function resolveRemainingStock(template: MerchantCouponTemplate) {
     return '不限';
   }
   return Math.max(total - (template.receivedQuantity ?? 0), 0);
+}
+
+function formatMemberRestriction(template: MerchantCouponTemplate) {
+  const parts: string[] = [];
+  if (template.requiredMemberLevel) {
+    parts.push(`LV.${template.requiredMemberLevel} 及以上`);
+  }
+  if (template.requiredMemberTagIds) {
+    parts.push(`需标签 ${template.requiredMemberTagIds}`);
+  }
+  if (template.excludedMemberTagIds) {
+    parts.push(`排除标签 ${template.excludedMemberTagIds}`);
+  }
+  return parts.length > 0 ? `会员限制：${parts.join('；')}` : '';
+}
+
+function normalizeTagIds(value: string) {
+  const normalized = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(',');
+  return normalized || undefined;
+}
+
+function TagIdInput({
+  id,
+  label,
+  value,
+  onChange,
+  tags,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  tags: MemberTag[];
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-xs font-bold text-slate-700">{label}</label>
+      <input
+        id={id}
+        type="text"
+        placeholder={tags.length > 0 ? tags.map((tag) => `${tag.id}:${tag.name}`).join('，') : '输入标签 ID，多个用逗号分隔'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+      />
+    </div>
+  );
 }

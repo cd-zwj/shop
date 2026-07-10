@@ -210,6 +210,9 @@ public class CouponServiceImpl implements CouponService {
         template.setCanStackBalance(Boolean.FALSE);
         template.setCanStackPoints(Boolean.FALSE);
         template.setCanStackOtherCoupon(Boolean.FALSE);
+        template.setRequiredMemberLevel(dto.getRequiredMemberLevel());
+        template.setRequiredMemberTagIds(normalizeIdListText(dto.getRequiredMemberTagIds()));
+        template.setExcludedMemberTagIds(normalizeIdListText(dto.getExcludedMemberTagIds()));
         template.setApplicableProductScope("ALL");
         template.setDescription(trimToNull(dto.getDescription()));
         template.setStatus(TEMPLATE_STATUS_DRAFT);
@@ -748,6 +751,11 @@ public class CouponServiceImpl implements CouponService {
         if (dto.getPerUserLimit() != null && dto.getPerUserLimit() < 0) {
             throw new BusinessException("每人限领数量不能小于0");
         }
+        if (dto.getRequiredMemberLevel() != null && dto.getRequiredMemberLevel() < 0) {
+            throw new BusinessException("会员等级限制不能小于0");
+        }
+        parseIdList(dto.getRequiredMemberTagIds());
+        parseIdList(dto.getExcludedMemberTagIds());
         validateReceiveWindow(dto.getReceiveStartTime(), dto.getReceiveEndTime());
         validateValidity(dto.getValidDays(), dto.getValidStartTime(), dto.getValidEndTime());
         validateCouponRule(couponType, dto);
@@ -771,6 +779,9 @@ public class CouponServiceImpl implements CouponService {
         dto.setValidDays(template.getValidDays());
         dto.setValidStartTime(template.getValidStartTime());
         dto.setValidEndTime(template.getValidEndTime());
+        dto.setRequiredMemberLevel(template.getRequiredMemberLevel());
+        dto.setRequiredMemberTagIds(template.getRequiredMemberTagIds());
+        dto.setExcludedMemberTagIds(template.getExcludedMemberTagIds());
         validateTemplateCreate(dto);
     }
 
@@ -912,7 +923,75 @@ public class CouponServiceImpl implements CouponService {
     }
 
     private void ensureMemberRules(CouponTemplate template, Long tenantId, Long platformUserId) {
-        // Member level / tag restrictions removed from entity — no-op for now
+        Integer requiredLevel = template.getRequiredMemberLevel();
+        if (requiredLevel != null && requiredLevel > 0) {
+            TenantMember member = tenantMemberMapper.selectOne(new LambdaQueryWrapper<TenantMember>()
+                    .eq(TenantMember::getTenantId, tenantId)
+                    .eq(TenantMember::getPlatformUserId, platformUserId));
+            int currentLevel = member == null || member.getMemberLevel() == null ? 0 : member.getMemberLevel();
+            if (currentLevel < requiredLevel) {
+                throw new BusinessException("会员等级未达到优惠券使用要求");
+            }
+        }
+
+        List<Long> requiredTagIds = parseIdList(template.getRequiredMemberTagIds());
+        if (!requiredTagIds.isEmpty()) {
+            Long matchedCount = memberAccountTagMapper.selectCount(new LambdaQueryWrapper<MemberAccountTag>()
+                    .eq(MemberAccountTag::getTenantId, tenantId)
+                    .eq(MemberAccountTag::getPlatformUserId, platformUserId)
+                    .in(MemberAccountTag::getTagId, requiredTagIds));
+            if (matchedCount == null || matchedCount < requiredTagIds.size()) {
+                throw new BusinessException("会员标签未达到优惠券使用要求");
+            }
+        }
+
+        List<Long> excludedTagIds = parseIdList(template.getExcludedMemberTagIds());
+        if (!excludedTagIds.isEmpty()) {
+            Long excludedCount = memberAccountTagMapper.selectCount(new LambdaQueryWrapper<MemberAccountTag>()
+                    .eq(MemberAccountTag::getTenantId, tenantId)
+                    .eq(MemberAccountTag::getPlatformUserId, platformUserId)
+                    .in(MemberAccountTag::getTagId, excludedTagIds));
+            if (excludedCount != null && excludedCount > 0) {
+                throw new BusinessException("当前会员标签不可使用该优惠券");
+            }
+        }
+    }
+
+    private String normalizeIdListText(String value) {
+        List<Long> ids = parseIdList(value);
+        if (ids.isEmpty()) {
+            return null;
+        }
+        return ids.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+    }
+
+    private List<Long> parseIdList(String value) {
+        if (value == null || value.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        String normalized = value.trim()
+                .replace("[", "")
+                .replace("]", "")
+                .replace("\"", "");
+        if (normalized.isBlank()) {
+            return java.util.Collections.emptyList();
+        }
+        return java.util.Arrays.stream(normalized.split(","))
+                .map(String::trim)
+                .filter(part -> !part.isBlank())
+                .map(part -> {
+                    try {
+                        Long id = Long.parseLong(part);
+                        if (id <= 0) {
+                            throw new BusinessException("会员标签ID必须大于0");
+                        }
+                        return id;
+                    } catch (NumberFormatException e) {
+                        throw new BusinessException("会员标签ID列表格式不合法");
+                    }
+                })
+                .distinct()
+                .toList();
     }
 
     private Long resolveCouponTenantId(CouponTemplate template, Long tenantId) {

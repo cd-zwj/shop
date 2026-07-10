@@ -97,6 +97,15 @@ public class CouponTemplate implements Serializable {
     /** 是否可与其他优惠券叠加使用 */
     private Boolean canStackOtherCoupon;
 
+    /** 最低可用会员等级，空表示不限 */
+    private Integer requiredMemberLevel;
+
+    /** 必须具备的会员标签 ID，逗号或 JSON 数组格式 */
+    private String requiredMemberTagIds;
+
+    /** 命中后不可用的会员标签 ID，逗号或 JSON 数组格式 */
+    private String excludedMemberTagIds;
+
     /**
      * 适用商品范围类型。
      * ALL-全场通用、PRODUCT-指定商品、CATEGORY-指定分类

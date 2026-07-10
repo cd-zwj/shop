@@ -64,4 +64,8 @@ describe('productBulkEdit', () => {
   it('rejects negative stock adjustment values', () => {
     expect(() => buildProductStockUpdatePayload(product, -1)).toThrow('库存不能小于 0');
   });
+
+  it('rejects unusually large stock adjustment values', () => {
+    expect(() => buildProductStockUpdatePayload(product, 1000000)).toThrow('库存不能超过 999999');
+  });
 });

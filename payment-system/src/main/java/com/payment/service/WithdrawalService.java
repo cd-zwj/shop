@@ -63,6 +63,19 @@ public interface WithdrawalService {
     void addMerchantBalance(Long tenantId, BigDecimal amount, String orderNo);
 
     /**
+     * 增加商家余额并累计平台服务费。
+     * <p>
+     * 用于订单结算入账。amount 为扣除平台服务费后的净入账金额，
+     * platformFee 为本次订单结算产生的平台抽成金额。
+     *
+     * @param tenantId     租户 ID
+     * @param amount       净入账金额（单位：元）
+     * @param orderNo      关联订单号
+     * @param platformFee  平台服务费（单位：元）
+     */
+    void addMerchantBalance(Long tenantId, BigDecimal amount, String orderNo, BigDecimal platformFee);
+
+    /**
      * 扣减商家余额。
      * <p>
      * 用于提现等场景，需确保余额充足。

@@ -6,12 +6,17 @@ import com.payment.constant.MerchantPermission;
 import com.payment.dto.CouponEffectVO;
 import com.payment.dto.MarketingEffectSummaryVO;
 import com.payment.entity.CouponTemplate;
+import com.payment.entity.OrderDiscountSnapshot;
+import com.payment.entity.PromotionActivity;
 import com.payment.enums.CouponOwnerTypeEnum;
 import com.payment.mapper.CouponTemplateMapper;
+import com.payment.mapper.OrderDiscountSnapshotMapper;
+import com.payment.mapper.PromotionActivityMapper;
 import com.payment.service.MarketingEffectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 
@@ -20,16 +25,29 @@ import java.util.Objects;
 public class MarketingEffectServiceImpl implements MarketingEffectService {
 
     private final CouponTemplateMapper couponTemplateMapper;
+    private final PromotionActivityMapper promotionActivityMapper;
+    private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
     private final V1MerchantSupportService v1MerchantSupportService;
 
     @Override
     public MarketingEffectSummaryVO getSummary(Long tenantId, Long platformUserId) {
         v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.MARKETING_MANAGE);
         List<CouponTemplate> templates = couponTemplateMapper.selectList(baseTenantCouponQuery(tenantId));
+        List<PromotionActivity> activities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
+                .eq(PromotionActivity::getTenantId, tenantId)
+                .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.TENANT.name())
+                .eq(PromotionActivity::getDeleted, 0));
+        List<OrderDiscountSnapshot> activityDiscounts = orderDiscountSnapshotMapper.selectList(new LambdaQueryWrapper<OrderDiscountSnapshot>()
+                .eq(OrderDiscountSnapshot::getTenantId, tenantId)
+                .eq(OrderDiscountSnapshot::getDiscountSource, "ACTIVITY"));
 
         int receivedCount = templates.stream().mapToInt(t -> value(t.getReceivedQuantity())).sum();
         int usedCount = templates.stream().mapToInt(t -> value(t.getUsedQuantity())).sum();
         int remainingStock = templates.stream().mapToInt(this::remainingStock).sum();
+        BigDecimal activityDiscountAmount = activityDiscounts.stream()
+                .map(OrderDiscountSnapshot::getDiscountAmount)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         MarketingEffectSummaryVO vo = new MarketingEffectSummaryVO();
         vo.setTemplateCount(templates.size());
@@ -38,6 +56,9 @@ public class MarketingEffectServiceImpl implements MarketingEffectService {
         vo.setUsedCount(usedCount);
         vo.setRemainingStock(remainingStock);
         vo.setWriteOffRate(rate(usedCount, receivedCount));
+        vo.setActivityCount(activities.size());
+        vo.setActiveActivityCount((int) activities.stream().filter(a -> "ACTIVE".equals(a.getStatus())).count());
+        vo.setActivityDiscountAmount(activityDiscountAmount);
         return vo;
     }
 

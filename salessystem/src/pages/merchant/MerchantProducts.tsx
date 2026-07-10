@@ -16,6 +16,7 @@ import type { MerchantProduct } from '../../types/merchant';
 import { cn } from '../../lib/utils';
 import { formatCurrency, getImageUrl } from '../../utils/display';
 import {
+  MAX_PRODUCT_STOCK,
   buildProductStockUpdatePayload,
   buildProductStatusUpdatePayload,
   normalizeProductStatusFilter,
@@ -169,8 +170,8 @@ export default function MerchantProducts() {
     if (!tenantId || !stockEditingProduct) return;
 
     const nextStock = Number(stockDraft);
-    if (!Number.isInteger(nextStock) || nextStock < 0) {
-      setError('库存必须是大于等于 0 的整数');
+    if (!Number.isInteger(nextStock) || nextStock < 0 || nextStock > MAX_PRODUCT_STOCK) {
+      setError(`库存必须是 0 到 ${MAX_PRODUCT_STOCK} 之间的整数`);
       return;
     }
 
@@ -189,8 +190,8 @@ export default function MerchantProducts() {
       setStockEditingProduct(null);
       setStockDraft('');
       setSuccess(`已调整「${stockEditingProduct.name}」库存为 ${nextStock}`);
-    } catch {
-      setError('库存调整失败，请稍后重试');
+    } catch (stockError) {
+      setError(stockError instanceof Error ? stockError.message : '库存调整失败，请稍后重试');
     } finally {
       setIsStockUpdating(false);
     }

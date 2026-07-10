@@ -53,6 +53,11 @@ public class MerchantBalance implements Serializable {
     private BigDecimal totalWithdrawal;
 
     /**
+     * 累计平台服务费（元），订单结算时按平台抽成规则累计
+     */
+    private BigDecimal totalPlatformFee;
+
+    /**
      * 逻辑删除标记：0-未删除，1-已删除
      */
     private Integer deleted;

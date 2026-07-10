@@ -158,6 +158,9 @@ public class V1AdminMarketingController {
             target.setValidStartTime(source.getValidStartTime());
             target.setValidEndTime(source.getValidEndTime());
             target.setDescription(source.getDescription());
+            target.setRequiredMemberLevel(source.getRequiredMemberLevel());
+            target.setRequiredMemberTagIds(source.getRequiredMemberTagIds());
+            target.setExcludedMemberTagIds(source.getExcludedMemberTagIds());
         }
         target.setTenantId(null);
         target.setTemplateScope(CouponOwnerTypeEnum.PLATFORM.name());

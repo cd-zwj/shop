@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  detectMerchantActivityRuleConflicts,
+  detectMerchantCrossActivityRuleConflicts,
   validateMerchantActivityDraft,
   validateMerchantActivityRuleDraft,
 } from './merchantActivityValidation';
@@ -83,76 +83,165 @@ describe('validateMerchantActivityRuleDraft', () => {
   });
 });
 
-describe('detectMerchantActivityRuleConflicts', () => {
-  it('warns when a new rule reuses priority and threshold in the same activity', () => {
-    const conflicts = detectMerchantActivityRuleConflicts([
+describe('detectMerchantCrossActivityRuleConflicts', () => {
+  const activities = [
+    {
+      id: 10,
+      tenantId: 1,
+      ownerType: 'TENANT' as const,
+      name: '活动A',
+      activityType: 'FULL_REDUCTION',
+      startTime: '2026-08-01T10:00',
+      endTime: '2026-08-10T10:00',
+      status: 'ACTIVE',
+    },
+    {
+      id: 11,
+      tenantId: 1,
+      ownerType: 'TENANT' as const,
+      name: '活动B',
+      activityType: 'FULL_REDUCTION',
+      startTime: '2026-08-05T10:00',
+      endTime: '2026-08-12T10:00',
+      status: 'DRAFT',
+    },
+    {
+      id: 12,
+      tenantId: 1,
+      ownerType: 'TENANT' as const,
+      name: '活动C',
+      activityType: 'FULL_REDUCTION',
+      startTime: '2026-08-20T10:00',
+      endTime: '2026-08-25T10:00',
+      status: 'ACTIVE',
+    },
+    {
+      id: 13,
+      tenantId: 1,
+      ownerType: 'TENANT' as const,
+      name: '活动D',
+      activityType: 'FULL_REDUCTION',
+      startTime: '2026-08-05T10:00',
+      endTime: '2026-08-12T10:00',
+      status: 'DISABLED',
+    },
+  ];
+
+  it('detects duplicate priority and threshold only from overlapping active/draft activities', () => {
+    const conflicts = detectMerchantCrossActivityRuleConflicts(
+      activities,
       {
-        id: 1,
-        activityId: 10,
-        ruleType: 'FULL_REDUCTION',
+        11: [{ id: 1, activityId: 11, ruleType: 'FULL_REDUCTION', thresholdAmount: 100, discountAmount: 10, priority: 3 }],
+        12: [{ id: 2, activityId: 12, ruleType: 'FULL_REDUCTION', thresholdAmount: 100, discountAmount: 5, priority: 9 }],
+        13: [{ id: 3, activityId: 13, ruleType: 'FULL_REDUCTION', thresholdAmount: 100, discountAmount: 8, priority: 3 }],
+      },
+      activities[0],
+      {
+        ...validRuleDraft,
         thresholdAmount: 100,
-        discountAmount: 20,
         priority: 3,
       },
-    ], {
-      ...validRuleDraft,
-      thresholdAmount: 100,
-      discountAmount: 15,
-      priority: 3,
-    });
+    );
 
     expect(conflicts).toEqual(expect.arrayContaining([
-      '已有相同优先级的活动规则，可能导致用户结算时命中顺序不清晰',
-      '已有相同门槛的满减规则，请调整门槛或合并规则',
+      '存在其他活动使用相同优先级的规则，请避免跨活动命中顺序不清晰',
+      '存在其他活动配置了相同门槛的满减规则',
     ]));
   });
 
-  it('warns when category discount or buy-gift scopes duplicate existing rules', () => {
-    const conflicts = detectMerchantActivityRuleConflicts([
+  it('ignores non-overlapping and disabled activities', () => {
+    const conflicts = detectMerchantCrossActivityRuleConflicts(
+      activities,
       {
-        id: 2,
-        activityId: 10,
-        ruleType: 'CATEGORY_DISCOUNT',
-        categoryCode: 'digital',
-        discountRate: 0.8,
+        12: [{ id: 2, activityId: 12, ruleType: 'FULL_REDUCTION', thresholdAmount: 100, discountAmount: 5, priority: 3 }],
+        13: [{ id: 3, activityId: 13, ruleType: 'FULL_REDUCTION', thresholdAmount: 100, discountAmount: 8, priority: 3 }],
+      },
+      activities[0],
+      {
+        ...validRuleDraft,
+        thresholdAmount: 100,
+        priority: 3,
+      },
+    );
+
+    expect(conflicts).toEqual([]);
+  });
+
+  it('normalizes FULL_DISCOUNT to DISCOUNT_RATE for threshold conflict detection', () => {
+    const conflicts = detectMerchantCrossActivityRuleConflicts(
+      activities,
+      {
+        11: [{ id: 4, activityId: 11, ruleType: 'DISCOUNT_RATE', thresholdAmount: 200, discountRate: 0.8, priority: 1 }],
+      },
+      {
+        id: activities[0].id,
+        startTime: activities[0].startTime,
+        endTime: activities[0].endTime,
+        status: activities[0].status,
+      },
+      {
+        ...validRuleDraft,
+        ruleType: 'FULL_DISCOUNT',
+        thresholdAmount: 200,
+        discountAmount: '',
+        discountRate: 0.7,
+        priority: 2,
+      },
+    );
+
+    expect(conflicts).toContain('存在其他活动配置了相同门槛的满折规则');
+  });
+
+  it('detects duplicate buy-x-get-y product rules across overlapping activities', () => {
+    const conflicts = detectMerchantCrossActivityRuleConflicts(
+      activities,
+      {
+        11: [{ id: 5, activityId: 11, ruleType: 'BUY_X_GET_Y', productId: 88, ruleConfigJson: '{"giftProductId":99}', priority: 0 }],
+      },
+      {
+        id: activities[0].id,
+        startTime: activities[0].startTime,
+        endTime: activities[0].endTime,
+        status: activities[0].status,
+      },
+      {
+        ...validRuleDraft,
+        ruleType: 'BUY_X_GET_Y',
+        thresholdAmount: '',
+        discountAmount: '',
+        discountRate: '',
+        productId: 88,
+        ruleConfigJson: '{"giftProductId":100}',
         priority: 1,
       },
+    );
+
+    expect(conflicts).toContain('存在其他活动使用同一商品配置买赠规则');
+  });
+
+  it('detects duplicate category discount rules across overlapping activities', () => {
+    const conflicts = detectMerchantCrossActivityRuleConflicts(
+      activities,
       {
-        id: 3,
-        activityId: 10,
-        ruleType: 'BUY_X_GET_Y',
-        productId: 9,
-        ruleConfigJson: '{"buyX":2,"getY":1}',
+        11: [{ id: 6, activityId: 11, ruleType: 'CATEGORY_DISCOUNT', categoryCode: 'FOOD', discountRate: 0.9, priority: 1 }],
+      },
+      {
+        id: activities[0].id,
+        startTime: activities[0].startTime,
+        endTime: activities[0].endTime,
+        status: activities[0].status,
+      },
+      {
+        ...validRuleDraft,
+        ruleType: 'CATEGORY_DISCOUNT',
+        thresholdAmount: '',
+        discountAmount: '',
+        discountRate: 0.8,
+        categoryCode: 'FOOD',
         priority: 2,
       },
-    ], {
-      ...validRuleDraft,
-      ruleType: 'CATEGORY_DISCOUNT',
-      thresholdAmount: '',
-      discountAmount: '',
-      discountRate: 0.7,
-      categoryCode: ' DIGITAL ',
-      priority: 4,
-    });
+    );
 
-    expect(conflicts).toContain('该分类已有折扣规则，请避免同一分类重复配置');
-
-    expect(detectMerchantActivityRuleConflicts([
-      {
-        id: 3,
-        activityId: 10,
-        ruleType: 'BUY_X_GET_Y',
-        productId: 9,
-        ruleConfigJson: '{"buyX":2,"getY":1}',
-        priority: 2,
-      },
-    ], {
-      ...validRuleDraft,
-      ruleType: 'BUY_X_GET_Y',
-      thresholdAmount: '',
-      discountAmount: '',
-      productId: 9,
-      priority: 5,
-    })).toContain('该商品已有买赠规则，请避免重复发放权益');
+    expect(conflicts).toContain('存在其他活动使用同一分类配置折扣规则');
   });
 });

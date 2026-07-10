@@ -15,6 +15,7 @@ import com.payment.entity.CouponTemplate;
 import com.payment.entity.CouponLockRecord;
 import com.payment.entity.CouponReleaseRecord;
 import com.payment.entity.CouponWriteOffRecord;
+import com.payment.entity.TenantMember;
 import com.payment.entity.UserCoupon;
 import com.payment.enums.CouponOwnerTypeEnum;
 import com.payment.enums.CouponScopeTypeEnum;
@@ -73,6 +74,25 @@ class CouponServiceImplTest {
         assertEquals(0, captor.getValue().getDeleted());
         assertNotNull(captor.getValue().getTemplateNo());
         assertEquals(result, captor.getValue());
+    }
+
+    @Test
+    void createTemplateShouldPersistMemberRestrictions() {
+        CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
+        CouponServiceImpl service = service(templateMapper, mock(UserCouponMapper.class), mock(CouponReceiveRecordMapper.class),
+                mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
+        CouponTemplateCreateDTO dto = fullReductionTemplate();
+        dto.setRequiredMemberLevel(3);
+        dto.setRequiredMemberTagIds("11,12");
+        dto.setExcludedMemberTagIds("[21]");
+
+        service.createTemplate(dto);
+
+        ArgumentCaptor<CouponTemplate> captor = ArgumentCaptor.forClass(CouponTemplate.class);
+        verify(templateMapper).insert(captor.capture());
+        assertEquals(3, captor.getValue().getRequiredMemberLevel());
+        assertEquals("11,12", captor.getValue().getRequiredMemberTagIds());
+        assertEquals("21", captor.getValue().getExcludedMemberTagIds());
     }
 
     @Test
@@ -248,18 +268,21 @@ class CouponServiceImplTest {
 
     @Test
     void receiveCouponShouldRejectWhenMemberLevelTooLow() {
-        // Member level restrictions removed from entity — test now expects success
         CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
-        CouponServiceImpl service = service(templateMapper, userCouponMapper, mock(CouponReceiveRecordMapper.class),
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        CouponServiceImpl service = service(templateMapper, mock(CouponScopeMapper.class), userCouponMapper,
+                tenantMemberMapper, mock(MemberAccountTagMapper.class), mock(CouponReceiveRecordMapper.class),
                 mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
+        CouponTemplate template = activeTemplate();
+        template.setRequiredMemberLevel(3);
 
-        when(templateMapper.selectById(201L)).thenReturn(activeTemplate());
-        when(userCouponMapper.claimCouponSlot(anyLong(), anyLong())).thenReturn(1);
-        when(userCouponMapper.selectCount(any())).thenReturn(0L);
+        TenantMember member = new TenantMember();
+        member.setMemberLevel(2);
+        when(templateMapper.selectById(201L)).thenReturn(template);
+        when(tenantMemberMapper.selectOne(any())).thenReturn(member);
 
-        // No longer throws — member level fields removed from entity
-        service.receiveCoupon(201L, 9L, 100L, "SO_REWARD_1");
+        assertThrows(BusinessException.class, () -> service.receiveCoupon(201L, 9L, 100L, "SO_REWARD_1"));
     }
 
     @Test
@@ -458,23 +481,24 @@ class CouponServiceImplTest {
 
     @Test
     void resolveCouponCandidateShouldRejectExcludedMemberTag() {
-        // Member tag restrictions removed from entity — test now expects success
         CouponTemplateMapper templateMapper = mock(CouponTemplateMapper.class);
         CouponScopeMapper scopeMapper = mock(CouponScopeMapper.class);
         UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
-        CouponServiceImpl service = service(templateMapper, scopeMapper, userCouponMapper, mock(CouponReceiveRecordMapper.class),
+        MemberAccountTagMapper memberAccountTagMapper = mock(MemberAccountTagMapper.class);
+        CouponServiceImpl service = service(templateMapper, scopeMapper, userCouponMapper, mock(TenantMemberMapper.class),
+                memberAccountTagMapper, mock(CouponReceiveRecordMapper.class),
                 mock(CouponLockRecordMapper.class), mock(CouponReleaseRecordMapper.class), mock(CouponWriteOffRecordMapper.class));
 
         CouponTemplate template = activeTemplate();
+        template.setExcludedMemberTagIds("7");
         when(userCouponMapper.selectById(501L)).thenReturn(receivedCoupon());
         when(templateMapper.selectById(201L)).thenReturn(template);
         when(scopeMapper.selectList(any())).thenReturn(List.of());
+        when(memberAccountTagMapper.selectCount(any())).thenReturn(1L);
 
-        // No longer throws — member tag fields removed from entity
-        CouponDiscountCandidateDTO result = service.resolveCouponCandidate(501L, 9L, 100L, List.of(
+        assertThrows(BusinessException.class, () -> service.resolveCouponCandidate(501L, 9L, 100L, List.of(
                 pricingItem(7L, "drink", "30.00", 1)
-        ));
-        assertNotNull(result);
+        )));
     }
 
     @Test

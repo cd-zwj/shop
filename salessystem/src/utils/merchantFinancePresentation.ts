@@ -1,8 +1,9 @@
 import type { MerchantTransaction, MerchantWalletSummary, MerchantWithdrawal } from '../types/merchant';
 
 export interface MerchantTransactionSummary {
-  paymentIncome: number;
-  rechargeIncome: number;
+ paymentIncome: number;
+  platformFeeIncome: number;
+ rechargeIncome: number;
   refundAmount: number;
   withdrawalAmount: number;
   otherChange: number;
@@ -25,8 +26,9 @@ export interface MerchantReconciliation {
 }
 
 const EMPTY_TRANSACTION_SUMMARY: MerchantTransactionSummary = {
-  paymentIncome: 0,
-  rechargeIncome: 0,
+ paymentIncome: 0,
+  platformFeeIncome: 0,
+ rechargeIncome: 0,
   refundAmount: 0,
   withdrawalAmount: 0,
   otherChange: 0,
@@ -42,8 +44,10 @@ export function summarizeMerchantTransactions(
     const absoluteAmount = Math.abs(amount);
 
     if (transaction.bizType === 'PAYMENT' && amount > 0) {
+      const feeAmount = normalizeAmount(transaction.feeAmount);
       return {
         ...summary,
+        platformFeeIncome: summary.platformFeeIncome + feeAmount,
         paymentIncome: summary.paymentIncome + amount,
         netChange: summary.netChange + amount,
         transactionCount: summary.transactionCount + 1,

@@ -98,10 +98,14 @@ export function getPurchaseDeliveryPresentation(record: PurchaseRecord): Purchas
   }
 
   if (record.productType === 'SUBSCRIPTION') {
+    const expireTime = stringValue(payload?.expireTime) || record.expireTime || undefined;
+    const benefitCode = stringValue(payload?.benefitCode);
     return {
       title,
       subtitle,
-      guidance: record.expireTime ? '订阅权益已激活，可在到期前持续使用。' : '订阅权益已激活。',
+      guidance: expireTime
+        ? `订阅权益已激活，有效期至 ${formatDateTime(expireTime)}。${benefitCode ? `权益编码：${benefitCode}` : ''}`
+        : '订阅权益已激活，可在购买记录中重新查看。',
     };
   }
 
@@ -115,4 +119,18 @@ export function getPurchaseDeliveryPresentation(record: PurchaseRecord): Purchas
 
 function stringValue(value: unknown) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).replace(/\//g, '-');
 }

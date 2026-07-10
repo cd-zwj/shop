@@ -202,12 +202,22 @@ public class WithdrawalServiceImpl implements WithdrawalService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void addMerchantBalance(Long tenantId, BigDecimal amount, String orderNo) {
+        addMerchantBalance(tenantId, amount, orderNo, BigDecimal.ZERO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void addMerchantBalance(Long tenantId, BigDecimal amount, String orderNo, BigDecimal platformFee) {
         if (tenantId == null) {
             throw new BusinessException("租户信息不存在");
         }
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             log.warn("增加商家余额金额无效 tenantId={}, amount={}", tenantId, amount);
             return;
+        }
+        BigDecimal safePlatformFee = platformFee == null ? BigDecimal.ZERO : platformFee;
+        if (safePlatformFee.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("平台服务费不能为负数");
         }
 
         MerchantBalance balance = getMerchantBalance(tenantId);
@@ -218,6 +228,7 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             balance.setFrozenBalance(BigDecimal.ZERO);
             balance.setTotalIncome(amount);
             balance.setTotalWithdrawal(BigDecimal.ZERO);
+            balance.setTotalPlatformFee(safePlatformFee);
             balance.setDeleted(0);
             balance.setCreateTime(LocalDateTime.now());
             balance.setUpdateTime(LocalDateTime.now());
@@ -226,13 +237,14 @@ public class WithdrawalServiceImpl implements WithdrawalService {
             } catch (Exception e) {
                 // 并发创建 → DuplicateKeyException → 回退到重试更新
                 log.warn("商家余额并发创建冲突，转为更新，tenantId={}", tenantId);
-                retryIncreaseMerchantBalance(tenantId, amount);
+                retryIncreaseMerchantBalance(tenantId, amount, safePlatformFee);
             }
         } else {
-            retryIncreaseMerchantBalance(tenantId, amount);
+            retryIncreaseMerchantBalance(tenantId, amount, safePlatformFee);
         }
 
-        log.info("增加商家余额成功 tenantId={}, amount={}, orderNo={}", tenantId, amount, orderNo);
+        log.info("增加商家余额成功 tenantId={}, amount={}, platformFee={}, orderNo={}",
+                tenantId, amount, safePlatformFee, orderNo);
     }
 
     /**
@@ -473,13 +485,13 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         throw new BusinessException("拒绝提现解冻余额失败，请重试");
     }
 
-    private void retryIncreaseMerchantBalance(Long tenantId, BigDecimal amount) {
+    private void retryIncreaseMerchantBalance(Long tenantId, BigDecimal amount, BigDecimal platformFee) {
         for (int attempt = 0; attempt < 3; attempt++) {
             MerchantBalance balance = getMerchantBalance(tenantId);
             if (balance == null) {
                 throw new BusinessException("创建商家余额失败");
             }
-            if (increaseAvailableBalance(balance, amount)) {
+            if (increaseAvailableBalance(balance, amount, platformFee)) {
                 return;
             }
         }
@@ -494,10 +506,11 @@ public class WithdrawalServiceImpl implements WithdrawalService {
         return merchantBalanceMapper.update(null, wrapper) > 0;
     }
 
-    private boolean increaseAvailableBalance(MerchantBalance balance, BigDecimal amount) {
+    private boolean increaseAvailableBalance(MerchantBalance balance, BigDecimal amount, BigDecimal platformFee) {
         UpdateWrapper<MerchantBalance> wrapper = baseBalanceUpdate(balance)
                 .setSql("balance = COALESCE(balance, 0) + " + moneyLiteral(amount))
-                .setSql("total_income = COALESCE(total_income, 0) + " + moneyLiteral(amount));
+                .setSql("total_income = COALESCE(total_income, 0) + " + moneyLiteral(amount))
+                .setSql("total_platform_fee = COALESCE(total_platform_fee, 0) + " + moneyLiteral(platformFee));
         return merchantBalanceMapper.update(null, wrapper) > 0;
     }
 

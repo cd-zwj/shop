@@ -189,7 +189,7 @@ public class PromotionServiceImpl implements PromotionService {
             throw new BusinessException("活动规则类型必须与活动类型一致");
         }
         validateRule(ruleType, dto);
-        validateRuleConflicts(ruleType, dto);
+        validateRuleConflicts(activity, ruleType, dto);
 
         ActivityRule rule = new ActivityRule();
         rule.setActivityId(activity.getId());
@@ -319,8 +319,14 @@ public class PromotionServiceImpl implements PromotionService {
         throw new BusinessException("当前活动规则暂不支持自动计算");
     }
 
+    /** 校验活动规则冲突，包含同活动内和跨活动冲突。 */
+    private void validateRuleConflicts(PromotionActivity activity, ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
+        validateIntraActivityRuleConflicts(ruleType, dto);
+        validateCrossActivityRuleConflicts(activity, ruleType, dto);
+    }
+
     /** 校验同一活动内的规则冲突，避免结算命中顺序和优惠含义不清晰。 */
-    private void validateRuleConflicts(ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
+    private void validateIntraActivityRuleConflicts(ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
         List<ActivityRule> existingRules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
                 .eq(ActivityRule::getActivityId, dto.getActivityId())
                 .eq(ActivityRule::getDeleted, 0));
@@ -348,6 +354,57 @@ public class PromotionServiceImpl implements PromotionService {
         }
         if (duplicateThreshold && ruleType == ActivityTypeEnum.DISCOUNT_RATE) {
             throw new BusinessException("已有相同门槛的满折规则");
+        }
+    }
+
+    /** 校验跨活动冲突，仅针对同租户、状态为 DRAFT/ACTIVE 且时间窗口重叠的其他活动。 */
+    private void validateCrossActivityRuleConflicts(PromotionActivity activity, ActivityTypeEnum ruleType, ActivityRuleCreateDTO dto) {
+        if (!CouponOwnerTypeEnum.TENANT.name().equals(activity.getActivityScope()) || activity.getTenantId() == null) {
+            return;
+        }
+
+        List<PromotionActivity> overlappingActivities = promotionActivityMapper.selectList(new LambdaQueryWrapper<PromotionActivity>()
+                .eq(PromotionActivity::getActivityScope, CouponOwnerTypeEnum.TENANT.name())
+                .eq(PromotionActivity::getTenantId, activity.getTenantId())
+                .eq(PromotionActivity::getDeleted, 0)
+                .in(PromotionActivity::getStatus, List.of(STATUS_DRAFT, STATUS_ACTIVE))
+                .ne(PromotionActivity::getId, activity.getId())
+                .le(PromotionActivity::getStartTime, activity.getEndTime())
+                .ge(PromotionActivity::getEndTime, activity.getStartTime()));
+        if (overlappingActivities == null || overlappingActivities.isEmpty()) {
+            return;
+        }
+
+        Set<Long> activityIds = overlappingActivities.stream()
+                .map(PromotionActivity::getId)
+                .collect(Collectors.toCollection(HashSet::new));
+        List<ActivityRule> existingRules = activityRuleMapper.selectList(new LambdaQueryWrapper<ActivityRule>()
+                .in(ActivityRule::getActivityId, activityIds)
+                .eq(ActivityRule::getDeleted, 0));
+        if (existingRules == null || existingRules.isEmpty()) {
+            return;
+        }
+
+        int priority = dto.getPriority() == null ? 0 : dto.getPriority();
+        boolean duplicatePriority = existingRules.stream()
+                .map(ActivityRule::getPriority)
+                .map(value -> value == null ? 0 : value)
+                .anyMatch(value -> value == priority);
+        if (duplicatePriority) {
+            throw new BusinessException("存在其他活动使用相同优先级的规则，请避免跨活动命中顺序不清晰");
+        }
+
+        BigDecimal threshold = safe(dto.getThresholdAmount());
+        boolean duplicateThreshold = existingRules.stream()
+                .filter(rule -> ruleType.name().equals(rule.getRuleType()))
+                .map(ActivityRule::getThresholdAmount)
+                .map(this::safe)
+                .anyMatch(value -> value.compareTo(threshold) == 0);
+        if (duplicateThreshold && ruleType == ActivityTypeEnum.FULL_REDUCTION) {
+            throw new BusinessException("存在其他活动配置了相同门槛的满减规则");
+        }
+        if (duplicateThreshold && ruleType == ActivityTypeEnum.DISCOUNT_RATE) {
+            throw new BusinessException("存在其他活动配置了相同门槛的满折规则");
         }
     }
 

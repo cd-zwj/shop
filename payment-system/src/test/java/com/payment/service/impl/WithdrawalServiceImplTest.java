@@ -12,12 +12,14 @@ import com.payment.mapper.UserMapper;
 import com.payment.mapper.WithdrawalMapper;
 import com.payment.service.UserNotificationService;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
@@ -129,6 +131,24 @@ class WithdrawalServiceImplTest {
 
         verify(merchantBalanceMapper, org.mockito.Mockito.times(2)).update(isNull(), any(UpdateWrapper.class));
         verify(merchantBalanceMapper, never()).updateById(any(MerchantBalance.class));
+    }
+
+    @Test
+    void addMerchantBalanceShouldPersistPlatformFeeWhenCreatingBalance() {
+        WithdrawalMapper withdrawalMapper = mock(WithdrawalMapper.class);
+        MerchantBalanceMapper merchantBalanceMapper = mock(MerchantBalanceMapper.class);
+        WithdrawalServiceImpl service = service(withdrawalMapper, merchantBalanceMapper);
+
+        when(merchantBalanceMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+
+        service.addMerchantBalance(9L, new BigDecimal("97.00"), "SO1002", new BigDecimal("3.00"));
+
+        ArgumentCaptor<MerchantBalance> balanceCaptor = ArgumentCaptor.forClass(MerchantBalance.class);
+        verify(merchantBalanceMapper).insert(balanceCaptor.capture());
+        MerchantBalance inserted = balanceCaptor.getValue();
+        assertEquals(new BigDecimal("97.00"), inserted.getBalance());
+        assertEquals(new BigDecimal("97.00"), inserted.getTotalIncome());
+        assertEquals(new BigDecimal("3.00"), inserted.getTotalPlatformFee());
     }
 
     @Test

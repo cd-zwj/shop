@@ -19,6 +19,7 @@ import type { PromotionActivity, ActivityRule, ActivityRuleCreatePayload, Activi
 import { cn } from '../../lib/utils';
 import {
   detectMerchantActivityRuleConflicts,
+  detectMerchantCrossActivityRuleConflicts,
   normalizeRuleType,
   validateMerchantActivityDraft,
   validateMerchantActivityRuleDraft,
@@ -87,28 +88,45 @@ export default function MerchantActivities() {
     void loadActivities();
   }, [loadActivities]);
 
-  const loadRules = async (activityId: number) => {
-    if (!tenantId) return;
+  const ensureRulesForActivities = useCallback(async (activityIds: number[]) => {
+    if (!tenantId) return undefined;
+
+    const missingIds = activityIds.filter((activityId) => activityRules[activityId] == null);
+    if (missingIds.length === 0) {
+      return undefined;
+    }
+
     setIsRulesLoading(true);
     try {
-      const data = await merchantMarketingService.getActivityRules(tenantId, activityId);
+      const results = await Promise.all(
+        missingIds.map(async (activityId) => ({
+          activityId,
+          rules: await merchantMarketingService.getActivityRules(tenantId, activityId),
+        })),
+      );
+      const loadedRules: Record<number, ActivityRule[]> = {};
+      results.forEach(({ activityId, rules }) => {
+        loadedRules[activityId] = rules || [];
+      });
       setActivityRules((prev) => ({
         ...prev,
-        [activityId]: data || [],
+        ...loadedRules,
       }));
+      return loadedRules;
     } catch (err) {
       showToast(err instanceof Error ? err.message : '获取规则列表失败', 'error');
+      return undefined;
     } finally {
       setIsRulesLoading(false);
     }
-  };
+  }, [activityRules, tenantId, showToast]);
 
   const toggleExpand = async (activityId: number) => {
     if (expandedActivityId === activityId) {
       setExpandedActivityId(null);
     } else {
       setExpandedActivityId(activityId);
-      await loadRules(activityId);
+      await ensureRulesForActivities([activityId]);
     }
   };
 
@@ -205,11 +223,39 @@ export default function MerchantActivities() {
       if (categoryCode) payload.categoryCode = categoryCode.trim();
       if (ruleConfigJson) payload.ruleConfigJson = ruleConfigJson.trim();
 
+      const loadedRules = await ensureRulesForActivities(activities
+        .filter((activity) => activity.status === 'DRAFT' || activity.status === 'ACTIVE')
+        .map((activity) => activity.id)) ?? {};
+
+      const crossConflictIssues = detectMerchantCrossActivityRuleConflicts(
+        activities,
+        {
+          ...activityRules,
+          ...loadedRules,
+        },
+        targetActivity,
+        {
+          ruleType,
+          thresholdAmount,
+          discountAmount,
+          discountRate,
+          productId,
+          categoryCode,
+          ruleConfigJson,
+          priority,
+        },
+      );
+
+      if (crossConflictIssues.length > 0) {
+        showToast(crossConflictIssues.join('；'), 'error');
+        return;
+      }
+
       await merchantMarketingService.addActivityRule(tenantId, targetActivity.id, payload);
       showToast('添加活动规则成功', 'success');
       setIsCreateRuleOpen(false);
       resetRuleForm();
-      await loadRules(targetActivity.id);
+      await ensureRulesForActivities([targetActivity.id]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : '创建规则失败', 'error');
     } finally {

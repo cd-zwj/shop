@@ -18,6 +18,9 @@ export interface MerchantCouponTemplate {
   validDaysAfterReceive: number | null;
   description: string | null;
   stackStrategy: string | null;
+  requiredMemberLevel?: number | null;
+  requiredMemberTagIds?: string | null;
+  excludedMemberTagIds?: string | null;
   receivedQuantity?: number | null;
   usedQuantity?: number | null;
   createTime: string;
@@ -39,6 +42,9 @@ export interface CouponTemplateCreatePayload {
   validDaysAfterReceive?: number;
   description?: string;
   stackStrategy?: string;
+  requiredMemberLevel?: number;
+  requiredMemberTagIds?: string;
+  excludedMemberTagIds?: string;
   ownerType?: 'PLATFORM' | 'TENANT';
   tenantId?: number;
 }
@@ -121,6 +127,9 @@ export interface MarketingEffectSummary {
   usedCount: number;
   remainingStock: number;
   writeOffRate: number;
+  activityCount?: number;
+  activeActivityCount?: number;
+  activityDiscountAmount?: number;
 }
 
 export interface CouponEffect {

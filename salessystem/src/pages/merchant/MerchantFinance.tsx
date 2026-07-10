@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Landmark,
   List,
+  Receipt,
   RefreshCw,
   ShieldCheck,
   Wallet,
@@ -33,6 +34,7 @@ const DEFAULT_SUMMARY: MerchantWalletSummary = {
   frozenBalance: 0,
   totalIncome: 0,
   totalWithdrawal: 0,
+  totalPlatformFee: 0,
 };
 
 const TX_TYPE_LABEL: Record<string, string> = {
@@ -229,6 +231,13 @@ export default function MerchantFinance() {
             value: formatCurrency(summary.totalWithdrawal),
             hint: `${pendingWithdrawals.length} 笔待审核`,
             icon: Landmark,
+            tone: 'bg-white',
+          },
+          {
+            label: '累计手续费',
+            value: formatCurrency(summary.totalPlatformFee),
+            hint: '平台服务费抽成累计',
+            icon: Receipt,
             tone: 'bg-white',
           },
         ].map((card) => (
@@ -428,13 +437,14 @@ export default function MerchantFinance() {
           </span>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           {[
             { label: '账面余额', value: formatCurrency(reconciliation.ledgerBalance), hint: '可提现 + 冻结' },
             { label: '收入留存', value: formatCurrency(reconciliation.retainedAmount), hint: '累计收入 - 累计提现' },
             { label: '退款/调整差额', value: formatCurrency(reconciliation.adjustmentAmount), hint: '留存 - 账面余额' },
-            { label: '待审核提现', value: formatCurrency(reconciliation.pendingWithdrawalAmount), hint: '当前列表待审核合计' },
-            { label: '筛选页净变动', value: formatCurrency(reconciliation.currentPageNetChange), hint: '当前流水页合计' },
+           { label: '待审核提现', value: formatCurrency(reconciliation.pendingWithdrawalAmount), hint: '当前列表待审核合计' },
+            { label: '累计手续费', value: formatCurrency(summary.totalPlatformFee), hint: '平台服务费抽成累计' },
+           { label: '筛选页净变动', value: formatCurrency(reconciliation.currentPageNetChange), hint: '当前流水页合计' },
           ].map((item) => (
             <div key={item.label} className="rounded-[28px] bg-slate-50 p-5">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{item.label}</p>
@@ -512,7 +522,7 @@ export default function MerchantFinance() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           {[
             {
               label: '当前页收款',
@@ -526,8 +536,13 @@ export default function MerchantFinance() {
             },
             {
               label: '当前页退款',
-              value: formatCurrency(transactionSummary.refundAmount),
-              tone: 'text-red-600',
+             value: formatCurrency(transactionSummary.refundAmount),
+             tone: 'text-red-600',
+           },
+            {
+              label: '当前页手续费',
+              value: formatCurrency(transactionSummary.platformFeeIncome),
+              tone: 'text-amber-600',
             },
             {
               label: '当前页提现',
@@ -588,6 +603,7 @@ export default function MerchantFinance() {
                     <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">类型</th>
                     <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">关联单号</th>
                     <th className="pb-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">变动金额</th>
+                    <th className="pb-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">手续费</th>
                     <th className="pb-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-400">变动后余额</th>
                     <th className="pb-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-400">备注</th>
                   </tr>
@@ -606,6 +622,9 @@ export default function MerchantFinance() {
                       <td className="py-3.5 font-mono text-xs text-slate-500">{tx.bizNo ?? '--'}</td>
                       <td className={cn('py-3.5 text-right font-black', (tx.changeAmount ?? 0) >= 0 ? 'text-green-600' : 'text-red-600')}>
                         {(tx.changeAmount ?? 0) >= 0 ? '+' : ''}{formatCurrency(tx.changeAmount)}
+                      </td>
+                      <td className="py-3.5 text-right font-medium text-slate-500">
+                        {tx.feeAmount != null && tx.feeAmount > 0 ? `-${formatCurrency(tx.feeAmount)}` : '--'}
                       </td>
                       <td className="py-3.5 text-right font-medium text-slate-600">
                         {tx.balanceAfter != null ? formatCurrency(tx.balanceAfter) : '--'}

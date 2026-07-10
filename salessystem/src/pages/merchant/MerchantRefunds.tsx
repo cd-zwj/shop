@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, ClipboardList, Check, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { AlertCircle, ClipboardList, Check, Download, RefreshCw, X, ShieldAlert } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -13,6 +13,7 @@ import {
   getMerchantRefundRiskItems,
   getMerchantRefundToneClass,
 } from '../../utils/merchantRefundPresentation';
+import { downloadMerchantRefundsCsv } from '../../utils/merchantRefundExport';
 
 const REFUND_TABS = [
   { id: 'ALL', label: '全部' },
@@ -152,16 +153,31 @@ export default function MerchantRefunds() {
   const getRefundSuggestionLabel = (refund: Refund) =>
     refund.refundSuggestion || (refund.quickRefundSuggested ? '建议同意后快速退款' : '同意前需核对交付状态');
 
+  const handleExportCsv = () => {
+    const exported = downloadMerchantRefundsCsv(refunds);
+    showToast(exported ? '退款 CSV 已导出' : '暂无可导出的退款单', exported ? 'success' : 'info');
+  };
+
   const auditingPresentation = auditingRefund ? getMerchantRefundPresentation(auditingRefund) : null;
   const auditingRiskItems = auditingRefund ? getMerchantRefundRiskItems(auditingRefund) : [];
 
   return (
     <div className="flex flex-col gap-6 p-6 pb-20">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900">退款与售后服务</h1>
-        <p className="text-sm font-medium text-slate-500">
-          管理并处理店铺中的售后申请。对待审核的申请，请及时查验并处理。
-        </p>
+      <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-black tracking-tight text-slate-900">退款与售后服务</h1>
+          <p className="text-sm font-medium text-slate-500">
+            管理并处理店铺中的售后申请。对待审核的申请，请及时查验并处理。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50"
+        >
+          <Download className="h-4 w-4" />
+          导出 CSV
+        </button>
       </header>
 
       {/* Tabs */}

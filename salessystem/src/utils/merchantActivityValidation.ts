@@ -1,4 +1,4 @@
-import type { ActivityRule, ActivityRuleCreatePayload } from '../types/marketing';
+import type { ActivityRule, ActivityRuleCreatePayload, PromotionActivity } from '../types/marketing';
 
 export type ActivityDraftValue = number | string | null | undefined;
 
@@ -124,8 +124,84 @@ export function detectMerchantActivityRuleConflicts(
   return issues;
 }
 
+export function detectMerchantCrossActivityRuleConflicts(
+  activities: PromotionActivity[],
+  activityRules: Record<number, ActivityRule[]>,
+  targetActivity: Pick<PromotionActivity, 'id' | 'startTime' | 'endTime' | 'status'>,
+  draft: MerchantActivityRuleDraft,
+) {
+  const issues: string[] = [];
+  const priority = toNumber(draft.priority);
+  const ruleType = normalizeRuleType(draft.ruleType);
+  const thresholdAmount = toNumber(draft.thresholdAmount);
+  const productId = toNumber(draft.productId);
+  const categoryCode = draft.categoryCode.trim().toLowerCase();
+
+  const overlappingActivities = activities.filter((activity) => (
+    activity.id !== targetActivity.id
+    && (activity.status === 'DRAFT' || activity.status === 'ACTIVE')
+    && hasOverlappingWindow(targetActivity.startTime, targetActivity.endTime, activity.startTime, activity.endTime)
+  ));
+
+  const existingRules = overlappingActivities.flatMap((activity) => activityRules[activity.id] ?? []);
+  if (existingRules.length === 0) {
+    return issues;
+  }
+
+  if (existingRules.some((rule) => Number(rule.priority ?? 0) === priority)) {
+    issues.push('存在其他活动使用相同优先级的规则，请避免跨活动命中顺序不清晰');
+  }
+
+  if (ruleType === 'FULL_REDUCTION' && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'FULL_REDUCTION'
+    && Number(rule.thresholdAmount ?? 0) === thresholdAmount,
+  )) {
+    issues.push('存在其他活动配置了相同门槛的满减规则');
+  }
+
+  if (ruleType === 'DISCOUNT_RATE' && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'DISCOUNT_RATE'
+    && Number(rule.thresholdAmount ?? 0) === thresholdAmount,
+  )) {
+    issues.push('存在其他活动配置了相同门槛的满折规则');
+  }
+
+  if (ruleType === 'BUY_X_GET_Y' && productId > 0 && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'BUY_X_GET_Y'
+    && Number(rule.productId ?? 0) === productId,
+  )) {
+    issues.push('存在其他活动使用同一商品配置买赠规则');
+  }
+
+  if (ruleType === 'CATEGORY_DISCOUNT' && categoryCode && existingRules.some((rule) =>
+    normalizeRuleType(rule.ruleType) === 'CATEGORY_DISCOUNT'
+    && String(rule.categoryCode ?? '').trim().toLowerCase() === categoryCode,
+  )) {
+    issues.push('存在其他活动使用同一分类配置折扣规则');
+  }
+
+  return issues;
+}
+
 export function normalizeRuleType(ruleType: ActivityRuleCreatePayload['ruleType'] | string) {
   return ruleType === 'FULL_DISCOUNT' ? 'DISCOUNT_RATE' : ruleType;
+}
+
+function hasOverlappingWindow(
+  leftStartTime: string,
+  leftEndTime: string,
+  rightStartTime: string,
+  rightEndTime: string,
+) {
+  const leftStart = parseDateTime(leftStartTime);
+  const leftEnd = parseDateTime(leftEndTime);
+  const rightStart = parseDateTime(rightStartTime);
+  const rightEnd = parseDateTime(rightEndTime);
+  if (!leftStart || !leftEnd || !rightStart || !rightEnd) {
+    return false;
+  }
+
+  return leftStart.getTime() <= rightEnd.getTime() && rightStart.getTime() <= leftEnd.getTime();
 }
 
 function validateDiscountRate(discountRate: number, issues: string[]) {

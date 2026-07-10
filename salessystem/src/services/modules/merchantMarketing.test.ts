@@ -52,6 +52,52 @@ describe('merchantMarketingService', () => {
     expect(result.ownerType).toBe('TENANT');
   });
 
+  it('maps merchant coupon creation payload to backend DTO names with member restrictions', async () => {
+    mockRequest.mockResolvedValue({
+      id: 9,
+      templateName: '银卡专享',
+      couponType: 'FULL_REDUCTION',
+    });
+
+    await merchantMarketingService.createCouponTemplate(3, {
+      name: '银卡专享',
+      couponType: 'FIXED',
+      thresholdAmount: 100,
+      discountAmount: 10,
+      totalStock: 50,
+      perUserLimit: 1,
+      validDaysAfterReceive: 30,
+      requiredMemberLevel: 2,
+      requiredMemberTagIds: '5,6',
+      excludedMemberTagIds: '9',
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      url: '/v1/merchant/tenants/3/marketing/coupons',
+      method: 'post',
+      data: {
+        templateName: '银卡专享',
+        couponType: 'FULL_REDUCTION',
+        thresholdAmount: 100,
+        discountAmount: 10,
+        discountRate: undefined,
+        maxDiscountAmount: undefined,
+        totalQuantity: 50,
+        perUserLimit: 1,
+        receiveStartTime: undefined,
+        receiveEndTime: undefined,
+        validStartTime: undefined,
+        validEndTime: undefined,
+        validDays: 30,
+        description: undefined,
+        requiredMemberLevel: 2,
+        requiredMemberTagIds: '5,6',
+        excludedMemberTagIds: '9',
+      },
+      authRole: 'merchant',
+    });
+  });
+
   it('normalizes backend activity and rule fields for merchant pages', async () => {
     mockRequest.mockResolvedValue([
       {

@@ -10,11 +10,11 @@ import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
+import com.payment.service.MerchantSettlementService;
 import com.payment.service.MessageIdempotentService;
 import com.payment.service.ProductInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
-import com.payment.service.WithdrawalService;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -126,8 +126,8 @@ class PaymentV1ConsumerTest {
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_PAYABLE\"}");
 
-        verify(fixture.withdrawalService).addMerchantBalance(9L, new BigDecimal("60.00"), "SO_PAYABLE");
-        verify(fixture.withdrawalService, never()).addMerchantBalance(9L, new BigDecimal("80.00"), "SO_PAYABLE");
+        verify(fixture.settlementService).settleOrder(9L, new BigDecimal("60.00"), "SO_PAYABLE");
+        verify(fixture.settlementService, never()).settleOrder(9L, new BigDecimal("80.00"), "SO_PAYABLE");
     }
 
     @Test
@@ -147,7 +147,7 @@ class PaymentV1ConsumerTest {
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_ZERO\"}");
 
-        verify(fixture.withdrawalService, never()).addMerchantBalance(any(), any(), any());
+        verify(fixture.settlementService, never()).settleOrder(any(), any(), any());
     }
 
     @Test
@@ -169,7 +169,7 @@ class PaymentV1ConsumerTest {
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_LEGACY\"}");
 
-        verify(fixture.withdrawalService).addMerchantBalance(9L, new BigDecimal("65.00"), "SO_LEGACY");
+        verify(fixture.settlementService).settleOrder(9L, new BigDecimal("65.00"), "SO_LEGACY");
     }
 
     private static SalesOrder paidOrderFixture(String orderNo) {
@@ -196,7 +196,7 @@ class PaymentV1ConsumerTest {
         private final SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         private final SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
         private final ProductInventoryService productInventoryService = mock(ProductInventoryService.class);
-        private final WithdrawalService withdrawalService = mock(WithdrawalService.class);
+        private final MerchantSettlementService settlementService = mock(MerchantSettlementService.class);
         private final MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         private final MemberService memberService = mock(MemberService.class);
         private final PointsRuleMapper pointsRuleMapper = mock(PointsRuleMapper.class);
@@ -208,7 +208,7 @@ class PaymentV1ConsumerTest {
                 salesOrderMapper,
                 salesOrderItemMapper,
                 productInventoryService,
-                withdrawalService,
+                settlementService,
                 memberPointsAccountService,
                 pointsRuleMapper,
                 memberService,

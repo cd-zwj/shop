@@ -82,6 +82,7 @@ describe('MerchantFinance', () => {
       frozenBalance: 100,
       totalIncome: 5000,
       totalWithdrawal: 800,
+      totalPlatformFee: 0,
     });
     mockedFinanceService.getPointsRule.mockResolvedValue({ pointsRatio: 1, enabled: true });
     mockedFinanceService.listRechargeRules.mockResolvedValue([]);

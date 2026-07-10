@@ -169,6 +169,8 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
 
         Long currentLevelId = null;
         String currentLevelName = null;
+        java.math.BigDecimal currentDiscountRate = null;
+        String currentBenefitJson = null;
         if (member != null && member.getMemberLevel() != null && member.getMemberLevel() > 0) {
             MemberLevel level = memberLevelMapper.selectOne(
                     new LambdaQueryWrapper<MemberLevel>()
@@ -179,6 +181,8 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
             if (level != null) {
                 currentLevelId = level.getId();
                 currentLevelName = level.getLevelName();
+                currentDiscountRate = level.getDiscountRate();
+                currentBenefitJson = level.getBenefitJson();
             }
         }
 
@@ -202,6 +206,8 @@ public class MemberGrowthServiceImpl implements MemberGrowthService {
                 .levelId(currentLevelId)
                 .levelName(currentLevelName)
                 .nextLevelGrowth(nextLevelGrowth)
+                .discountRate(currentDiscountRate)
+                .benefitJson(currentBenefitJson)
                 .build();
     }
 

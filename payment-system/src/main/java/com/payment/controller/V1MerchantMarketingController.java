@@ -470,6 +470,9 @@ public class V1MerchantMarketingController {
             target.setValidStartTime(source.getValidStartTime());
             target.setValidEndTime(source.getValidEndTime());
             target.setDescription(source.getDescription());
+            target.setRequiredMemberLevel(source.getRequiredMemberLevel());
+            target.setRequiredMemberTagIds(source.getRequiredMemberTagIds());
+            target.setExcludedMemberTagIds(source.getExcludedMemberTagIds());
         }
         target.setTenantId(tenantId);
         target.setTemplateScope(CouponOwnerTypeEnum.TENANT.name());

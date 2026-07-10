@@ -90,6 +90,7 @@ export default function GrowthCenter() {
     overview?.nextLevelGrowth && overview.nextLevelGrowth > 0
       ? Math.min(100, Math.round((overview.totalGrowth / overview.nextLevelGrowth) * 100))
       : 100;
+  const benefitItems = parseBenefitItems(overview?.benefitJson);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 md:mt-8">
@@ -181,6 +182,23 @@ export default function GrowthCenter() {
                 <p className="text-[11px] text-emerald-400 font-medium">
                   恭喜您已达最高等级，尽享尊享权益！
                 </p>
+              )}
+              {(overview.discountRate || benefitItems.length > 0) && (
+                <div className="mt-3 rounded-2xl bg-white/10 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">当前权益</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {overview.discountRate && overview.discountRate > 0 && overview.discountRate < 1 && (
+                      <span className="rounded-xl bg-emerald-400/15 px-3 py-1 text-xs font-black text-emerald-300">
+                        {(overview.discountRate * 10).toFixed(1).replace(/\.0$/, '')} 折
+                      </span>
+                    )}
+                    {benefitItems.map((item) => (
+                      <span key={item} className="rounded-xl bg-white/10 px-3 py-1 text-xs font-bold text-white">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}
@@ -321,4 +339,22 @@ export default function GrowthCenter() {
       </section>
     </div>
   );
+}
+
+function parseBenefitItems(value?: string | null) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).filter(Boolean).slice(0, 6);
+    }
+    if (parsed && typeof parsed === 'object') {
+      return Object.entries(parsed as Record<string, unknown>)
+        .map(([key, entry]) => `${key}: ${String(entry)}`)
+        .slice(0, 6);
+    }
+  } catch {
+    return value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 6);
+  }
+  return [];
 }

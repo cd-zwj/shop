@@ -13,12 +13,12 @@ import org.springframework.stereotype.Component;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.time.LocalDateTime;
 
 /**
- * 订阅 / 权益包交付策略（占位）。
+ * 订阅 / 权益包交付策略。
  *
- * 第一版仅从 deliveryConfig.validityDays 读出有效期天数，标 DELIVERED，
- * 真正的"权益判定 / 续费 / 到期降权"在后续批次补。
+ * 当前本地闭环生成可追溯的激活与到期信息，后续真实权益判定可复用 payload 中的 benefitCode。
  */
 @Slf4j
 @Component
@@ -50,10 +50,23 @@ public class SubscriptionDeliveryStrategy implements DeliveryStrategy {
             }
         }
 
+        LocalDateTime activatedTime = LocalDateTime.now();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("validityDays", validityDays);
-        payload.put("placeholder", true);
-        payload.put("note", "权益生命周期尚未接入,当前为占位实现");
+        payload.put("activatedTime", activatedTime.toString());
+        payload.put("expireTime", activatedTime.plusDays(validityDays).toString());
+        payload.put("placeholder", false);
+        payload.put("note", "订阅权益已激活，可在有效期内重复查看。");
+        if (config != null && !config.isBlank()) {
+            try {
+                JsonNode cfg = JsonUtils.fromJsonTree(config);
+                if (cfg != null && cfg.hasNonNull("benefitCode")) {
+                    payload.put("benefitCode", cfg.get("benefitCode").asText());
+                }
+            } catch (Exception ignored) {
+                // invalid config was already logged while resolving validityDays
+            }
+        }
         return DeliveryResult.delivered(JsonUtils.toJson(payload));
     }
 }

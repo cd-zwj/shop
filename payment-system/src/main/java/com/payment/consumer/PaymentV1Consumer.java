@@ -18,7 +18,7 @@ import com.payment.service.MessageIdempotentService;
 import com.payment.service.ProductInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
-import com.payment.service.WithdrawalService;
+import com.payment.service.MerchantSettlementService;
 import com.payment.service.delivery.OrderDeliveryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +53,8 @@ public class PaymentV1Consumer {
     private final SalesOrderItemMapper salesOrderItemMapper;
     /** 商品库存服务 */
     private final ProductInventoryService productInventoryService;
-    /** 提现/商户余额服务 */
-    private final WithdrawalService withdrawalService;
+    /** 商户订单结算服务（含平台服务费抽成） */
+    private final MerchantSettlementService settlementService;
     /** 会员积分账户服务 */
     private final MemberPointsAccountService memberPointsAccountService;
     /** 积分规则 Mapper */
@@ -198,7 +198,7 @@ public class PaymentV1Consumer {
         BigDecimal merchantWalletDeductAmount = amountOrZero(salesOrder.getMerchantWalletDeductAmount());
         BigDecimal settlementAmount = payableAmount.subtract(merchantWalletDeductAmount);
         if (settlementAmount.compareTo(BigDecimal.ZERO) > 0) {
-            withdrawalService.addMerchantBalance(salesOrder.getTenantId(), settlementAmount, orderNo);
+            settlementService.settleOrder(salesOrder.getTenantId(), settlementAmount, orderNo);
         }
 
         PointsRule pointsRule = pointsRuleMapper.selectOne(new LambdaQueryWrapper<PointsRule>()
