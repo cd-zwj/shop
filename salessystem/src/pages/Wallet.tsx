@@ -75,8 +75,13 @@ export default function UserWallet() {
       (acc, item) => ({
         points: acc.points + Number(item.points || 0),
         wallet: acc.wallet + Number(item.walletAvailableAmount || 0),
+        usableCoupons: acc.usableCoupons + Number(item.usableCouponCount || 0),
+        lockedCoupons: acc.lockedCoupons + Number(item.lockedCouponCount || 0),
+        usedCoupons: acc.usedCoupons + Number(item.usedCouponCount || 0),
+        expiredCoupons: acc.expiredCoupons + Number(item.expiredCouponCount || 0),
+        growth: acc.growth + Number(item.totalGrowth || 0),
       }),
-      { points: 0, wallet: 0 },
+      { points: 0, wallet: 0, usableCoupons: 0, lockedCoupons: 0, usedCoupons: 0, expiredCoupons: 0, growth: 0 },
     );
   }, [tenantAssets]);
 
@@ -151,11 +156,25 @@ export default function UserWallet() {
             icon={<Star className="h-6 w-6 fill-current" />}
           />
           <MetricCard
+            label="可用优惠券"
+            value={isLoading ? '...' : tenantAssetTotals.usableCoupons.toLocaleString()}
+            accent="text-amber-600"
+            bg="bg-amber-50"
+            icon={<Ticket className="h-6 w-6 fill-current" />}
+          />
+          <MetricCard
+            label="成长值"
+            value={isLoading ? '...' : tenantAssetTotals.growth.toLocaleString()}
+            accent="text-emerald-600"
+            bg="bg-emerald-50"
+            icon={<TrendingUp className="h-6 w-6" />}
+          />
+          <MetricCard
             label="关联商户"
             value={isLoading ? '...' : tenantAssets.length.toString()}
             accent="text-primary"
             bg="bg-primary/5"
-            icon={<Ticket className="h-6 w-6 fill-current" />}
+            icon={<Store className="h-6 w-6" />}
           />
         </div>
       </div>
@@ -165,7 +184,7 @@ export default function UserWallet() {
           <div>
             <h3 className="text-xl font-black text-slate-900">商户资产概览</h3>
             <p className="mt-1 text-xs font-bold text-slate-400">
-              商户钱包合计 {formatCurrency(tenantAssetTotals.wallet)} · 积分合计 {tenantAssetTotals.points.toLocaleString()} 分
+              商户钱包合计 {formatCurrency(tenantAssetTotals.wallet)} · 积分 {tenantAssetTotals.points.toLocaleString()} · 可用券 {tenantAssetTotals.usableCoupons.toLocaleString()} 张 · 成长值 {tenantAssetTotals.growth.toLocaleString()}
             </p>
           </div>
         </div>
@@ -196,8 +215,13 @@ export default function UserWallet() {
                   <div className="mt-0.5 flex flex-wrap gap-2 text-xs font-semibold text-slate-400">
                     <span>商户钱包 {formatCurrency(asset.walletAvailableAmount)}</span>
                     <span>积分 {Number(asset.points || 0).toLocaleString()} 分</span>
+                    <span>可用券 {Number(asset.usableCouponCount || 0).toLocaleString()} 张</span>
+                    <span>成长值 {Number(asset.totalGrowth || 0).toLocaleString()}</span>
                     {asset.expiringSoonPoints > 0 && (
                       <span className="text-amber-600">30天内过期 {asset.expiringSoonPoints.toLocaleString()} 分</span>
+                    )}
+                    {Number(asset.lockedCouponCount || 0) > 0 && (
+                      <span className="text-violet-600">锁定券 {Number(asset.lockedCouponCount).toLocaleString()} 张</span>
                     )}
                   </div>
                 </div>

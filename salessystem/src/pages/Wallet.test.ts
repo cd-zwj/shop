@@ -70,12 +70,19 @@ describe('UserWallet', () => {
       walletFrozenAmount: 0,
       points: 88,
       expiringSoonPoints: 0,
+      usableCouponCount: 3,
+      lockedCouponCount: 1,
+      usedCouponCount: 2,
+      expiredCouponCount: 4,
+      totalGrowth: 260,
     }]);
 
     const element = await renderWallet();
 
     expect(element.textContent).toContain('本地测试店');
     expect(element.textContent).toContain('商户钱包 ¥120.00');
+    expect(element.textContent).toContain('可用券 3 张');
+    expect(element.textContent).toContain('成长值 260');
     expect(element.textContent).toContain('钱包明细');
   });
 

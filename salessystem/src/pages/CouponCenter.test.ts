@@ -80,6 +80,45 @@ async function renderCouponCenter() {
 }
 
 describe('CouponCenter', () => {
+  it('shows a summarized coupon usage timeline', async () => {
+    mockedCatalogService.listTenants.mockResolvedValue([{ id: 9, name: '测试店铺' }]);
+    mockedCouponService.getAvailableCoupons.mockResolvedValue([]);
+    mockedCouponService.getMyCoupons.mockImplementation(async (_tenantId, status) => {
+      if (status === 'USED') {
+        return [{
+          id: 21,
+          couponNo: 'UC21',
+          couponTemplateId: 11,
+          tenantId: 9,
+          status: 'USED',
+          name: '满 100 减 20',
+          couponType: 'FIXED',
+          thresholdAmount: 100,
+          discountAmount: 20,
+          discountRate: null,
+          maxDiscountAmount: null,
+          receiveTime: '2026-07-01T10:00:00',
+          expireTime: '2026-08-01T10:00:00',
+          usedTime: '2026-07-03T10:00:00',
+          orderNo: 'SO20260703001',
+          timeline: [
+            { eventType: 'RECEIVE', title: '已领取', description: '优惠券已进入账户', occurredAt: '2026-07-01T10:00:00' },
+            { eventType: 'LOCK', title: '已锁定', description: '订单 SO20260703001 已锁定优惠券', occurredAt: '2026-07-03T09:55:00', orderNo: 'SO20260703001' },
+            { eventType: 'WRITE_OFF', title: '已核销', description: '订单 SO20260703001 已使用优惠券，抵扣 ¥20', occurredAt: '2026-07-03T10:00:00', orderNo: 'SO20260703001', amount: 20 },
+          ],
+        }];
+      }
+      return [];
+    });
+
+    const element = await renderCouponCenter();
+
+    expect(element.textContent).toContain('优惠券使用时间线');
+    expect(element.textContent).toContain('共 3 条事件');
+    expect(element.textContent).toContain('已核销 · 满 100 减 20');
+    expect(element.textContent).toContain('订单 SO20260703001 已使用优惠券');
+  });
+
   it('shows a retryable error state when coupon assets fail to load', async () => {
     mockedCatalogService.listTenants.mockResolvedValue([{ id: 9, name: '测试店铺' }]);
     mockedCouponService.getAvailableCoupons

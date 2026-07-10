@@ -39,6 +39,18 @@ export interface UserCoupon {
   usedTime: string | null;
   orderNo?: string | null;
   trace?: AssetTracePresentation | null;
+  timeline?: CouponTimelineEvent[];
+}
+
+export interface CouponTimelineEvent {
+  eventType: 'RECEIVE' | 'LOCK' | 'RELEASE' | 'WRITE_OFF' | 'EXPIRE' | string;
+  title: string;
+  description?: string | null;
+  occurredAt?: string | null;
+  orderNo?: string | null;
+  bizNo?: string | null;
+  amount?: number | null;
+  status?: string | null;
 }
 
 export interface CouponReceiveResult {

@@ -3,14 +3,17 @@ package com.payment.service.impl;
 import com.payment.dto.AppTenantAssetSummaryVO;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
+import com.payment.entity.MemberGrowthLog;
 import com.payment.entity.MerchantWalletAccount;
 import com.payment.entity.Tenant;
 import com.payment.entity.TenantMember;
+import com.payment.mapper.MemberGrowthLogMapper;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
 import com.payment.mapper.MerchantWalletAccountMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.mapper.TenantMemberMapper;
+import com.payment.mapper.UserCouponMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -31,6 +34,8 @@ class AppAssetSummaryServiceImplTest {
         MerchantWalletAccountMapper walletAccountMapper = mock(MerchantWalletAccountMapper.class);
         MemberPointsAccountMapper pointsAccountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper pointsLogMapper = mock(MemberPointsLogMapper.class);
+        MemberGrowthLogMapper growthLogMapper = mock(MemberGrowthLogMapper.class);
+        UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
 
         when(tenantMemberMapper.selectList(any())).thenReturn(List.of(member(1L, 1), member(3L, 1)));
         when(walletAccountMapper.selectList(any())).thenReturn(List.of(wallet(2L, "12.50", "1.00")));
@@ -44,13 +49,23 @@ class AppAssetSummaryServiceImplTest {
                 tenant(2L, "书店"),
                 tenant(3L, "花店")
         ));
+        when(userCouponMapper.selectCount(any()))
+                .thenReturn(2L, 0L, 1L, 0L)
+                .thenReturn(3L, 1L, 2L, 1L)
+                .thenReturn(0L, 0L, 0L, 0L);
+        when(growthLogMapper.selectOne(any()))
+                .thenReturn(growth(260))
+                .thenReturn(growth(80))
+                .thenReturn(growth(0));
 
         AppAssetSummaryServiceImpl service = new AppAssetSummaryServiceImpl(
                 tenantMemberMapper,
                 tenantMapper,
                 walletAccountMapper,
                 pointsAccountMapper,
-                pointsLogMapper);
+                pointsLogMapper,
+                growthLogMapper,
+                userCouponMapper);
 
         List<AppTenantAssetSummaryVO> result = service.listTenantAssetSummaries(99L);
 
@@ -60,10 +75,16 @@ class AppAssetSummaryServiceImplTest {
         assertThat(result.get(0).getPoints()).isEqualTo(120);
         assertThat(result.get(0).getExpiringSoonPoints()).isEqualTo(50);
         assertThat(result.get(0).getMemberStatus()).isEqualTo(1);
+        assertThat(result.get(0).getUsableCouponCount()).isEqualTo(2);
+        assertThat(result.get(0).getUsedCouponCount()).isEqualTo(1);
+        assertThat(result.get(0).getTotalGrowth()).isEqualTo(260);
         assertThat(result.get(1).getWalletAvailableAmount()).isEqualByComparingTo("12.50");
         assertThat(result.get(1).getWalletFrozenAmount()).isEqualByComparingTo("1.00");
         assertThat(result.get(1).getPoints()).isEqualTo(80);
         assertThat(result.get(1).getExpiringSoonPoints()).isEqualTo(80);
+        assertThat(result.get(1).getUsableCouponCount()).isEqualTo(3);
+        assertThat(result.get(1).getLockedCouponCount()).isEqualTo(1);
+        assertThat(result.get(1).getTotalGrowth()).isEqualTo(80);
         assertThat(result.get(2).getPoints()).isZero();
     }
 
@@ -74,6 +95,8 @@ class AppAssetSummaryServiceImplTest {
         MerchantWalletAccountMapper walletAccountMapper = mock(MerchantWalletAccountMapper.class);
         MemberPointsAccountMapper pointsAccountMapper = mock(MemberPointsAccountMapper.class);
         MemberPointsLogMapper pointsLogMapper = mock(MemberPointsLogMapper.class);
+        MemberGrowthLogMapper growthLogMapper = mock(MemberGrowthLogMapper.class);
+        UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
 
         when(tenantMemberMapper.selectList(any())).thenReturn(List.of());
         when(walletAccountMapper.selectList(any())).thenReturn(List.of());
@@ -84,7 +107,9 @@ class AppAssetSummaryServiceImplTest {
                 tenantMapper,
                 walletAccountMapper,
                 pointsAccountMapper,
-                pointsLogMapper);
+                pointsLogMapper,
+                growthLogMapper,
+                userCouponMapper);
 
         assertThat(service.listTenantAssetSummaries(99L)).isEmpty();
     }
@@ -116,6 +141,12 @@ class AppAssetSummaryServiceImplTest {
         log.setTenantId(tenantId);
         log.setChangePoints(points);
         log.setExpireTime(LocalDateTime.now().plusDays(7));
+        return log;
+    }
+
+    private MemberGrowthLog growth(Integer value) {
+        MemberGrowthLog log = new MemberGrowthLog();
+        log.setChangeGrowth(value);
         return log;
     }
 

@@ -6,6 +6,7 @@ import com.payment.config.RabbitMQConfig;
 import com.payment.dto.AssetTracePresentations;
 import com.payment.dto.AppCouponReceiveVO;
 import com.payment.dto.AppCouponTemplateVO;
+import com.payment.dto.AppCouponTimelineEventVO;
 import com.payment.dto.AppUserCouponVO;
 import com.payment.dto.CouponScopeCreateDTO;
 import com.payment.dto.CouponTemplateCreateDTO;
@@ -46,6 +47,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -359,7 +362,7 @@ public class CouponServiceImpl implements CouponService {
                 : couponTemplateMapper.selectBatchIds(templateIds).stream()
                         .collect(Collectors.toMap(CouponTemplate::getId, Function.identity()));
 
-        return coupons.stream()
+        List<UserCoupon> visibleCoupons = coupons.stream()
                 .filter(coupon -> {
                     CouponTemplate tpl = templateMap.get(coupon.getTemplateId());
                     if (tpl == null) {
@@ -370,7 +373,15 @@ public class CouponServiceImpl implements CouponService {
                     }
                     return isCouponTemplateVisibleToTenant(tpl, tenantId, platformUserId);
                 })
-                .map(coupon -> toUserCouponVO(coupon, templateMap.get(coupon.getTemplateId())))
+                .toList();
+        Map<Long, List<AppCouponTimelineEventVO>> timelineMap = loadCouponTimelineEvents(visibleCoupons);
+
+        return visibleCoupons.stream()
+                .map(coupon -> {
+                    AppUserCouponVO vo = toUserCouponVO(coupon, templateMap.get(coupon.getTemplateId()));
+                    vo.setTimeline(timelineMap.getOrDefault(coupon.getId(), List.of()));
+                    return vo;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -1082,6 +1093,107 @@ public class CouponServiceImpl implements CouponService {
         }
         vo.setTrace(AssetTracePresentations.coupon(coupon, template));
         return vo;
+    }
+
+    private Map<Long, List<AppCouponTimelineEventVO>> loadCouponTimelineEvents(List<UserCoupon> coupons) {
+        Set<Long> userCouponIds = coupons.stream()
+                .map(UserCoupon::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        if (userCouponIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Map<Long, List<AppCouponTimelineEventVO>> events = new LinkedHashMap<>();
+        receiveRecordMapper.selectList(new LambdaQueryWrapper<CouponReceiveRecord>()
+                        .in(CouponReceiveRecord::getUserCouponId, userCouponIds))
+                .forEach(record -> appendTimelineEvent(events, record.getUserCouponId(),
+                        couponTimelineEvent("RECEIVE", "已领取", "优惠券已进入账户",
+                                record.getReceiveTime(), null, record.getBizNo(), null, null)));
+        lockRecordMapper.selectList(new LambdaQueryWrapper<CouponLockRecord>()
+                        .in(CouponLockRecord::getUserCouponId, userCouponIds))
+                .forEach(record -> appendTimelineEvent(events, record.getUserCouponId(),
+                        couponTimelineEvent("LOCK", "已锁定", orderDescription(record.getOrderNo(), "下单时锁定优惠券"),
+                                record.getLockTime(), record.getOrderNo(), record.getBizNo(), null, record.getLockStatus())));
+        releaseRecordMapper.selectList(new LambdaQueryWrapper<CouponReleaseRecord>()
+                        .in(CouponReleaseRecord::getUserCouponId, userCouponIds))
+                .forEach(record -> appendTimelineEvent(events, record.getUserCouponId(),
+                        couponTimelineEvent("RELEASE", "已释放", releaseDescription(record.getOrderNo(), record.getReleaseReason()),
+                                record.getReleaseTime(), record.getOrderNo(), record.getBizNo(), null, record.getReleaseReason())));
+        writeOffRecordMapper.selectList(new LambdaQueryWrapper<CouponWriteOffRecord>()
+                        .in(CouponWriteOffRecord::getUserCouponId, userCouponIds))
+                .forEach(record -> appendTimelineEvent(events, record.getUserCouponId(),
+                        couponTimelineEvent("WRITE_OFF", "已核销", writeOffDescription(record.getOrderNo(), record.getDiscountAmount()),
+                                record.getWriteOffTime(), record.getOrderNo(), record.getBizNo(), record.getDiscountAmount(), null)));
+        expireRecordMapper.selectList(new LambdaQueryWrapper<CouponExpireRecord>()
+                        .in(CouponExpireRecord::getUserCouponId, userCouponIds))
+                .forEach(record -> appendTimelineEvent(events, record.getUserCouponId(),
+                        couponTimelineEvent("EXPIRE", "已过期", expireDescription(record.getExpireReason()),
+                                record.getExpireTime(), null, record.getBizNo(), null, record.getExpireReason())));
+
+        events.values().forEach(list -> list.sort(Comparator.comparing(
+                AppCouponTimelineEventVO::getOccurredAt,
+                Comparator.nullsLast(Comparator.naturalOrder()))));
+        return events;
+    }
+
+    private void appendTimelineEvent(Map<Long, List<AppCouponTimelineEventVO>> events,
+                                     Long userCouponId,
+                                     AppCouponTimelineEventVO event) {
+        if (userCouponId == null || event == null) {
+            return;
+        }
+        events.computeIfAbsent(userCouponId, ignored -> new ArrayList<>()).add(event);
+    }
+
+    private AppCouponTimelineEventVO couponTimelineEvent(String eventType,
+                                                         String title,
+                                                         String description,
+                                                         LocalDateTime occurredAt,
+                                                         String orderNo,
+                                                         String bizNo,
+                                                         BigDecimal amount,
+                                                         String status) {
+        AppCouponTimelineEventVO event = new AppCouponTimelineEventVO();
+        event.setEventType(eventType);
+        event.setTitle(title);
+        event.setDescription(description);
+        event.setOccurredAt(occurredAt);
+        event.setOrderNo(orderNo);
+        event.setBizNo(bizNo);
+        event.setAmount(amount);
+        event.setStatus(status);
+        return event;
+    }
+
+    private String orderDescription(String orderNo, String fallback) {
+        return orderNo == null || orderNo.isBlank() ? fallback : "订单 " + orderNo + " 已锁定优惠券";
+    }
+
+    private String releaseDescription(String orderNo, String reason) {
+        String reasonText = switch (reason == null ? "" : reason) {
+            case "ORDER_CANCEL" -> "订单取消";
+            case "PAYMENT_TIMEOUT" -> "支付超时";
+            case "REFUND" -> "退款释放";
+            default -> "优惠券已释放";
+        };
+        return orderNo == null || orderNo.isBlank() ? reasonText : "订单 " + orderNo + "：" + reasonText;
+    }
+
+    private String writeOffDescription(String orderNo, BigDecimal discountAmount) {
+        String amountText = discountAmount == null ? "" : "，抵扣 ¥" + discountAmount.stripTrailingZeros().toPlainString();
+        return orderNo == null || orderNo.isBlank()
+                ? "优惠券已使用" + amountText
+                : "订单 " + orderNo + " 已使用优惠券" + amountText;
+    }
+
+    private String expireDescription(String reason) {
+        return switch (reason == null ? "" : reason) {
+            case "TIME_EXPIRED" -> "超过有效期自动失效";
+            case "TEMPLATE_CLOSED" -> "活动关闭后失效";
+            case "MANUAL" -> "已被管理员作废";
+            default -> "优惠券已失效";
+        };
     }
 
     private boolean isReceivable(CouponTemplate template, int receivedByUser) {

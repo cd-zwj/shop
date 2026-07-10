@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertCircle, Ticket, ArrowLeft, Store, Clock, RefreshCw } from 'lucide-react';
@@ -153,6 +153,20 @@ export default function CouponCenter() {
     return Number(value).toFixed(0);
   };
 
+  const couponTimeline = useMemo(() => {
+    return [...myCoupons, ...expiredCoupons]
+      .flatMap((coupon) => (coupon.timeline ?? []).map((event) => ({ coupon, event })))
+      .filter(({ event }) => event.occurredAt)
+      .sort((left, right) => new Date(right.event.occurredAt || '').getTime() - new Date(left.event.occurredAt || '').getTime());
+  }, [myCoupons, expiredCoupons]);
+
+  const couponTimelineSummary = useMemo(() => ({
+    totalEvents: couponTimeline.length,
+    locked: couponTimeline.filter(({ event }) => event.eventType === 'LOCK').length,
+    released: couponTimeline.filter(({ event }) => event.eventType === 'RELEASE').length,
+    writeOff: couponTimeline.filter(({ event }) => event.eventType === 'WRITE_OFF').length,
+  }), [couponTimeline]);
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 md:mt-8">
       {/* Top Header */}
@@ -211,6 +225,51 @@ export default function CouponCenter() {
               >
                 {t.name}
               </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!isLoading && couponTimeline.length > 0 && (
+        <section className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-900">优惠券使用时间线</h2>
+              <p className="mt-1 text-xs font-bold text-slate-400">
+                共 {couponTimelineSummary.totalEvents} 条事件 · 锁定 {couponTimelineSummary.locked} · 释放 {couponTimelineSummary.released} · 核销 {couponTimelineSummary.writeOff}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('expired')}
+              className="self-start rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary sm:self-auto"
+            >
+              查看失效记录
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3">
+            {couponTimeline.slice(0, 5).map(({ coupon, event }, index) => (
+              <div
+                key={`${coupon.id}-${event.eventType}-${event.occurredAt}-${index}`}
+                className="flex gap-3 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3"
+              >
+                <div className={cn('mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-black', timelineToneClass(event.eventType))}>
+                  {timelineInitial(event.eventType)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="truncate text-sm font-black text-slate-800">
+                      {event.title} · {coupon.name}
+                    </p>
+                    <span className="text-xs font-bold text-slate-400">{formatDateTime(event.occurredAt)}</span>
+                  </div>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {event.description || '优惠券状态已更新'}
+                    {event.orderNo ? ` · 订单 ${event.orderNo}` : ''}
+                  </p>
+                </div>
+              </div>
             ))}
           </div>
         </section>
@@ -517,4 +576,32 @@ export default function CouponCenter() {
       </div>
     </div>
   );
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 16);
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).replace(/\//g, '.');
+}
+
+function timelineInitial(eventType: string) {
+  if (eventType === 'WRITE_OFF') return '核';
+  if (eventType === 'RELEASE') return '释';
+  if (eventType === 'LOCK') return '锁';
+  if (eventType === 'EXPIRE') return '期';
+  return '领';
+}
+
+function timelineToneClass(eventType: string) {
+  if (eventType === 'WRITE_OFF') return 'bg-blue-50 text-blue-600';
+  if (eventType === 'RELEASE') return 'bg-amber-50 text-amber-600';
+  if (eventType === 'LOCK') return 'bg-violet-50 text-violet-600';
+  if (eventType === 'EXPIRE') return 'bg-red-50 text-red-600';
+  return 'bg-green-50 text-green-600';
 }

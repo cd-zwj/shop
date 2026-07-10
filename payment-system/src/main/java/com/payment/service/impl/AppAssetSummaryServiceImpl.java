@@ -1,18 +1,23 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.payment.dto.AppTenantAssetSummaryVO;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
+import com.payment.entity.MemberGrowthLog;
 import com.payment.entity.MerchantWalletAccount;
 import com.payment.entity.Tenant;
 import com.payment.entity.TenantMember;
 import com.payment.enums.PointsDeductStatusEnum;
+import com.payment.enums.UserCouponStatusEnum;
+import com.payment.mapper.MemberGrowthLogMapper;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
 import com.payment.mapper.MerchantWalletAccountMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.mapper.TenantMemberMapper;
+import com.payment.mapper.UserCouponMapper;
 import com.payment.service.AppAssetSummaryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,8 @@ public class AppAssetSummaryServiceImpl implements AppAssetSummaryService {
     private final MerchantWalletAccountMapper merchantWalletAccountMapper;
     private final MemberPointsAccountMapper memberPointsAccountMapper;
     private final MemberPointsLogMapper memberPointsLogMapper;
+    private final MemberGrowthLogMapper memberGrowthLogMapper;
+    private final UserCouponMapper userCouponMapper;
 
     @Override
     public List<AppTenantAssetSummaryVO> listTenantAssetSummaries(Long platformUserId) {
@@ -98,7 +105,30 @@ public class AppAssetSummaryServiceImpl implements AppAssetSummaryService {
         int availablePoints = points == null || points.getPoints() == null ? 0 : Math.max(0, points.getPoints());
         vo.setPoints(availablePoints);
         vo.setExpiringSoonPoints(Math.min(availablePoints, sumExpiringPoints(tenantId, platformUserId)));
+        vo.setUsableCouponCount(countCoupons(tenantId, platformUserId,
+                UserCouponStatusEnum.RECEIVED.name(), UserCouponStatusEnum.RELEASED.name()));
+        vo.setLockedCouponCount(countCoupons(tenantId, platformUserId, UserCouponStatusEnum.LOCKED.name()));
+        vo.setUsedCouponCount(countCoupons(tenantId, platformUserId, UserCouponStatusEnum.USED.name()));
+        vo.setExpiredCouponCount(countCoupons(tenantId, platformUserId, UserCouponStatusEnum.EXPIRED.name()));
+        vo.setTotalGrowth(sumGrowth(tenantId, platformUserId));
         return vo;
+    }
+
+    private int countCoupons(Long tenantId, Long platformUserId, String... statuses) {
+        Long count = userCouponMapper.selectCount(new LambdaQueryWrapper<com.payment.entity.UserCoupon>()
+                .eq(com.payment.entity.UserCoupon::getTenantId, tenantId)
+                .eq(com.payment.entity.UserCoupon::getPlatformUserId, platformUserId)
+                .in(com.payment.entity.UserCoupon::getCouponStatus, List.of(statuses)));
+        return count == null ? 0 : count.intValue();
+    }
+
+    private int sumGrowth(Long tenantId, Long platformUserId) {
+        QueryWrapper<MemberGrowthLog> wrapper = new QueryWrapper<>();
+        wrapper.eq("tenant_id", tenantId)
+                .eq("platform_user_id", platformUserId)
+                .select("IFNULL(SUM(change_growth), 0) AS change_growth");
+        MemberGrowthLog result = memberGrowthLogMapper.selectOne(wrapper);
+        return result == null || result.getChangeGrowth() == null ? 0 : Math.max(0, result.getChangeGrowth());
     }
 
     private int sumExpiringPoints(Long tenantId, Long platformUserId) {

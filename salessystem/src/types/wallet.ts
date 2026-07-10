@@ -45,6 +45,11 @@ export interface TenantAssetSummary {
   walletFrozenAmount: number;
   points: number;
   expiringSoonPoints: number;
+  usableCouponCount?: number;
+  lockedCouponCount?: number;
+  usedCouponCount?: number;
+  expiredCouponCount?: number;
+  totalGrowth?: number;
 }
 
 export interface RechargePayment {

@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { CouponTemplate, UserCoupon, CouponReceiveResult } from '../../types/coupon';
+import type { CouponTemplate, UserCoupon, CouponReceiveResult, CouponTimelineEvent } from '../../types/coupon';
 
 type UserCouponStatus = 'USABLE' | 'USED' | 'EXPIRED';
 type BackendUserCouponStatus = 'RECEIVED' | 'LOCKED' | 'USED' | 'RELEASED' | 'EXPIRED' | string;
@@ -21,6 +21,7 @@ interface BackendUserCoupon {
   expireTime?: string | null;
   useTime?: string | null;
   trace?: import('../../types/wallet').AssetTracePresentation | null;
+  timeline?: CouponTimelineEvent[] | null;
 }
 
 export const appCouponService = {
@@ -80,6 +81,7 @@ function normalizeUserCoupon(coupon: BackendUserCoupon): UserCoupon {
     usedTime: coupon.useTime ?? null,
     orderNo: coupon.orderNo ?? null,
     trace: coupon.trace ?? null,
+    timeline: coupon.timeline ?? [],
   };
 }
 

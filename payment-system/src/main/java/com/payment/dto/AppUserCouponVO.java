@@ -4,6 +4,7 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 用户端个人券包视图对象，用于展示用户已领取的优惠券详情及使用状态。
@@ -42,4 +43,6 @@ public class AppUserCouponVO {
     private LocalDateTime useTime;
     /** 用户端优惠券追溯展示字段 */
     private AssetTracePresentation trace;
+    /** 用户端优惠券生命周期时间线 */
+    private List<AppCouponTimelineEventVO> timeline;
 }

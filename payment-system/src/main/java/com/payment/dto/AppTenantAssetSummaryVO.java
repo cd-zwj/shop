@@ -17,4 +17,9 @@ public class AppTenantAssetSummaryVO {
     private BigDecimal walletFrozenAmount = BigDecimal.ZERO;
     private Integer points = 0;
     private Integer expiringSoonPoints = 0;
+    private Integer usableCouponCount = 0;
+    private Integer lockedCouponCount = 0;
+    private Integer usedCouponCount = 0;
+    private Integer expiredCouponCount = 0;
+    private Integer totalGrowth = 0;
 }
