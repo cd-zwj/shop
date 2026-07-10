@@ -85,6 +85,37 @@ export default function UserWallet() {
     );
   }, [tenantAssets]);
 
+  const assetRiskItems = useMemo(() => {
+    return tenantAssets.flatMap((asset) => {
+      const items: Array<{ title: string; detail: string; actionLabel: string; actionPath: string }> = [];
+      if (asset.expiringSoonPoints > 0) {
+        items.push({
+          title: '积分即将过期',
+          detail: `${asset.tenantName} 有 ${asset.expiringSoonPoints.toLocaleString()} 分将在 30 天内过期`,
+          actionLabel: '查看积分',
+          actionPath: `/points/${asset.tenantId}`,
+        });
+      }
+      if (Number(asset.lockedCouponCount || 0) > 0) {
+        items.push({
+          title: '优惠券锁定中',
+          detail: `${asset.tenantName} 有 ${Number(asset.lockedCouponCount).toLocaleString()} 张优惠券处于订单锁定状态`,
+          actionLabel: '查看券包',
+          actionPath: `/coupons?tenantId=${asset.tenantId}`,
+        });
+      }
+      if (Number(asset.expiredCouponCount || 0) > 0) {
+        items.push({
+          title: '存在失效优惠券',
+          detail: `${asset.tenantName} 已有 ${Number(asset.expiredCouponCount).toLocaleString()} 张优惠券失效`,
+          actionLabel: '查看记录',
+          actionPath: `/coupons?tenantId=${asset.tenantId}`,
+        });
+      }
+      return items;
+    }).slice(0, 4);
+  }, [tenantAssets]);
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-4 pb-10 md:mt-8">
       <header>
@@ -107,6 +138,31 @@ export default function UserWallet() {
             重试
           </button>
         </div>
+      )}
+
+      {!isLoading && assetRiskItems.length > 0 && (
+        <section className="rounded-3xl border border-amber-100 bg-amber-50/70 px-6 py-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black text-amber-700">
+            <AlertCircle className="h-5 w-5" />
+            资产提醒
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {assetRiskItems.map((item, index) => (
+              <button
+                key={`${item.title}-${index}`}
+                type="button"
+                onClick={() => navigate(item.actionPath)}
+                className="flex items-center justify-between gap-4 rounded-2xl border border-amber-100 bg-white px-4 py-3 text-left shadow-sm transition-all hover:border-amber-200 hover:bg-amber-50"
+              >
+                <div>
+                  <div className="text-sm font-black text-slate-900">{item.title}</div>
+                  <div className="mt-0.5 text-xs font-bold text-slate-500">{item.detail}</div>
+                </div>
+                <span className="flex-none text-xs font-black text-amber-700">{item.actionLabel}</span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

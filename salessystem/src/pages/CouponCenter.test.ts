@@ -117,6 +117,23 @@ describe('CouponCenter', () => {
     expect(element.textContent).toContain('共 3 条事件');
     expect(element.textContent).toContain('已核销 · 满 100 减 20');
     expect(element.textContent).toContain('订单 SO20260703001 已使用优惠券');
+
+    const expiredButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('查看失效记录'));
+    await act(async () => {
+      expiredButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    const timelineButton = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('查看时间线'));
+    expect(timelineButton).toBeTruthy();
+    await act(async () => {
+      timelineButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(element.textContent).toContain('生命周期明细');
   });
 
   it('shows a retryable error state when coupon assets fail to load', async () => {

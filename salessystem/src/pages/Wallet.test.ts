@@ -83,6 +83,8 @@ describe('UserWallet', () => {
     expect(element.textContent).toContain('商户钱包 ¥120.00');
     expect(element.textContent).toContain('可用券 3 张');
     expect(element.textContent).toContain('成长值 260');
+    expect(element.textContent).toContain('资产提醒');
+    expect(element.textContent).toContain('优惠券锁定中');
     expect(element.textContent).toContain('钱包明细');
   });
 
