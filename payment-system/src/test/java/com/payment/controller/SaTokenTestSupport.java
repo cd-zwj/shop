@@ -15,6 +15,7 @@ final class SaTokenTestSupport {
     static String loginPlatformUser(long userId) {
         return SaTokenContextMockUtil.setMockContext(() -> {
             AuthStpKit.PLATFORM.login(AuthLoginIdHelper.platform(userId));
+            AuthStpKit.PLATFORM.getSession().set("platformUserId", userId);
             return AuthStpKit.PLATFORM.getTokenValue();
         });
     }

@@ -80,7 +80,38 @@ describe('appCouponService', () => {
           actionLabel: '查看订单',
           tone: 'neutral',
         },
+        timeline: [],
       },
     ]);
+  });
+
+  it('keeps locked coupons distinguishable for the active coupon list', async () => {
+    mockRequest.mockResolvedValue([
+      {
+        id: 502,
+        couponNo: 'CP202607060002',
+        templateId: 202,
+        tenantId: 9,
+        couponStatus: 'LOCKED',
+        templateName: '锁定券',
+        couponType: 'FULL_REDUCTION',
+        thresholdAmount: 50,
+        discountAmount: 10,
+        receiveTime: '2026-07-01T09:00:00',
+        expireTime: '2026-07-31T23:59:59',
+        orderNo: 'SO202607060002',
+      },
+    ]);
+
+    const result = await appCouponService.getMyCoupons(9, 'LOCKED');
+
+    expect(mockRequest).toHaveBeenCalledWith({
+      url: '/v1/app/tenants/9/coupons',
+      method: 'get',
+      params: { status: 'LOCKED' },
+      authRole: 'user',
+    });
+    expect(result[0].status).toBe('LOCKED');
+    expect(result[0].orderNo).toBe('SO202607060002');
   });
 });

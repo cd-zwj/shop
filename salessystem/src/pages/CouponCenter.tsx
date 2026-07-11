@@ -12,6 +12,8 @@ import { cn } from '../lib/utils';
 import { getCouponTracePresentation } from '../utils/assetTracePresentation';
 import { getErrorMessage } from '../utils/errorMessage';
 
+type CouponTab = 'available' | 'my' | 'expired';
+
 export default function CouponCenter() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -20,7 +22,7 @@ export default function CouponCenter() {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [activeTenant, setActiveTenant] = useState<Tenant | null>(null);
   
-  const [activeTab, setActiveTab] = useState<'available' | 'my' | 'expired'>('available');
+  const [activeTab, setActiveTab] = useState<CouponTab>(() => couponTabFromSearchParam(searchParams.get('tab')));
   const [expandedTimelineCouponId, setExpandedTimelineCouponId] = useState<number | null>(null);
   const [availableCoupons, setAvailableCoupons] = useState<CouponTemplate[]>([]);
   const [myCoupons, setMyCoupons] = useState<UserCoupon[]>([]);
@@ -71,23 +73,23 @@ export default function CouponCenter() {
     void loadTenants();
   }, [loadTenants]);
 
+  useEffect(() => {
+    setActiveTab(couponTabFromSearchParam(searchParams.get('tab')));
+  }, [searchParams]);
+
   // Load coupon data for active tenant
   const loadCoupons = useCallback(async (tenant: Tenant) => {
     setIsLoading(true);
     setError(null);
     try {
-      const [available, usable, used, expired] = await Promise.all([
+      const [available, coupons] = await Promise.all([
         appCouponService.getAvailableCoupons(tenant.id),
-        appCouponService.getMyCoupons(tenant.id, 'USABLE'),
-        appCouponService.getMyCoupons(tenant.id, 'USED'),
-        appCouponService.getMyCoupons(tenant.id, 'EXPIRED'),
+        appCouponService.getMyCoupons(tenant.id),
       ]);
 
       setAvailableCoupons(available);
-      setMyCoupons(usable);
-
-      // Combine USED and EXPIRED into expiredCoupons tab
-      setExpiredCoupons([...used, ...expired]);
+      setMyCoupons(coupons.filter((coupon) => coupon.status === 'USABLE' || coupon.status === 'LOCKED'));
+      setExpiredCoupons(coupons.filter((coupon) => coupon.status === 'USED' || coupon.status === 'EXPIRED'));
     } catch (e) {
       const message = getErrorMessage(e, '获取优惠券列表失败');
       setError(message);
@@ -121,16 +123,14 @@ export default function CouponCenter() {
       showToast('优惠券领取成功！', 'success');
       
       // Refresh coupons
-      const [available, usable, used, expired] = await Promise.all([
+      const [available, coupons] = await Promise.all([
         appCouponService.getAvailableCoupons(activeTenant.id),
-        appCouponService.getMyCoupons(activeTenant.id, 'USABLE'),
-        appCouponService.getMyCoupons(activeTenant.id, 'USED'),
-        appCouponService.getMyCoupons(activeTenant.id, 'EXPIRED'),
+        appCouponService.getMyCoupons(activeTenant.id),
       ]);
 
       setAvailableCoupons(available);
-      setMyCoupons(usable);
-      setExpiredCoupons([...used, ...expired]);
+      setMyCoupons(coupons.filter((item) => item.status === 'USABLE' || item.status === 'LOCKED'));
+      setExpiredCoupons(coupons.filter((item) => item.status === 'USED' || item.status === 'EXPIRED'));
       
       // Automatically switch to My Coupons tab
       setActiveTab('my');
@@ -285,7 +285,7 @@ export default function CouponCenter() {
         ].map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key as 'available' | 'my' | 'expired')}
+            onClick={() => setActiveTab(tab.key as CouponTab)}
             className={cn(
               'flex-1 text-center py-3.5 text-sm font-bold border-b-2 transition-all relative',
               activeTab === tab.key
@@ -619,6 +619,10 @@ function formatDateTime(value: string | null | undefined) {
     hour: '2-digit',
     minute: '2-digit',
   }).replace(/\//g, '.');
+}
+
+function couponTabFromSearchParam(value: string | null): CouponTab {
+  return value === 'my' || value === 'expired' ? value : 'available';
 }
 
 function CouponTimelineDetails({ events }: { events: CouponTimelineEvent[] }) {

@@ -27,7 +27,7 @@ export interface UserCoupon {
   couponNo: string;
   couponTemplateId: number;
   tenantId: number;
-  status: 'USABLE' | 'USED' | 'EXPIRED';
+  status: 'USABLE' | 'LOCKED' | 'USED' | 'EXPIRED';
   name: string;
   couponType: 'FIXED' | 'RATE';
   thresholdAmount: number;

@@ -1,7 +1,7 @@
 import { request } from '../request';
 import type { CouponTemplate, UserCoupon, CouponReceiveResult, CouponTimelineEvent } from '../../types/coupon';
 
-type UserCouponStatus = 'USABLE' | 'USED' | 'EXPIRED';
+type UserCouponStatus = 'USABLE' | 'LOCKED' | 'USED' | 'EXPIRED';
 type BackendUserCouponStatus = 'RECEIVED' | 'LOCKED' | 'USED' | 'RELEASED' | 'EXPIRED' | string;
 
 interface BackendUserCoupon {
@@ -88,6 +88,9 @@ function normalizeUserCoupon(coupon: BackendUserCoupon): UserCoupon {
 function toFrontendUserCouponStatus(status: BackendUserCouponStatus): UserCoupon['status'] {
   if (status === 'USED') {
     return 'USED';
+  }
+  if (status === 'LOCKED') {
+    return 'LOCKED';
   }
   if (status === 'EXPIRED') {
     return 'EXPIRED';

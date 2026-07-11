@@ -52,7 +52,7 @@ async function flushAsyncWork() {
   });
 }
 
-async function renderCouponCenter() {
+async function renderCouponCenter(initialEntry = '/coupons?tenantId=9') {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -61,7 +61,7 @@ async function renderCouponCenter() {
     root?.render(
       React.createElement(
         MemoryRouter,
-        { initialEntries: ['/coupons?tenantId=9'] },
+        { initialEntries: [initialEntry] },
         React.createElement(
           ToastProvider,
           null,
@@ -83,33 +83,28 @@ describe('CouponCenter', () => {
   it('shows a summarized coupon usage timeline', async () => {
     mockedCatalogService.listTenants.mockResolvedValue([{ id: 9, name: '测试店铺' }]);
     mockedCouponService.getAvailableCoupons.mockResolvedValue([]);
-    mockedCouponService.getMyCoupons.mockImplementation(async (_tenantId, status) => {
-      if (status === 'USED') {
-        return [{
-          id: 21,
-          couponNo: 'UC21',
-          couponTemplateId: 11,
-          tenantId: 9,
-          status: 'USED',
-          name: '满 100 减 20',
-          couponType: 'FIXED',
-          thresholdAmount: 100,
-          discountAmount: 20,
-          discountRate: null,
-          maxDiscountAmount: null,
-          receiveTime: '2026-07-01T10:00:00',
-          expireTime: '2026-08-01T10:00:00',
-          usedTime: '2026-07-03T10:00:00',
-          orderNo: 'SO20260703001',
-          timeline: [
-            { eventType: 'RECEIVE', title: '已领取', description: '优惠券已进入账户', occurredAt: '2026-07-01T10:00:00' },
-            { eventType: 'LOCK', title: '已锁定', description: '订单 SO20260703001 已锁定优惠券', occurredAt: '2026-07-03T09:55:00', orderNo: 'SO20260703001' },
-            { eventType: 'WRITE_OFF', title: '已核销', description: '订单 SO20260703001 已使用优惠券，抵扣 ¥20', occurredAt: '2026-07-03T10:00:00', orderNo: 'SO20260703001', amount: 20 },
-          ],
-        }];
-      }
-      return [];
-    });
+    mockedCouponService.getMyCoupons.mockResolvedValue([{
+      id: 21,
+      couponNo: 'UC21',
+      couponTemplateId: 11,
+      tenantId: 9,
+      status: 'USED',
+      name: '满 100 减 20',
+      couponType: 'FIXED',
+      thresholdAmount: 100,
+      discountAmount: 20,
+      discountRate: null,
+      maxDiscountAmount: null,
+      receiveTime: '2026-07-01T10:00:00',
+      expireTime: '2026-08-01T10:00:00',
+      usedTime: '2026-07-03T10:00:00',
+      orderNo: 'SO20260703001',
+      timeline: [
+        { eventType: 'RECEIVE', title: '已领取', description: '优惠券已进入账户', occurredAt: '2026-07-01T10:00:00' },
+        { eventType: 'LOCK', title: '已锁定', description: '订单 SO20260703001 已锁定优惠券', occurredAt: '2026-07-03T09:55:00', orderNo: 'SO20260703001' },
+        { eventType: 'WRITE_OFF', title: '已核销', description: '订单 SO20260703001 已使用优惠券，抵扣 ¥20', occurredAt: '2026-07-03T10:00:00', orderNo: 'SO20260703001', amount: 20 },
+      ],
+    }]);
 
     const element = await renderCouponCenter();
 
@@ -180,5 +175,36 @@ describe('CouponCenter', () => {
     expect(element.textContent).toContain('满 100 减 20');
     expect(Array.from(element.querySelectorAll('button'))
       .some((button) => button.textContent?.includes('重试'))).toBe(false);
+  });
+
+  it('opens the requested coupon tab and keeps locked coupons in my coupons', async () => {
+    mockedCatalogService.listTenants.mockResolvedValue([{ id: 9, name: '测试店铺' }]);
+    mockedCouponService.getAvailableCoupons.mockResolvedValue([]);
+    mockedCouponService.getMyCoupons.mockResolvedValue([{
+      id: 22,
+      couponNo: 'UC22',
+      couponTemplateId: 12,
+      tenantId: 9,
+      status: 'LOCKED',
+      name: '锁定优惠券',
+      couponType: 'FIXED',
+      thresholdAmount: 50,
+      discountAmount: 10,
+      discountRate: null,
+      maxDiscountAmount: null,
+      receiveTime: '2026-07-01T10:00:00',
+      expireTime: '2026-08-01T10:00:00',
+      usedTime: null,
+      orderNo: 'SO20260703002',
+      timeline: [],
+    }]);
+
+    const element = await renderCouponCenter('/coupons?tenantId=9&tab=my');
+    const myCouponTab = Array.from(element.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('我的券'));
+
+    expect(myCouponTab?.className).toContain('border-primary');
+    expect(element.textContent).toContain('锁定优惠券');
+    expect(element.textContent).toContain('锁定中');
   });
 });

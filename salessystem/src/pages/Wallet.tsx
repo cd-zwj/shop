@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { motion } from 'motion/react';
 import {
   AlertCircle,
+  BadgeCheck,
   ChevronRight,
   CircleDollarSign,
+  Coins,
   Plus,
   Receipt,
   RefreshCw,
@@ -15,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appWalletService } from '../services/modules/appWallet';
-import type { TenantAssetSummary, WalletAccount, WalletLog } from '../types/wallet';
+import type { AssetActivity, TenantAssetSummary, WalletAccount, WalletLog } from '../types/wallet';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { getErrorMessage } from '../utils/errorMessage';
@@ -26,6 +28,8 @@ export default function UserWallet() {
   const [wallet, setWallet] = useState<WalletAccount | null>(null);
   const [logs, setLogs] = useState<WalletLog[]>([]);
   const [tenantAssets, setTenantAssets] = useState<TenantAssetSummary[]>([]);
+  const [assetActivities, setAssetActivities] = useState<AssetActivity[]>([]);
+  const [assetActivitiesUnavailable, setAssetActivitiesUnavailable] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,21 +38,28 @@ export default function UserWallet() {
     setError(null);
 
     try {
-      const [walletInfo, walletLogs, merchantList] = await Promise.all([
+      const [walletInfo, walletLogs, merchantList, activityResult] = await Promise.all([
         appWalletService.getUnifiedWallet(),
         appWalletService.getUnifiedWalletLogs(1, 5),
         appWalletService.listTenantAssetSummaries(),
+        appWalletService.listAssetActivities(10)
+          .then((activities) => ({ activities, unavailable: false }))
+          .catch(() => ({ activities: [] as AssetActivity[], unavailable: true })),
       ]);
 
       if (!isActive()) return;
       setWallet(walletInfo);
       setLogs(walletLogs.records ?? []);
-      setTenantAssets(merchantList.slice(0, 6));
+      setTenantAssets(merchantList);
+      setAssetActivities(activityResult.activities);
+      setAssetActivitiesUnavailable(activityResult.unavailable);
     } catch (loadError) {
       if (!isActive()) return;
       setError(getErrorMessage(loadError, '钱包资产加载失败，请稍后重试'));
       setLogs([]);
       setTenantAssets([]);
+      setAssetActivities([]);
+      setAssetActivitiesUnavailable(false);
     } finally {
       if (isActive()) {
         setIsLoading(false);
@@ -79,9 +90,10 @@ export default function UserWallet() {
         lockedCoupons: acc.lockedCoupons + Number(item.lockedCouponCount || 0),
         usedCoupons: acc.usedCoupons + Number(item.usedCouponCount || 0),
         expiredCoupons: acc.expiredCoupons + Number(item.expiredCouponCount || 0),
+        expiringCoupons: acc.expiringCoupons + Number(item.expiringSoonCouponCount || 0),
         growth: acc.growth + Number(item.totalGrowth || 0),
       }),
-      { points: 0, wallet: 0, usableCoupons: 0, lockedCoupons: 0, usedCoupons: 0, expiredCoupons: 0, growth: 0 },
+      { points: 0, wallet: 0, usableCoupons: 0, lockedCoupons: 0, usedCoupons: 0, expiredCoupons: 0, expiringCoupons: 0, growth: 0 },
     );
   }, [tenantAssets]);
 
@@ -101,7 +113,15 @@ export default function UserWallet() {
           title: '优惠券锁定中',
           detail: `${asset.tenantName} 有 ${Number(asset.lockedCouponCount).toLocaleString()} 张优惠券处于订单锁定状态`,
           actionLabel: '查看券包',
-          actionPath: `/coupons?tenantId=${asset.tenantId}`,
+          actionPath: `/coupons?tenantId=${asset.tenantId}&tab=my`,
+        });
+      }
+      if (Number(asset.expiringSoonCouponCount || 0) > 0) {
+        items.push({
+          title: '优惠券即将过期',
+          detail: `${asset.tenantName} 有 ${Number(asset.expiringSoonCouponCount).toLocaleString()} 张优惠券将在 30 天内过期`,
+          actionLabel: '查看券包',
+          actionPath: `/coupons?tenantId=${asset.tenantId}&tab=my`,
         });
       }
       if (Number(asset.expiredCouponCount || 0) > 0) {
@@ -109,7 +129,7 @@ export default function UserWallet() {
           title: '存在失效优惠券',
           detail: `${asset.tenantName} 已有 ${Number(asset.expiredCouponCount).toLocaleString()} 张优惠券失效`,
           actionLabel: '查看记录',
-          actionPath: `/coupons?tenantId=${asset.tenantId}`,
+          actionPath: `/coupons?tenantId=${asset.tenantId}&tab=expired`,
         });
       }
       return items;
@@ -213,7 +233,7 @@ export default function UserWallet() {
           />
           <MetricCard
             label="可用优惠券"
-            value={isLoading ? '...' : tenantAssetTotals.usableCoupons.toLocaleString()}
+            value={isLoading ? '...' : `${tenantAssetTotals.usableCoupons.toLocaleString()} 张`}
             accent="text-amber-600"
             bg="bg-amber-50"
             icon={<Ticket className="h-6 w-6 fill-current" />}
@@ -275,6 +295,9 @@ export default function UserWallet() {
                     <span>成长值 {Number(asset.totalGrowth || 0).toLocaleString()}</span>
                     {asset.expiringSoonPoints > 0 && (
                       <span className="text-amber-600">30天内过期 {asset.expiringSoonPoints.toLocaleString()} 分</span>
+                    )}
+                    {Number(asset.expiringSoonCouponCount || 0) > 0 && (
+                      <span className="text-amber-600">即将过期券 {Number(asset.expiringSoonCouponCount).toLocaleString()} 张</span>
                     )}
                     {Number(asset.lockedCouponCount || 0) > 0 && (
                       <span className="text-violet-600">锁定券 {Number(asset.lockedCouponCount).toLocaleString()} 张</span>
@@ -341,6 +364,71 @@ export default function UserWallet() {
 
       <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-200/30">
         <div className="flex items-center justify-between border-b border-slate-50 px-8 py-6">
+          <div>
+            <h3 className="text-xl font-black text-slate-900">统一资产动态</h3>
+            <p className="mt-1 text-xs font-bold text-slate-400">
+              钱包、积分、成长值、优惠券事件按时间合并展示
+            </p>
+          </div>
+          <button onClick={() => navigate('/history')} className="flex items-center gap-1 text-sm font-bold text-primary hover:underline">
+            钱包流水 <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="divide-y divide-slate-50">
+          {isLoading && Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="flex items-center gap-4 px-8 py-5">
+              <div className="h-11 w-11 rounded-2xl bg-slate-100" />
+              <div className="flex-1">
+                <div className="h-4 w-32 rounded-full bg-slate-100" />
+                <div className="mt-2 h-3 w-48 rounded-full bg-slate-50" />
+              </div>
+            </div>
+          ))}
+          {!isLoading && assetActivitiesUnavailable && (
+            <div className="px-8 py-8 text-sm font-bold text-slate-400">
+              资产动态暂时不可用，请稍后重试。
+            </div>
+          )}
+          {!isLoading && !assetActivitiesUnavailable && assetActivities.length === 0 && (
+            <div className="px-8 py-8 text-sm font-bold text-slate-400">
+              暂无资产动态。领取优惠券、下单支付或获得积分后会在这里出现。
+            </div>
+          )}
+          {!isLoading && assetActivities.map((activity, index) => (
+            <motion.button
+              key={`${activity.assetType}-${activity.bizNo ?? index}-${activity.occurredAt ?? index}`}
+              whileHover={{ backgroundColor: '#f8fafc' }}
+              type="button"
+              onClick={() => activity.actionPath && navigate(activity.actionPath)}
+              className="flex w-full items-center justify-between gap-4 px-8 py-5 text-left transition-colors"
+            >
+              <div className="flex min-w-0 items-center gap-5">
+                <div className={cn('flex h-11 w-11 flex-none items-center justify-center rounded-2xl', activityToneClass(activity.tone))}>
+                  {activityIcon(activity.assetType)}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate font-black text-slate-900">{activity.title}</div>
+                  <div className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+                    {[activity.tenantName, activity.description, activity.bizNo].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+              </div>
+              <div className="flex-none text-right">
+                {activity.amountText && (
+                  <div className={cn('font-black', activity.tone === 'negative' ? 'text-red-600' : activity.tone === 'positive' ? 'text-emerald-600' : 'text-slate-900')}>
+                    {activity.amountText}
+                  </div>
+                )}
+                <div className="mt-0.5 text-xs font-semibold text-slate-400">{formatActivityTime(activity.occurredAt)}</div>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-200/30">
+        <div className="flex items-center justify-between border-b border-slate-50 px-8 py-6">
           <h3 className="text-xl font-black text-slate-900">最近钱包流水</h3>
           <button onClick={() => navigate('/history')} className="flex items-center gap-1 text-sm font-bold text-primary hover:underline">
             查看全部 <ChevronRight className="h-4 w-4" />
@@ -389,6 +477,45 @@ export default function UserWallet() {
       </section>
     </div>
   );
+}
+
+function activityIcon(assetType: string) {
+  if (assetType === 'COUPON') {
+    return <Ticket className="h-5 w-5" />;
+  }
+  if (assetType === 'POINTS') {
+    return <Coins className="h-5 w-5" />;
+  }
+  if (assetType === 'GROWTH') {
+    return <BadgeCheck className="h-5 w-5" />;
+  }
+  return <WalletIcon className="h-5 w-5" />;
+}
+
+function activityToneClass(tone?: string | null) {
+  if (tone === 'negative') {
+    return 'bg-red-50 text-red-600';
+  }
+  if (tone === 'positive') {
+    return 'bg-emerald-50 text-emerald-600';
+  }
+  return 'bg-slate-100 text-slate-600';
+}
+
+function formatActivityTime(value?: string | null) {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function MetricCard({

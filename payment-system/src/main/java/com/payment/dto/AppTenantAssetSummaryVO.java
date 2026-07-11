@@ -21,5 +21,6 @@ public class AppTenantAssetSummaryVO {
     private Integer lockedCouponCount = 0;
     private Integer usedCouponCount = 0;
     private Integer expiredCouponCount = 0;
+    private Integer expiringSoonCouponCount = 0;
     private Integer totalGrowth = 0;
 }

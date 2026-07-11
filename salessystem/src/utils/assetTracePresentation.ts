@@ -134,6 +134,19 @@ export function getCouponTracePresentation(coupon: UserCoupon): AssetTracePresen
     };
   }
 
+  if (coupon.status === 'LOCKED') {
+    const orderNo = coupon.orderNo?.trim();
+    return {
+      source: orderNo ? `锁定订单 ${orderNo}` : `领取时间 ${formatDateTime(coupon.receiveTime)}`,
+      status: '锁定中',
+      hint: '订单支付完成前暂不可使用',
+      actionLabel: orderNo ? '查看订单' : undefined,
+      actionPath: orderNo ? buildOrderDetailPath(orderNo) : undefined,
+      inactiveActionLabel: orderNo ? undefined : '锁定中',
+      tone: 'neutral',
+    };
+  }
+
   return {
     source: `领取时间 ${formatDateTime(coupon.receiveTime)}`,
     status: '可使用',

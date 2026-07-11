@@ -103,6 +103,20 @@ public class V1AppWalletController {
     }
 
     /**
+     * 查询当前用户统一资产动态。
+     *
+     * <p>合并钱包流水、积分流水、成长值日志和优惠券事件，按发生时间倒序返回。</p>
+     *
+     * @param size 返回条数，默认20
+     * @return 统一资产动态列表
+     */
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/assets/activities")
+    public Result<List<AppAssetActivityVO>> listAssetActivities(@RequestParam(defaultValue = "20") Integer size) {
+        return Result.success(appAssetSummaryService.listAssetActivities(PlatformSessionHelper.getPlatformUserId(), size));
+    }
+
+    /**
      * 查询统一钱包充值规则。
      * <p>
      * 获取所有可用的统一钱包充值优惠规则，如充100送10等。

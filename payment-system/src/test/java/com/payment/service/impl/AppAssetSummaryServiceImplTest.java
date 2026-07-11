@@ -1,28 +1,45 @@
 package com.payment.service.impl;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.dto.AppAssetActivityVO;
 import com.payment.dto.AppTenantAssetSummaryVO;
+import com.payment.entity.CouponLockRecord;
+import com.payment.entity.CouponReceiveRecord;
 import com.payment.entity.MemberPointsAccount;
 import com.payment.entity.MemberPointsLog;
 import com.payment.entity.MemberGrowthLog;
 import com.payment.entity.MerchantWalletAccount;
+import com.payment.entity.MerchantWalletLog;
 import com.payment.entity.Tenant;
 import com.payment.entity.TenantMember;
+import com.payment.entity.UnifiedWalletLog;
+import com.payment.entity.UserCoupon;
+import com.payment.mapper.CouponExpireRecordMapper;
+import com.payment.mapper.CouponLockRecordMapper;
+import com.payment.mapper.CouponReceiveRecordMapper;
+import com.payment.mapper.CouponReleaseRecordMapper;
+import com.payment.mapper.CouponWriteOffRecordMapper;
 import com.payment.mapper.MemberGrowthLogMapper;
 import com.payment.mapper.MemberPointsAccountMapper;
 import com.payment.mapper.MemberPointsLogMapper;
 import com.payment.mapper.MerchantWalletAccountMapper;
+import com.payment.mapper.MerchantWalletLogMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.mapper.TenantMemberMapper;
+import com.payment.mapper.UnifiedWalletLogMapper;
 import com.payment.mapper.UserCouponMapper;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AppAssetSummaryServiceImplTest {
@@ -40,25 +57,33 @@ class AppAssetSummaryServiceImplTest {
         when(tenantMemberMapper.selectList(any())).thenReturn(List.of(member(1L, 1), member(3L, 1)));
         when(walletAccountMapper.selectList(any())).thenReturn(List.of(wallet(2L, "12.50", "1.00")));
         when(pointsAccountMapper.selectList(any())).thenReturn(List.of(points(1L, 120), points(2L, 80)));
-        when(pointsLogMapper.selectList(any()))
-                .thenReturn(List.of(expiringLog(1L, 50)))
-                .thenReturn(List.of(expiringLog(2L, 200)))
-                .thenReturn(List.of());
         when(tenantMapper.selectBatchIds(any())).thenReturn(List.of(
                 tenant(1L, "咖啡店"),
                 tenant(2L, "书店"),
-                tenant(3L, "花店")
+                tenant(3L, "花店"),
+                tenant(4L, "甜品店")
         ));
-        when(userCouponMapper.selectCount(any()))
-                .thenReturn(2L, 0L, 1L, 0L)
-                .thenReturn(3L, 1L, 2L, 1L)
-                .thenReturn(0L, 0L, 0L, 0L);
-        when(growthLogMapper.selectOne(any()))
-                .thenReturn(growth(260))
-                .thenReturn(growth(80))
-                .thenReturn(growth(0));
+        when(userCouponMapper.selectMaps(any()))
+                .thenReturn(List.of(
+                        row("tenantId", 1L, "couponStatus", "RECEIVED", "count", 2),
+                        row("tenantId", 1L, "couponStatus", "USED", "count", 1),
+                        row("tenantId", 2L, "couponStatus", "RECEIVED", "count", 3),
+                        row("tenantId", 2L, "couponStatus", "LOCKED", "count", 1),
+                        row("tenantId", 2L, "couponStatus", "USED", "count", 2),
+                        row("tenantId", 2L, "couponStatus", "EXPIRED", "count", 1),
+                        row("tenantId", 4L, "couponStatus", "RECEIVED", "count", 1)))
+                .thenReturn(List.of(
+                        row("tenantId", 1L, "count", 1),
+                        row("tenantId", 2L, "count", 2)));
+        when(growthLogMapper.selectMaps(any())).thenReturn(List.of(
+                row("tenantId", 1L, "totalGrowth", 260),
+                row("tenantId", 2L, "totalGrowth", 80),
+                row("tenantId", 4L, "totalGrowth", 40)));
+        when(pointsLogMapper.selectMaps(any())).thenReturn(List.of(
+                row("tenantId", 1L, "points", 50),
+                row("tenantId", 2L, "points", 200)));
 
-        AppAssetSummaryServiceImpl service = new AppAssetSummaryServiceImpl(
+        AppAssetSummaryServiceImpl service = service(
                 tenantMemberMapper,
                 tenantMapper,
                 walletAccountMapper,
@@ -70,13 +95,14 @@ class AppAssetSummaryServiceImplTest {
         List<AppTenantAssetSummaryVO> result = service.listTenantAssetSummaries(99L);
 
         assertThat(result).extracting(AppTenantAssetSummaryVO::getTenantId)
-                .containsExactly(1L, 2L, 3L);
+                .containsExactly(1L, 2L, 3L, 4L);
         assertThat(result.get(0).getTenantName()).isEqualTo("咖啡店");
         assertThat(result.get(0).getPoints()).isEqualTo(120);
         assertThat(result.get(0).getExpiringSoonPoints()).isEqualTo(50);
         assertThat(result.get(0).getMemberStatus()).isEqualTo(1);
         assertThat(result.get(0).getUsableCouponCount()).isEqualTo(2);
         assertThat(result.get(0).getUsedCouponCount()).isEqualTo(1);
+        assertThat(result.get(0).getExpiringSoonCouponCount()).isEqualTo(1);
         assertThat(result.get(0).getTotalGrowth()).isEqualTo(260);
         assertThat(result.get(1).getWalletAvailableAmount()).isEqualByComparingTo("12.50");
         assertThat(result.get(1).getWalletFrozenAmount()).isEqualByComparingTo("1.00");
@@ -84,8 +110,14 @@ class AppAssetSummaryServiceImplTest {
         assertThat(result.get(1).getExpiringSoonPoints()).isEqualTo(80);
         assertThat(result.get(1).getUsableCouponCount()).isEqualTo(3);
         assertThat(result.get(1).getLockedCouponCount()).isEqualTo(1);
+        assertThat(result.get(1).getExpiringSoonCouponCount()).isEqualTo(2);
         assertThat(result.get(1).getTotalGrowth()).isEqualTo(80);
         assertThat(result.get(2).getPoints()).isZero();
+        assertThat(result.get(3).getTenantName()).isEqualTo("甜品店");
+        assertThat(result.get(3).getUsableCouponCount()).isEqualTo(1);
+        assertThat(result.get(3).getTotalGrowth()).isEqualTo(40);
+        verify(userCouponMapper, never()).selectCount(any());
+        verify(growthLogMapper, never()).selectOne(any());
     }
 
     @Test
@@ -101,8 +133,11 @@ class AppAssetSummaryServiceImplTest {
         when(tenantMemberMapper.selectList(any())).thenReturn(List.of());
         when(walletAccountMapper.selectList(any())).thenReturn(List.of());
         when(pointsAccountMapper.selectList(any())).thenReturn(List.of());
+        when(userCouponMapper.selectMaps(any())).thenReturn(List.of());
+        when(growthLogMapper.selectMaps(any())).thenReturn(List.of());
+        when(pointsLogMapper.selectMaps(any())).thenReturn(List.of());
 
-        AppAssetSummaryServiceImpl service = new AppAssetSummaryServiceImpl(
+        AppAssetSummaryServiceImpl service = service(
                 tenantMemberMapper,
                 tenantMapper,
                 walletAccountMapper,
@@ -112,6 +147,112 @@ class AppAssetSummaryServiceImplTest {
                 userCouponMapper);
 
         assertThat(service.listTenantAssetSummaries(99L)).isEmpty();
+    }
+
+    @Test
+    void listAssetActivitiesShouldMergeAssetEventsByTime() {
+        TenantMemberMapper tenantMemberMapper = mock(TenantMemberMapper.class);
+        TenantMapper tenantMapper = mock(TenantMapper.class);
+        MerchantWalletAccountMapper walletAccountMapper = mock(MerchantWalletAccountMapper.class);
+        MemberPointsAccountMapper pointsAccountMapper = mock(MemberPointsAccountMapper.class);
+        MemberPointsLogMapper pointsLogMapper = mock(MemberPointsLogMapper.class);
+        MemberGrowthLogMapper growthLogMapper = mock(MemberGrowthLogMapper.class);
+        UserCouponMapper userCouponMapper = mock(UserCouponMapper.class);
+        UnifiedWalletLogMapper unifiedWalletLogMapper = mock(UnifiedWalletLogMapper.class);
+        MerchantWalletLogMapper merchantWalletLogMapper = mock(MerchantWalletLogMapper.class);
+        CouponReceiveRecordMapper receiveRecordMapper = mock(CouponReceiveRecordMapper.class);
+        CouponLockRecordMapper lockRecordMapper = mock(CouponLockRecordMapper.class);
+        CouponReleaseRecordMapper releaseRecordMapper = mock(CouponReleaseRecordMapper.class);
+        CouponWriteOffRecordMapper writeOffRecordMapper = mock(CouponWriteOffRecordMapper.class);
+        CouponExpireRecordMapper expireRecordMapper = mock(CouponExpireRecordMapper.class);
+
+        when(unifiedWalletLogMapper.selectPage(any(), any())).thenReturn(page(unifiedWallet(
+                LocalDateTime.of(2026, 7, 10, 10, 0), "ORDER_PAY", "SO1001", "-10.00")));
+        when(merchantWalletLogMapper.selectPage(any(), any())).thenReturn(page(merchantWallet(
+                LocalDateTime.of(2026, 7, 10, 11, 0), 9L, "REFUND", "SO1002", "3.00")));
+        when(pointsLogMapper.selectPage(any(), any())).thenReturn(page(List.of(
+                releasedPointsLog(LocalDateTime.of(2026, 7, 10, 13, 0), 9L, 20),
+                pointsLog(LocalDateTime.of(2026, 7, 10, 9, 0), 9L, 20))));
+        when(growthLogMapper.selectPage(any(), any())).thenReturn(page(growthLog(
+                LocalDateTime.of(2026, 7, 10, 8, 0), 9L, 5)));
+        when(userCouponMapper.selectList(any())).thenReturn(List.of(userCoupon(501L)));
+        when(receiveRecordMapper.selectPage(any(), any())).thenReturn(page(receiveRecord(
+                LocalDateTime.of(2026, 7, 10, 12, 0), 9L, "CR1001")));
+        when(lockRecordMapper.selectPage(any(), any())).thenReturn(page(lockRecord(
+                LocalDateTime.of(2026, 7, 10, 7, 0), 9L, "SO1001")));
+        when(releaseRecordMapper.selectPage(any(), any())).thenReturn(new Page<>(1, 2));
+        when(writeOffRecordMapper.selectPage(any(), any())).thenReturn(new Page<>(1, 2));
+        when(expireRecordMapper.selectPage(any(), any())).thenReturn(new Page<>(1, 2));
+        when(tenantMapper.selectBatchIds(any())).thenReturn(List.of(tenant(9L, "本地测试店")));
+
+        AppAssetSummaryServiceImpl service = new AppAssetSummaryServiceImpl(
+                tenantMemberMapper,
+                tenantMapper,
+                walletAccountMapper,
+                pointsAccountMapper,
+                pointsLogMapper,
+                growthLogMapper,
+                userCouponMapper,
+                unifiedWalletLogMapper,
+                merchantWalletLogMapper,
+                receiveRecordMapper,
+                lockRecordMapper,
+                releaseRecordMapper,
+                writeOffRecordMapper,
+                expireRecordMapper);
+
+        List<AppAssetActivityVO> result = service.listAssetActivities(99L, 4);
+
+        assertThat(result).extracting(AppAssetActivityVO::getTitle)
+                .containsExactly("积分已释放", "优惠券领取", "退款", "ORDER PAY");
+        assertThat(result).extracting(AppAssetActivityVO::getTenantName)
+                .containsExactly("本地测试店", "本地测试店", "本地测试店", null);
+        assertThat(result).extracting(AppAssetActivityVO::getAmountText)
+                .containsExactly("+20 分", null, "+¥3", "¥-10");
+        assertThat(result).extracting(AppAssetActivityVO::getActionPath)
+                .containsExactly("/points/9", "/coupons?tab=my&tenantId=9", "/wallet/tenants/9", "/history");
+    }
+
+    private AppAssetSummaryServiceImpl service(TenantMemberMapper tenantMemberMapper,
+                                               TenantMapper tenantMapper,
+                                               MerchantWalletAccountMapper walletAccountMapper,
+                                               MemberPointsAccountMapper pointsAccountMapper,
+                                               MemberPointsLogMapper pointsLogMapper,
+                                               MemberGrowthLogMapper growthLogMapper,
+                                               UserCouponMapper userCouponMapper) {
+        return new AppAssetSummaryServiceImpl(
+                tenantMemberMapper,
+                tenantMapper,
+                walletAccountMapper,
+                pointsAccountMapper,
+                pointsLogMapper,
+                growthLogMapper,
+                userCouponMapper,
+                mock(UnifiedWalletLogMapper.class),
+                mock(MerchantWalletLogMapper.class),
+                mock(CouponReceiveRecordMapper.class),
+                mock(CouponLockRecordMapper.class),
+                mock(CouponReleaseRecordMapper.class),
+                mock(CouponWriteOffRecordMapper.class),
+                mock(CouponExpireRecordMapper.class));
+    }
+
+    private Map<String, Object> row(Object... values) {
+        java.util.LinkedHashMap<String, Object> row = new java.util.LinkedHashMap<>();
+        for (int index = 0; index < values.length; index += 2) {
+            row.put(String.valueOf(values[index]), values[index + 1]);
+        }
+        return row;
+    }
+
+    private <T> Page<T> page(T record) {
+        return page(List.of(record));
+    }
+
+    private <T> Page<T> page(List<T> records) {
+        Page<T> page = new Page<>(1, 10);
+        page.setRecords(records);
+        return page;
     }
 
     private TenantMember member(Long tenantId, Integer status) {
@@ -136,18 +277,75 @@ class AppAssetSummaryServiceImplTest {
         return account;
     }
 
-    private MemberPointsLog expiringLog(Long tenantId, Integer points) {
+    private MemberPointsLog pointsLog(LocalDateTime createTime, Long tenantId, Integer points) {
         MemberPointsLog log = new MemberPointsLog();
         log.setTenantId(tenantId);
         log.setChangePoints(points);
-        log.setExpireTime(LocalDateTime.now().plusDays(7));
+        log.setBizType("ORDER_REWARD");
+        log.setBizNo("SO1001");
+        log.setCreateTime(createTime);
         return log;
     }
 
-    private MemberGrowthLog growth(Integer value) {
-        MemberGrowthLog log = new MemberGrowthLog();
-        log.setChangeGrowth(value);
+    private MemberPointsLog releasedPointsLog(LocalDateTime releaseTime, Long tenantId, Integer points) {
+        MemberPointsLog log = pointsLog(releaseTime.minusMinutes(5), tenantId, -points);
+        log.setStatus("RELEASED");
+        log.setReleaseTime(releaseTime);
+        log.setReleaseReason("订单取消");
         return log;
+    }
+
+    private MemberGrowthLog growthLog(LocalDateTime createTime, Long tenantId, Integer value) {
+        MemberGrowthLog log = new MemberGrowthLog();
+        log.setTenantId(tenantId);
+        log.setChangeGrowth(value);
+        log.setBizType("ORDER_REWARD");
+        log.setBizNo("SO1001");
+        log.setCreateTime(createTime);
+        return log;
+    }
+
+    private UnifiedWalletLog unifiedWallet(LocalDateTime createTime, String bizType, String bizNo, String amount) {
+        UnifiedWalletLog log = new UnifiedWalletLog();
+        log.setPlatformUserId(99L);
+        log.setBizType(bizType);
+        log.setBizNo(bizNo);
+        log.setChangeAmount(new BigDecimal(amount));
+        log.setCreateTime(createTime);
+        return log;
+    }
+
+    private MerchantWalletLog merchantWallet(LocalDateTime createTime, Long tenantId, String bizType, String bizNo, String amount) {
+        MerchantWalletLog log = new MerchantWalletLog();
+        log.setPlatformUserId(99L);
+        log.setTenantId(tenantId);
+        log.setBizType(bizType);
+        log.setBizNo(bizNo);
+        log.setChangeAmount(new BigDecimal(amount));
+        log.setCreateTime(createTime);
+        return log;
+    }
+
+    private UserCoupon userCoupon(Long id) {
+        UserCoupon coupon = new UserCoupon();
+        coupon.setId(id);
+        return coupon;
+    }
+
+    private CouponReceiveRecord receiveRecord(LocalDateTime receiveTime, Long tenantId, String bizNo) {
+        CouponReceiveRecord record = new CouponReceiveRecord();
+        record.setTenantId(tenantId);
+        record.setBizNo(bizNo);
+        record.setReceiveTime(receiveTime);
+        return record;
+    }
+
+    private CouponLockRecord lockRecord(LocalDateTime lockTime, Long tenantId, String orderNo) {
+        CouponLockRecord record = new CouponLockRecord();
+        record.setTenantId(tenantId);
+        record.setOrderNo(orderNo);
+        record.setLockTime(lockTime);
+        return record;
     }
 
     private Tenant tenant(Long id, String name) {

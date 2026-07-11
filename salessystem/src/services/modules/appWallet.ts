@@ -6,6 +6,7 @@ import type {
   RechargePayment,
   UnifiedRechargeRule,
   UnifiedWalletRechargePayload,
+  AssetActivity,
   TenantAssetSummary,
   WalletAccount,
   WalletLog,
@@ -34,6 +35,15 @@ export const appWalletService = {
     return request<TenantAssetSummary[]>({
       url: '/v1/app/assets/tenant-summaries',
       method: 'get',
+      authRole: 'user',
+    });
+  },
+
+  listAssetActivities(size = 20) {
+    return request<AssetActivity[]>({
+      url: '/v1/app/assets/activities',
+      method: 'get',
+      params: { size },
       authRole: 'user',
     });
   },

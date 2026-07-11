@@ -49,7 +49,21 @@ export interface TenantAssetSummary {
   lockedCouponCount?: number;
   usedCouponCount?: number;
   expiredCouponCount?: number;
+  expiringSoonCouponCount?: number;
   totalGrowth?: number;
+}
+
+export interface AssetActivity {
+  assetType: 'WALLET' | 'POINTS' | 'GROWTH' | 'COUPON' | string;
+  title: string;
+  description?: string | null;
+  occurredAt?: string | null;
+  tenantId?: number | null;
+  tenantName?: string | null;
+  bizNo?: string | null;
+  amountText?: string | null;
+  tone?: AssetTraceTone | null;
+  actionPath?: string | null;
 }
 
 export interface RechargePayment {

@@ -70,6 +70,26 @@ describe('appWalletService', () => {
     });
   });
 
+  describe('listAssetActivities', () => {
+    it('应调用 GET /v1/app/assets/activities 并传入默认条数', async () => {
+      // Arrange
+      const activities = [{ assetType: 'COUPON', title: '优惠券领取' }];
+      mockRequest.mockResolvedValue(activities);
+
+      // Act
+      const result = await appWalletService.listAssetActivities();
+
+      // Assert
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/assets/activities',
+        method: 'get',
+        params: { size: 20 },
+        authRole: 'user',
+      });
+      expect(result).toEqual(activities);
+    });
+  });
+
   describe('createUnifiedRecharge', () => {
     it('应调用 POST /v1/app/wallets/unified/recharges', async () => {
       // Arrange
