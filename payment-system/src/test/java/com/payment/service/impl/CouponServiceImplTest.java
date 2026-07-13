@@ -307,6 +307,7 @@ class CouponServiceImplTest {
         ArgumentCaptor<CouponLockRecord> recordCaptor = ArgumentCaptor.forClass(CouponLockRecord.class);
         verify(lockRecordMapper).insert(recordCaptor.capture());
         assertEquals(501L, recordCaptor.getValue().getUserCouponId());
+        assertEquals(100L, recordCaptor.getValue().getPlatformUserId());
         assertEquals("SO1001", recordCaptor.getValue().getBizNo());
         assertEquals(UserCouponStatusEnum.LOCKED.name(), recordCaptor.getValue().getLockStatus());
         assertCouponEvent(outboxPublisher, "LOCKED", "SO1001", UserCouponStatusEnum.LOCKED.name(), "SO1001");
@@ -345,6 +346,7 @@ class CouponServiceImplTest {
 
         ArgumentCaptor<CouponReleaseRecord> recordCaptor = ArgumentCaptor.forClass(CouponReleaseRecord.class);
         verify(releaseRecordMapper).insert(recordCaptor.capture());
+        assertEquals(100L, recordCaptor.getValue().getPlatformUserId());
         assertEquals("订单取消", recordCaptor.getValue().getReleaseReason());
         assertEquals("SO1001", recordCaptor.getValue().getBizNo());
         assertCouponEvent(outboxPublisher, "RELEASED", "SO1001", UserCouponStatusEnum.RECEIVED.name(), "SO1001");
@@ -370,6 +372,7 @@ class CouponServiceImplTest {
 
         ArgumentCaptor<CouponWriteOffRecord> recordCaptor = ArgumentCaptor.forClass(CouponWriteOffRecord.class);
         verify(writeOffRecordMapper).insert(recordCaptor.capture());
+        assertEquals(100L, recordCaptor.getValue().getPlatformUserId());
         assertEquals(new BigDecimal("8.00"), recordCaptor.getValue().getDiscountAmount());
         assertEquals(201L, recordCaptor.getValue().getCouponTemplateId());
         assertCouponEvent(outboxPublisher, "USED", "SO1001", UserCouponStatusEnum.USED.name(), "SO1001");

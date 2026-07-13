@@ -16,7 +16,10 @@ public class AppAssetActivityVO {
     private Long tenantId;
     private String tenantName;
     private String bizNo;
+    private String bizType;
     private String amountText;
     private String tone;
     private String actionPath;
+    private String sourceType;
+    private Long sourceId;
 }

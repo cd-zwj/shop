@@ -23,6 +23,7 @@ import org.springframework.beans.BeanUtils;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -49,6 +50,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/v1/app")
 @RequiredArgsConstructor
+@Validated
 public class V1AppWalletController {
 
     private final UnifiedWalletService unifiedWalletService;
@@ -105,15 +107,46 @@ public class V1AppWalletController {
     /**
      * 查询当前用户统一资产动态。
      *
-     * <p>合并钱包流水、积分流水、成长值日志和优惠券事件，按发生时间倒序返回。</p>
+     * <p>保留旧版数组响应，仅通过 size 控制返回条数。</p>
      *
      * @param size 返回条数，默认20
      * @return 统一资产动态列表
      */
     @SaCheckLogin(type = "platform")
     @GetMapping("/assets/activities")
-    public Result<List<AppAssetActivityVO>> listAssetActivities(@RequestParam(defaultValue = "20") Integer size) {
+    public Result<List<AppAssetActivityVO>> listAssetActivities(
+            @RequestParam(defaultValue = "20") Integer size) {
         return Result.success(appAssetSummaryService.listAssetActivities(PlatformSessionHelper.getPlatformUserId(), size));
+    }
+
+    /**
+     * 分页查询当前用户统一资产动态。
+     *
+     * @param query 筛选条件及游标
+     * @return 统一资产动态分页结果
+     */
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/assets/activities/page")
+    public Result<AssetActivityPageVO> listAssetActivitiesPage(@Valid @ModelAttribute AssetActivityQueryDTO query) {
+        if (query.getSize() == null) {
+            query.setSize(20);
+        }
+        return Result.success(appAssetSummaryService.listAssetActivities(PlatformSessionHelper.getPlatformUserId(), query));
+    }
+
+    /**
+     * 查询当前用户的受限资产。
+     *
+     * <p>tenantId 省略时返回当前用户全部商户的锁定券、预占积分和账户冻结摘要。</p>
+     *
+     * @param tenantId 可选商户ID
+     * @return 受限资产明细
+     */
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/assets/holds")
+    public Result<List<AssetHoldVO>> listAssetHolds(
+            @RequestParam(required = false) @Min(value = 1, message = "商户ID必须大于0") Long tenantId) {
+        return Result.success(appAssetSummaryService.listAssetHolds(PlatformSessionHelper.getPlatformUserId(), tenantId));
     }
 
     /**

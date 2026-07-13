@@ -30,6 +30,9 @@ public class CouponLockRecord implements Serializable {
     /** 所属租户ID，多租户行级隔离 */
     private Long tenantId;
 
+    /** 持券用户ID，用于用户维度的事件查询 */
+    private Long platformUserId;
+
     /** 关联的订单ID */
     private Long orderId;
 

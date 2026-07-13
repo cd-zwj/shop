@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import {
   AlertCircle,
@@ -17,11 +17,28 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { appWalletService } from '../services/modules/appWallet';
-import type { AssetActivity, TenantAssetSummary, WalletAccount, WalletLog } from '../types/wallet';
+import type {
+  AssetActivity,
+  AssetActivityPage,
+  AssetActivityQuery,
+  AssetActivityType,
+  AssetHold,
+  TenantAssetSummary,
+  WalletAccount,
+  WalletLog,
+} from '../types/wallet';
 import { cn } from '../lib/utils';
 import { formatCurrency } from '../utils/display';
 import { getErrorMessage } from '../utils/errorMessage';
 import { buildWalletRecentEntries } from '../utils/walletLogPresentation';
+
+const ACTIVITY_PAGE_SIZE = 20;
+const ACTIVITY_TYPE_OPTIONS: Array<{ value: AssetActivityType; label: string }> = [
+  { value: 'WALLET', label: '钱包' },
+  { value: 'POINTS', label: '积分' },
+  { value: 'GROWTH', label: '成长值' },
+  { value: 'COUPON', label: '优惠券' },
+];
 
 export default function UserWallet() {
   const navigate = useNavigate();
@@ -29,37 +46,65 @@ export default function UserWallet() {
   const [logs, setLogs] = useState<WalletLog[]>([]);
   const [tenantAssets, setTenantAssets] = useState<TenantAssetSummary[]>([]);
   const [assetActivities, setAssetActivities] = useState<AssetActivity[]>([]);
+  const [assetHolds, setAssetHolds] = useState<AssetHold[]>([]);
   const [assetActivitiesUnavailable, setAssetActivitiesUnavailable] = useState(false);
+  const [activityQuery, setActivityQuery] = useState<AssetActivityQuery>({ size: ACTIVITY_PAGE_SIZE });
+  const [activityTimeRange, setActivityTimeRange] = useState<'ALL' | 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'CUSTOM'>('ALL');
+  const [customActivityFrom, setCustomActivityFrom] = useState('');
+  const [customActivityTo, setCustomActivityTo] = useState('');
+  const [nextActivityCursor, setNextActivityCursor] = useState<string | null>(null);
+  const [hasMoreActivities, setHasMoreActivities] = useState(false);
+  const [isLoadingMoreActivities, setIsLoadingMoreActivities] = useState(false);
+  const [activityLoadError, setActivityLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const activityRequestIdRef = useRef(0);
 
   const loadWalletData = useCallback(async (isActive: () => boolean = () => true) => {
     setIsLoading(true);
     setError(null);
+    const initialActivityRequestId = ++activityRequestIdRef.current;
+    const holdsPromise = appWalletService.listAssetHolds().catch(() => [] as AssetHold[]);
 
     try {
       const [walletInfo, walletLogs, merchantList, activityResult] = await Promise.all([
         appWalletService.getUnifiedWallet(),
         appWalletService.getUnifiedWalletLogs(1, 5),
         appWalletService.listTenantAssetSummaries(),
-        appWalletService.listAssetActivities(10)
-          .then((activities) => ({ activities, unavailable: false }))
-          .catch(() => ({ activities: [] as AssetActivity[], unavailable: true })),
+        appWalletService.listAssetActivities({ size: ACTIVITY_PAGE_SIZE })
+          .then((page) => ({ page, unavailable: false }))
+          .catch(() => ({ page: emptyActivityPage(), unavailable: true })),
       ]);
-
       if (!isActive()) return;
       setWallet(walletInfo);
       setLogs(walletLogs.records ?? []);
       setTenantAssets(merchantList);
-      setAssetActivities(activityResult.activities);
-      setAssetActivitiesUnavailable(activityResult.unavailable);
+      if (initialActivityRequestId === activityRequestIdRef.current) {
+        setAssetActivities(activityResult.page.records);
+        setAssetActivitiesUnavailable(activityResult.unavailable);
+        setNextActivityCursor(activityResult.page.nextCursor ?? null);
+        setHasMoreActivities(activityResult.page.hasMore);
+        setActivityQuery({ size: ACTIVITY_PAGE_SIZE });
+        setActivityTimeRange('ALL');
+        setCustomActivityFrom('');
+        setCustomActivityTo('');
+        setActivityLoadError(null);
+      }
+      void holdsPromise.then((holds) => {
+        if (isActive()) {
+          setAssetHolds(holds);
+        }
+      });
     } catch (loadError) {
       if (!isActive()) return;
       setError(getErrorMessage(loadError, '钱包资产加载失败，请稍后重试'));
       setLogs([]);
       setTenantAssets([]);
       setAssetActivities([]);
+      setAssetHolds([]);
       setAssetActivitiesUnavailable(false);
+      setNextActivityCursor(null);
+      setHasMoreActivities(false);
     } finally {
       if (isActive()) {
         setIsLoading(false);
@@ -76,6 +121,93 @@ export default function UserWallet() {
       isMounted = false;
     };
   }, [loadWalletData]);
+
+  const loadActivityPage = useCallback(async (query: AssetActivityQuery, append: boolean) => {
+    const requestId = ++activityRequestIdRef.current;
+    if (append) {
+      setIsLoadingMoreActivities(true);
+    } else {
+      setIsLoadingMoreActivities(false);
+    }
+    setActivityLoadError(null);
+
+    try {
+      const page = await appWalletService.listAssetActivities(query);
+      if (requestId !== activityRequestIdRef.current) {
+        return;
+      }
+      setAssetActivities((current) => append ? [...current, ...page.records] : page.records);
+      setAssetActivitiesUnavailable(false);
+      setNextActivityCursor(page.nextCursor ?? null);
+      setHasMoreActivities(page.hasMore);
+    } catch (loadError) {
+      if (requestId !== activityRequestIdRef.current) {
+        return;
+      }
+      const message = getErrorMessage(loadError, '资产动态加载失败，请稍后重试');
+      setActivityLoadError(message);
+      if (!append) {
+        setAssetActivities([]);
+        setAssetActivitiesUnavailable(true);
+        setNextActivityCursor(null);
+        setHasMoreActivities(false);
+      }
+    } finally {
+      if (append && requestId === activityRequestIdRef.current) {
+        setIsLoadingMoreActivities(false);
+      }
+    }
+  }, []);
+
+  const resetActivityQuery = useCallback((nextQuery: AssetActivityQuery) => {
+    const normalizedQuery = { ...nextQuery, cursor: undefined, size: ACTIVITY_PAGE_SIZE };
+    setActivityQuery(normalizedQuery);
+    void loadActivityPage(normalizedQuery, false);
+  }, [loadActivityPage]);
+
+  const toggleActivityType = useCallback((type: AssetActivityType) => {
+    const currentTypes = activityQuery.types ?? [];
+    const types = currentTypes.includes(type)
+      ? currentTypes.filter((item) => item !== type)
+      : [...currentTypes, type];
+    resetActivityQuery({ ...activityQuery, types: types.length > 0 ? types : undefined });
+  }, [activityQuery, resetActivityQuery]);
+
+  const updateActivityTenant = useCallback((tenantId: number | undefined) => {
+    resetActivityQuery({ ...activityQuery, tenantId });
+  }, [activityQuery, resetActivityQuery]);
+
+  const updateActivityTimeRange = useCallback((range: 'ALL' | 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'CUSTOM') => {
+    setActivityTimeRange(range);
+    if (range === 'CUSTOM') {
+      setCustomActivityFrom('');
+      setCustomActivityTo('');
+      resetActivityQuery({
+        ...activityQuery,
+        from: undefined,
+        to: undefined,
+      });
+      return;
+    }
+    resetActivityQuery({
+      ...activityQuery,
+      ...activityRangeBounds(range, customActivityFrom, customActivityTo),
+    });
+  }, [activityQuery, customActivityFrom, customActivityTo, resetActivityQuery]);
+
+  const applyCustomActivityRange = useCallback(() => {
+    resetActivityQuery({
+      ...activityQuery,
+      ...activityRangeBounds('CUSTOM', customActivityFrom, customActivityTo),
+    });
+  }, [activityQuery, customActivityFrom, customActivityTo, resetActivityQuery]);
+
+  const loadMoreActivities = useCallback(() => {
+    if (!nextActivityCursor || isLoadingMoreActivities) {
+      return;
+    }
+    void loadActivityPage({ ...activityQuery, cursor: nextActivityCursor }, true);
+  }, [activityQuery, isLoadingMoreActivities, loadActivityPage, nextActivityCursor]);
 
   const recentDistribution = useMemo(() => {
     return buildWalletRecentEntries(logs);
@@ -179,6 +311,39 @@ export default function UserWallet() {
                   <div className="mt-0.5 text-xs font-bold text-slate-500">{item.detail}</div>
                 </div>
                 <span className="flex-none text-xs font-black text-amber-700">{item.actionLabel}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!isLoading && assetHolds.length > 0 && (
+        <section className="border-y border-violet-100 bg-violet-50/70 px-6 py-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-black text-violet-700">
+            <AlertCircle className="h-5 w-5" />
+            受限资产
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            {assetHolds.map((hold, index) => (
+              <button
+                key={`${hold.tenantId}-${hold.assetType}-${hold.holdStatus}-${hold.bizNo ?? index}`}
+                type="button"
+                disabled={!hold.actionPath}
+                onClick={() => hold.actionPath && navigate(hold.actionPath)}
+                className={cn(
+                  'flex items-center justify-between gap-4 border border-violet-100 bg-white px-4 py-3 text-left shadow-sm',
+                  hold.actionPath ? 'transition-colors hover:border-violet-300 hover:bg-violet-50' : 'cursor-default',
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-black text-slate-900">{assetHoldTitle(hold)}</div>
+                  <div className="mt-0.5 truncate text-xs font-bold text-slate-500">
+                    {[hold.tenantName, hold.amountText, hold.reason, hold.bizNo].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                {hold.actionPath && (
+                  <span className="flex-none text-xs font-black text-violet-700">{hold.actionLabel ?? '查看订单'}</span>
+                )}
               </button>
             ))}
           </div>
@@ -363,16 +528,83 @@ export default function UserWallet() {
       </div>
 
       <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-200/30">
-        <div className="flex items-center justify-between border-b border-slate-50 px-8 py-6">
+        <div className="flex flex-col gap-4 border-b border-slate-50 px-8 py-6">
           <div>
             <h3 className="text-xl font-black text-slate-900">统一资产动态</h3>
             <p className="mt-1 text-xs font-bold text-slate-400">
               钱包、积分、成长值、优惠券事件按时间合并展示
             </p>
           </div>
-          <button onClick={() => navigate('/history')} className="flex items-center gap-1 text-sm font-bold text-primary hover:underline">
-            钱包流水 <ChevronRight className="h-4 w-4" />
-          </button>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_160px]">
+            <div className="flex flex-wrap gap-2" aria-label="资产类型筛选">
+              {ACTIVITY_TYPE_OPTIONS.map((option) => {
+                const selected = activityQuery.types?.includes(option.value) ?? false;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => toggleActivityType(option.value)}
+                    className={cn(
+                      'rounded-lg border px-3 py-1.5 text-xs font-black transition-colors',
+                      selected
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary',
+                    )}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+            <select
+              aria-label="商户筛选"
+              value={activityQuery.tenantId ?? ''}
+              onChange={(event) => updateActivityTenant(event.target.value ? Number(event.target.value) : undefined)}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+            >
+              <option value="">全部商户</option>
+              {tenantAssets.map((asset) => (
+                <option key={asset.tenantId} value={asset.tenantId}>{asset.tenantName}</option>
+              ))}
+            </select>
+            <select
+              aria-label="时间范围筛选"
+              value={activityTimeRange}
+              onChange={(event) => updateActivityTimeRange(event.target.value as 'ALL' | 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'CUSTOM')}
+              className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+            >
+              <option value="ALL">全部时间</option>
+              <option value="SEVEN_DAYS">近 7 天</option>
+              <option value="THIRTY_DAYS">近 30 天</option>
+              <option value="CUSTOM">自定义</option>
+            </select>
+          </div>
+          {activityTimeRange === 'CUSTOM' && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                aria-label="资产动态开始时间"
+                type="datetime-local"
+                value={customActivityFrom}
+                onChange={(event) => setCustomActivityFrom(event.target.value)}
+                className="h-9 min-w-0 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+              />
+              <input
+                aria-label="资产动态结束时间"
+                type="datetime-local"
+                value={customActivityTo}
+                onChange={(event) => setCustomActivityTo(event.target.value)}
+                className="h-9 min-w-0 rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={applyCustomActivityRange}
+                className="h-9 rounded-lg border border-primary px-3 text-xs font-black text-primary transition-colors hover:bg-primary/5"
+              >
+                应用
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="divide-y divide-slate-50">
@@ -387,7 +619,7 @@ export default function UserWallet() {
           ))}
           {!isLoading && assetActivitiesUnavailable && (
             <div className="px-8 py-8 text-sm font-bold text-slate-400">
-              资产动态暂时不可用，请稍后重试。
+              {activityLoadError ?? '资产动态暂时不可用，请稍后重试。'}
             </div>
           )}
           {!isLoading && !assetActivitiesUnavailable && assetActivities.length === 0 && (
@@ -395,36 +627,46 @@ export default function UserWallet() {
               暂无资产动态。领取优惠券、下单支付或获得积分后会在这里出现。
             </div>
           )}
-          {!isLoading && assetActivities.map((activity, index) => (
-            <motion.button
-              key={`${activity.assetType}-${activity.bizNo ?? index}-${activity.occurredAt ?? index}`}
-              whileHover={{ backgroundColor: '#f8fafc' }}
-              type="button"
-              onClick={() => activity.actionPath && navigate(activity.actionPath)}
-              className="flex w-full items-center justify-between gap-4 px-8 py-5 text-left transition-colors"
-            >
-              <div className="flex min-w-0 items-center gap-5">
-                <div className={cn('flex h-11 w-11 flex-none items-center justify-center rounded-2xl', activityToneClass(activity.tone))}>
-                  {activityIcon(activity.assetType)}
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate font-black text-slate-900">{activity.title}</div>
-                  <div className="mt-0.5 truncate text-xs font-semibold text-slate-400">
-                    {[activity.tenantName, activity.description, activity.bizNo].filter(Boolean).join(' · ')}
-                  </div>
-                </div>
-              </div>
-              <div className="flex-none text-right">
-                {activity.amountText && (
-                  <div className={cn('font-black', activity.tone === 'negative' ? 'text-red-600' : activity.tone === 'positive' ? 'text-emerald-600' : 'text-slate-900')}>
-                    {activity.amountText}
-                  </div>
-                )}
-                <div className="mt-0.5 text-xs font-semibold text-slate-400">{formatActivityTime(activity.occurredAt)}</div>
-              </div>
-            </motion.button>
-          ))}
+          {!isLoading && assetActivities.map((activity) => {
+            const content = activityRowContent(activity);
+            const key = `${activity.sourceType}-${activity.sourceId}`;
+            const className = 'flex w-full items-center justify-between gap-4 px-8 py-5 text-left transition-colors';
+            return activity.actionPath ? (
+              <motion.button
+                key={key}
+                whileHover={{ backgroundColor: '#f8fafc' }}
+                type="button"
+                onClick={() => navigate(activity.actionPath!)}
+                className={className}
+              >
+                {content}
+              </motion.button>
+            ) : (
+              <motion.div key={key} className={className}>
+                {content}
+              </motion.div>
+            );
+          })}
         </div>
+        {!isLoading && !assetActivitiesUnavailable && assetActivities.length > 0 && (
+          <div className="border-t border-slate-50 px-8 py-4">
+            {hasMoreActivities ? (
+              <button
+                type="button"
+                onClick={loadMoreActivities}
+                disabled={isLoadingMoreActivities}
+                className="w-full rounded-lg border border-slate-200 px-4 py-2 text-sm font-black text-slate-700 transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoadingMoreActivities ? '正在加载...' : '加载更多'}
+              </button>
+            ) : (
+              <div className="text-center text-xs font-bold text-slate-400">没有更多记录</div>
+            )}
+            {activityLoadError && (
+              <div className="mt-2 text-center text-xs font-bold text-red-600">{activityLoadError}</div>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-3xl border border-slate-100 bg-white shadow-xl shadow-slate-200/30">
@@ -476,6 +718,73 @@ export default function UserWallet() {
         </div>
       </section>
     </div>
+  );
+}
+
+function emptyActivityPage(): AssetActivityPage {
+  return { records: [], nextCursor: null, hasMore: false };
+}
+
+function activityRangeBounds(
+  range: 'ALL' | 'SEVEN_DAYS' | 'THIRTY_DAYS' | 'CUSTOM',
+  customFrom: string,
+  customTo: string,
+): Pick<AssetActivityQuery, 'from' | 'to'> {
+  if (range === 'SEVEN_DAYS' || range === 'THIRTY_DAYS') {
+    const now = new Date();
+    const days = range === 'SEVEN_DAYS' ? 7 : 30;
+    return {
+      from: toLocalDateTime(new Date(now.getTime() - days * 24 * 60 * 60 * 1000)),
+      to: toLocalDateTime(now),
+    };
+  }
+  if (range === 'CUSTOM') {
+    return {
+      from: customFrom || undefined,
+      to: customTo || undefined,
+    };
+  }
+  return { from: undefined, to: undefined };
+}
+
+function toLocalDateTime(value: Date) {
+  const part = (number: number) => String(number).padStart(2, '0');
+  return `${value.getFullYear()}-${part(value.getMonth() + 1)}-${part(value.getDate())}T${part(value.getHours())}:${part(value.getMinutes())}:${part(value.getSeconds())}`;
+}
+
+function assetHoldTitle(hold: AssetHold) {
+  if (hold.assetType === 'COUPON') {
+    return '优惠券锁定中';
+  }
+  if (hold.assetType === 'POINTS') {
+    return '积分预占中';
+  }
+  return '钱包金额冻结';
+}
+
+function activityRowContent(activity: AssetActivity) {
+  return (
+    <>
+      <div className="flex min-w-0 items-center gap-5">
+        <div className={cn('flex h-11 w-11 flex-none items-center justify-center rounded-2xl', activityToneClass(activity.tone))}>
+          {activityIcon(activity.assetType)}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate font-black text-slate-900">{activity.title}</div>
+          <div className="mt-0.5 truncate text-xs font-semibold text-slate-400">
+            {[activity.tenantName, activity.description, activity.bizNo].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+      </div>
+      <div className="flex-none text-right">
+        {activity.amountText && (
+          <div className={cn('font-black', activity.tone === 'negative' ? 'text-red-600' : activity.tone === 'positive' ? 'text-emerald-600' : 'text-slate-900')}>
+            {activity.amountText}
+          </div>
+        )}
+        <div className="mt-0.5 text-xs font-semibold text-slate-400">{formatActivityTime(activity.occurredAt)}</div>
+      </div>
+    </>
   );
 }
 

@@ -561,6 +561,7 @@ public class CouponServiceImpl implements CouponService {
         CouponLockRecord record = new CouponLockRecord();
         record.setUserCouponId(userCouponId);
         record.setTenantId(tenantId);
+        record.setPlatformUserId(platformUserId);
         record.setOrderId(orderId);
         record.setOrderNo(orderNo);
         record.setBizNo(bizNo);
@@ -599,6 +600,7 @@ public class CouponServiceImpl implements CouponService {
         CouponReleaseRecord record = new CouponReleaseRecord();
         record.setUserCouponId(userCouponId);
         record.setTenantId(tenantId);
+        record.setPlatformUserId(platformUserId);
         record.setOrderId(orderId);
         record.setOrderNo(orderNo);
         record.setBizNo(bizNo);
@@ -639,6 +641,7 @@ public class CouponServiceImpl implements CouponService {
         record.setUserCouponId(userCouponId);
         record.setCouponTemplateId(coupon.getTemplateId());
         record.setTenantId(tenantId);
+        record.setPlatformUserId(coupon.getPlatformUserId());
         record.setOrderId(orderId);
         record.setOrderNo(orderNo);
         record.setBizNo(bizNo);

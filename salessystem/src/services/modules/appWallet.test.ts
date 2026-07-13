@@ -71,22 +71,51 @@ describe('appWalletService', () => {
   });
 
   describe('listAssetActivities', () => {
-    it('应调用 GET /v1/app/assets/activities 并传入默认条数', async () => {
+    it('应调用 GET /v1/app/assets/activities/page 并传入筛选和游标参数', async () => {
       // Arrange
-      const activities = [{ assetType: 'COUPON', title: '优惠券领取' }];
+      const activities = { records: [{ assetType: 'COUPON', title: '优惠券领取' }], nextCursor: 'cursor-2', hasMore: true };
       mockRequest.mockResolvedValue(activities);
 
       // Act
-      const result = await appWalletService.listAssetActivities();
+      const result = await appWalletService.listAssetActivities({
+        types: ['COUPON', 'POINTS'],
+        tenantId: 9,
+        from: '2026-07-01T00:00:00',
+        to: '2026-07-11T23:59:59',
+        cursor: 'cursor-1',
+      });
 
       // Assert
       expect(mockRequest).toHaveBeenCalledWith({
-        url: '/v1/app/assets/activities',
+        url: '/v1/app/assets/activities/page',
         method: 'get',
-        params: { size: 20 },
+        params: {
+          types: ['COUPON', 'POINTS'],
+          tenantId: 9,
+          from: '2026-07-01T00:00:00',
+          to: '2026-07-11T23:59:59',
+          cursor: 'cursor-1',
+          size: 20,
+        },
         authRole: 'user',
       });
       expect(result).toEqual(activities);
+    });
+  });
+
+  describe('listAssetHolds', () => {
+    it('应调用一次聚合 holds 接口且不传商户ID', async () => {
+      const holds = [{ assetType: 'POINTS', holdStatus: 'PRE_HOLD', amountText: '-20 积分' }];
+      mockRequest.mockResolvedValue(holds);
+
+      const result = await appWalletService.listAssetHolds();
+
+      expect(mockRequest).toHaveBeenCalledWith({
+        url: '/v1/app/assets/holds',
+        method: 'get',
+        authRole: 'user',
+      });
+      expect(result).toEqual(holds);
     });
   });
 

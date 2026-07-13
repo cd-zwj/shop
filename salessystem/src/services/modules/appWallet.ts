@@ -6,7 +6,9 @@ import type {
   RechargePayment,
   UnifiedRechargeRule,
   UnifiedWalletRechargePayload,
-  AssetActivity,
+  AssetActivityPage,
+  AssetActivityQuery,
+  AssetHold,
   TenantAssetSummary,
   WalletAccount,
   WalletLog,
@@ -39,11 +41,20 @@ export const appWalletService = {
     });
   },
 
-  listAssetActivities(size = 20) {
-    return request<AssetActivity[]>({
-      url: '/v1/app/assets/activities',
+  listAssetActivities(query: AssetActivityQuery = {}) {
+    return request<AssetActivityPage>({
+      url: '/v1/app/assets/activities/page',
       method: 'get',
-      params: { size },
+      params: { ...query, size: query.size ?? 20 },
+      authRole: 'user',
+    });
+  },
+
+  listAssetHolds(tenantId?: number) {
+    return request<AssetHold[]>({
+      url: '/v1/app/assets/holds',
+      method: 'get',
+      ...(tenantId === undefined ? {} : { params: { tenantId } }),
       authRole: 'user',
     });
   },

@@ -60,10 +60,44 @@ export interface AssetActivity {
   occurredAt?: string | null;
   tenantId?: number | null;
   tenantName?: string | null;
+  bizType?: string | null;
   bizNo?: string | null;
   amountText?: string | null;
   tone?: AssetTraceTone | null;
   actionPath?: string | null;
+  sourceType: string;
+  sourceId: number;
+}
+
+export type AssetActivityType = 'WALLET' | 'POINTS' | 'GROWTH' | 'COUPON';
+
+export interface AssetActivityQuery {
+  types?: AssetActivityType[];
+  tenantId?: number;
+  from?: string;
+  to?: string;
+  cursor?: string;
+  size?: number;
+}
+
+export interface AssetActivityPage {
+  records: AssetActivity[];
+  nextCursor?: string | null;
+  hasMore: boolean;
+}
+
+export interface AssetHold {
+  tenantId: number;
+  tenantName?: string | null;
+  assetType: 'WALLET' | 'POINTS' | 'COUPON' | string;
+  holdStatus: 'LOCKED' | 'PRE_HOLD' | 'FROZEN' | string;
+  amountText: string;
+  reason: string;
+  bizType?: string | null;
+  bizNo?: string | null;
+  occurredAt?: string | null;
+  actionPath?: string | null;
+  actionLabel?: string | null;
 }
 
 export interface RechargePayment {
