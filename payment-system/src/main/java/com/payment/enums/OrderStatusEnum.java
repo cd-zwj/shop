@@ -8,7 +8,10 @@ package com.payment.enums;
 public enum OrderStatusEnum {
     /** 已创建：订单刚生成，等待用户支付 */
     CREATED,
-    /** 已支付：用户完成支付，等待后续交付或处理 */
+    /**
+     * 已支付（遗留状态）：仅存在于历史数据，新订单支付成功后直接进入
+     * {@link #PENDING_PREPARATION}，不再写入该状态。
+     */
     PAID,
     /** 已支付，等待商户开始备货 */
     PENDING_PREPARATION,

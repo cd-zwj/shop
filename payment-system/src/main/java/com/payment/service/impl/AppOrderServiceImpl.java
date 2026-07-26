@@ -209,11 +209,13 @@ public class AppOrderServiceImpl implements AppOrderService {
             result.setPaymentBillNo(paymentBill.getBillNo());
             result.setExternalPayUrl(payResponse.getPayUrl());
         } else {
-            salesOrder.setOrderStatus(OrderStatusEnum.PAID.name());
+            // 纯钱包支付没有外部回调，支付即成功，直接进入待备货，
+            // 与外部支付的 MQ 消费路径保持同一状态机（PAID 不再作为落库状态）。
+            salesOrder.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
             salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
             salesOrderMapper.updateById(salesOrder);
             settlePaidOrder(salesOrder);
-            result.setOrderStatus(OrderStatusEnum.PAID.name());
+            result.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
             result.setPayStatus(PayStatusEnum.SUCCESS.name());
         }
 
@@ -515,11 +517,13 @@ public class AppOrderServiceImpl implements AppOrderService {
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
-        if (OrderStatusEnum.PAID.name().equals(salesOrder.getOrderStatus())) {
-            throw new BusinessException("已支付订单不允许取消");
-        }
         if (OrderStatusEnum.CANCELLED.name().equals(salesOrder.getOrderStatus())) {
             return;
+        }
+        // 仅允许取消未支付订单：已支付订单（含待备货/备货中/已完成，以及历史 PAID）
+        // 库存已扣、商户可能已入账，取消必须走售后退款流程。
+        if (!OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())) {
+            throw new BusinessException("已支付订单不允许取消，请走售后退款流程");
         }
 
         if (salesOrder.getUnifiedWalletDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
@@ -1398,7 +1402,9 @@ public class AppOrderServiceImpl implements AppOrderService {
 
         if (PayStatusEnum.SUCCESS.name().equals(bill.getPayStatus())) {
             order.setPayStatus(PayStatusEnum.SUCCESS.name());
-            order.setOrderStatus(OrderStatusEnum.PAID.name());
+            // 与 MQ 消费路径保持一致：支付成功直接进入待备货，避免订单停留在
+            // 没有履约入口的 PAID 状态（商家无法开始备货、取货码无法核销）。
+            order.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
             salesOrderMapper.updateById(order);
             settlePaidOrder(order);
             return;

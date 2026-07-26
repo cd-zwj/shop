@@ -220,7 +220,7 @@ public class ScenarioBusinessTools {
 
     private void fillMerchantOrders(Map<String, Object> data, Long tenantId) {
         try {
-            var paidOrders = appOrderService.listMerchantOrders(tenantId, 1, 1, "PAID", null, null);
+            var paidOrders = appOrderService.listMerchantOrders(tenantId, 1, 1, "PENDING_PREPARATION", null, null);
             var pendingRefunds = refundApplicationService.listTenantRefunds(tenantId, "PENDING", 1, 1);
             Map<String, Object> orderOps = new LinkedHashMap<>();
             orderOps.put("pendingShipmentCount", paidOrders != null ? paidOrders.getTotal() : 0);
