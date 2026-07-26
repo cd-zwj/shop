@@ -51,8 +51,8 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         Page<Product> page = productMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<Product>()
                 .eq(Product::getTenantId, tenantId)
                 .eq(Product::getDeleted, 0)
-                .eq("active".equalsIgnoreCase(status) || "inactive".equalsIgnoreCase(status),
-                        Product::getStatus, "active".equalsIgnoreCase(status) ? 1 : 0)
+                // 商品状态筛选属于门店商品关系，不在租户级 Product 上过滤；
+                // 否则任一门店下架回写 Product.status 会污染所有门店。
                 .eq(category != null && !category.isBlank(), Product::getCategory, category)
                 .and(search != null && !search.isBlank(), query -> query.like(Product::getName, search)
                         .or().like(Product::getProductCode, search))
@@ -61,7 +61,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         Map<Long, StoreProduct> relationMap = primaryRelations(tenantId, page.getRecords());
         List<V1MerchantProductVO> records = page.getRecords().stream()
                 .map(product -> toProductVO(product, relationMap.get(product.getId())))
-                .filter(vo -> !"out_of_stock".equalsIgnoreCase(status) || "out_of_stock".equals(vo.getStatus()))
+                .filter(vo -> status == null || status.isBlank() || status.equalsIgnoreCase(vo.getStatus()))
                 .toList();
         Page<V1MerchantProductVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
         result.setRecords(records);
@@ -88,7 +88,9 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         product.setTenantId(tenantId);
         product.setProductCode(productCode);
         applyProduct(product, dto);
-        product.setStatus(toProductStatus(dto.getStatus()));
+        // Product.status 表示租户级主数据是否有效；单店上下架写 StoreProduct.status。
+        // 新建主数据默认有效，即使首个门店选择 inactive，也不污染后续其他门店。
+        product.setStatus(1);
         product.setDeleted(0);
         productMapper.insert(product);
 
@@ -109,12 +111,13 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         String productCode = resolveProductCode(dto);
         ensureProductCodeAvailable(tenantId, productCode, productId);
 
-        StoreProduct relation = primaryRelation(tenantId, productId);
+        StoreProduct relation = storeRelation(tenantId, dto.getStoreId(), productId);
         BigDecimal oldPrice = relation == null || relation.getPrice() == null ? product.getPrice() : relation.getPrice();
         int oldQuantity = currentQuantity(tenantId, dto.getStoreId(), productId);
         product.setProductCode(productCode);
-        applyProduct(product, dto);
-        product.setStatus(toProductStatus(dto.getStatus()));
+        applyTenantProductMetadata(product, dto);
+        // dto.price/status 是当前门店关系字段，只允许 upsertRelation 写 StoreProduct；
+        // 不再覆盖租户级 Product.price/status，避免 B 店调价/下架污染 A 店。
         productMapper.updateById(product);
 
         relation = upsertRelation(tenantId, dto.getStoreId(), productId, dto);
@@ -168,6 +171,13 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
                         .orderByAsc(StoreProduct::getStoreId))
                 .stream()
                 .collect(Collectors.toMap(StoreProduct::getProductId, relation -> relation, (left, right) -> left));
+    }
+
+    private StoreProduct storeRelation(Long tenantId, Long storeId, Long productId) {
+        return storeProductMapper.selectOne(new LambdaQueryWrapper<StoreProduct>()
+                .eq(StoreProduct::getTenantId, tenantId)
+                .eq(StoreProduct::getStoreId, storeId)
+                .eq(StoreProduct::getProductId, productId));
     }
 
     private StoreProduct primaryRelation(Long tenantId, Long productId) {
@@ -259,13 +269,22 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         return product;
     }
 
-    private void applyProduct(Product product, V1MerchantProductUpsertDTO dto) {
+    /**
+     * 更新租户级商品主数据。价格与上下架不属于该层：它们由 StoreProduct
+     * 按门店承载，防止单店编辑污染同一商品在其他门店的售价和可售状态。
+     */
+    private void applyTenantProductMetadata(Product product, V1MerchantProductUpsertDTO dto) {
         product.setName(dto.getName());
-        product.setPrice(dto.getPrice());
         product.setUnit(dto.getUnit());
         product.setCategory(dto.getCategory());
         product.setDescription(dto.getDescription());
         product.setImageUrl(dto.getImageUrl());
+    }
+
+    /** 新建商品时用首店价格初始化租户级基准价，仅作为无门店关系时的兜底。 */
+    private void applyProduct(Product product, V1MerchantProductUpsertDTO dto) {
+        applyTenantProductMetadata(product, dto);
+        product.setPrice(dto.getPrice());
     }
 
     private void ensureProductCodeAvailable(Long tenantId, String productCode, Long excludeProductId) {
@@ -297,10 +316,6 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         if (mode != null && !mode.isBlank() && !"STORE_PICKUP".equalsIgnoreCase(mode.trim())) {
             throw new BusinessException("当前仅支持到店自提履约方式");
         }
-    }
-
-    private Integer toProductStatus(String status) {
-        return "inactive".equalsIgnoreCase(status) ? 0 : 1;
     }
 
     private Integer toRelationStatus(String status) {
