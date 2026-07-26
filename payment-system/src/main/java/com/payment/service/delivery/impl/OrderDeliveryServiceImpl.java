@@ -1,5 +1,6 @@
 package com.payment.service.delivery.impl;
 
+import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.payment.common.BusinessException;
@@ -15,6 +16,7 @@ import com.payment.mapper.OrderFulfillmentActionMapper;
 import com.payment.mapper.OrderDeliveryRecordMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.service.AuditLogService;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
 import com.payment.service.delivery.OrderDeliveryService;
@@ -41,6 +43,7 @@ import java.util.Map;
 public class OrderDeliveryServiceImpl implements OrderDeliveryService {
 
     private static final SecureRandom PICKUP_CODE_RANDOM = new SecureRandom();
+    private static final int PICKUP_CODE_MAX_ATTEMPTS = 20;
 
     private final SalesOrderMapper salesOrderMapper;
     private final SalesOrderItemMapper salesOrderItemMapper;
@@ -48,6 +51,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
     private final OrderFulfillmentActionMapper fulfillmentActionMapper;
     private final OutboxPublisher outboxPublisher;
     private final UserNotificationService notificationService;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -98,31 +102,36 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         record.setProductId(item.getProductId());
         record.setProductName(item.getProductName());
         record.setStatus(DeliveryStatusEnum.DELIVERED.name());
-        record.setPayload(JsonUtils.toJson(Map.of("pickupCode", nextPickupCode(), "storeId", order.getStoreId())));
+        record.setStoreId(order.getStoreId());
         record.setRetryCount(0);
         record.setDeliveredTime(LocalDateTime.now());
-        try {
-            deliveryRecordMapper.insert(record);
-        } catch (DuplicateKeyException ignored) {
-            return;
-        }
 
-        salesOrderItemMapper.update(null, new LambdaUpdateWrapper<SalesOrderItem>()
-                .eq(SalesOrderItem::getId, item.getId())
-                .set(SalesOrderItem::getDeliveryStatus, DeliveryStatusEnum.DELIVERED.name())
-                .set(SalesOrderItem::getDeliveredTime, record.getDeliveredTime()));
-        notifyPickupCode(order, item);
-    }
-
-    private String nextPickupCode() {
-        for (int attempt = 0; attempt < 20; attempt++) {
+        // 取货码唯一性由 uk_tenant_pickup_hash 唯一约束兜底：
+        // 插入冲突时若订单项凭证已存在则幂等返回，否则视为哈希撞码换码重试。
+        for (int attempt = 0; attempt < PICKUP_CODE_MAX_ATTEMPTS; attempt++) {
             String code = String.format("%08d", PICKUP_CODE_RANDOM.nextInt(100_000_000));
-            Long count = deliveryRecordMapper.selectCount(new LambdaQueryWrapper<OrderDeliveryRecord>()
-                    .eq(OrderDeliveryRecord::getDeleted, 0)
-                    .apply("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.pickupCode')) = {0}", code));
-            if (count == null || count == 0) {
-                return code;
+            record.setId(null);
+            record.setPayload(JsonUtils.toJson(Map.of("pickupCode", code, "storeId", order.getStoreId())));
+            record.setPickupCodeHash(DigestUtil.sha256Hex(code));
+            try {
+                deliveryRecordMapper.insert(record);
+            } catch (DuplicateKeyException e) {
+                Long itemCount = deliveryRecordMapper.selectCount(new LambdaQueryWrapper<OrderDeliveryRecord>()
+                        .eq(OrderDeliveryRecord::getOrderItemId, item.getId())
+                        .eq(OrderDeliveryRecord::getDeleted, 0));
+                if (itemCount != null && itemCount > 0) {
+                    return;
+                }
+                log.info("取货码哈希冲突，重新生成 orderNo={}, attempt={}", order.getOrderNo(), attempt + 1);
+                continue;
             }
+
+            salesOrderItemMapper.update(null, new LambdaUpdateWrapper<SalesOrderItem>()
+                    .eq(SalesOrderItem::getId, item.getId())
+                    .set(SalesOrderItem::getDeliveryStatus, DeliveryStatusEnum.DELIVERED.name())
+                    .set(SalesOrderItem::getDeliveredTime, record.getDeliveredTime()));
+            notifyPickupCode(order, item);
+            return;
         }
         throw new BusinessException("取货码生成失败，请重试");
     }
@@ -144,23 +153,42 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         if (operatorId == null || operatorId <= 0) throw new BusinessException("核销操作人不能为空");
 
         String code = pickupCode.trim();
+        // 按哈希走 uk_tenant_pickup_hash 唯一索引查询；门店归属一并强校验。
         OrderDeliveryRecord record = deliveryRecordMapper.selectOne(new LambdaQueryWrapper<OrderDeliveryRecord>()
                 .eq(OrderDeliveryRecord::getTenantId, tenantId)
-                .eq(OrderDeliveryRecord::getDeleted, 0)
-                .apply("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.pickupCode')) = {0}", code)
-                .apply("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.storeId')) = {0}", String.valueOf(storeId)));
-        if (record == null) throw new BusinessException("取货码不存在或不属于当前门店");
+                .eq(OrderDeliveryRecord::getPickupCodeHash, DigestUtil.sha256Hex(code))
+                .eq(OrderDeliveryRecord::getDeleted, 0));
+        if (record == null || (record.getStoreId() != null && !record.getStoreId().equals(storeId))) {
+            auditPickupFailure(tenantId, storeId, operatorId, "取货码不存在或不属于当前门店");
+            throw new BusinessException("取货码不存在或不属于当前门店");
+        }
         if (DeliveryStatusEnum.CONFIRMED.name().equals(record.getStatus())) return record;
-        if (!DeliveryStatusEnum.DELIVERED.name().equals(record.getStatus())) throw new BusinessException("当前取货码不可核销");
+        if (!DeliveryStatusEnum.DELIVERED.name().equals(record.getStatus())) {
+            auditPickupFailure(tenantId, storeId, operatorId, "取货码状态不可核销: " + record.getStatus());
+            throw new BusinessException("当前取货码不可核销");
+        }
 
         SalesOrder order = salesOrderMapper.selectById(record.getOrderId());
         if (order == null || !OrderStatusEnum.COMPLETED.name().equals(order.getOrderStatus())) {
+            auditPickupFailure(tenantId, storeId, operatorId, "订单未完成备货即尝试核销, orderNo=" + record.getOrderNo());
             throw new BusinessException("订单尚未确认备货完成，暂不能核销");
         }
 
+        // 条件更新防并发双核销：仅 DELIVERED -> CONFIRMED 允许成功。
+        LocalDateTime confirmedTime = LocalDateTime.now();
+        int updated = deliveryRecordMapper.update(null, new LambdaUpdateWrapper<OrderDeliveryRecord>()
+                .eq(OrderDeliveryRecord::getId, record.getId())
+                .eq(OrderDeliveryRecord::getStatus, DeliveryStatusEnum.DELIVERED.name())
+                .set(OrderDeliveryRecord::getStatus, DeliveryStatusEnum.CONFIRMED.name())
+                .set(OrderDeliveryRecord::getConfirmedTime, confirmedTime)
+                .set(OrderDeliveryRecord::getVerifiedBy, operatorId));
+        if (updated == 0) {
+            // 并发场景：另一请求已完成核销，幂等返回最新记录。
+            return deliveryRecordMapper.selectById(record.getId());
+        }
         record.setStatus(DeliveryStatusEnum.CONFIRMED.name());
-        record.setConfirmedTime(LocalDateTime.now());
-        deliveryRecordMapper.updateById(record);
+        record.setConfirmedTime(confirmedTime);
+        record.setVerifiedBy(operatorId);
         salesOrderItemMapper.update(null, new LambdaUpdateWrapper<SalesOrderItem>()
                 .eq(SalesOrderItem::getId, record.getOrderItemId())
                 .set(SalesOrderItem::getDeliveryStatus, DeliveryStatusEnum.CONFIRMED.name()));
@@ -176,6 +204,19 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         action.setRemark("到店自提核销");
         fulfillmentActionMapper.insert(action);
         return record;
+    }
+
+    /**
+     * 核销失败留痕：写入审计日志供安全追溯（错误码穷举、跨店尝试等），
+     * 审计写入失败不阻断核销主流程的异常返回。
+     */
+    private void auditPickupFailure(Long tenantId, Long storeId, Long operatorId, String reason) {
+        try {
+            auditLogService.log(tenantId, operatorId, "MERCHANT", null,
+                    "ORDER_FULFILLMENT", "PICKUP_VERIFY_FAILED", "Store", storeId, reason, null);
+        } catch (Exception e) {
+            log.warn("记录核销失败审计日志失败 tenantId={}, storeId={}, operatorId={}", tenantId, storeId, operatorId, e);
+        }
     }
 
     @Override

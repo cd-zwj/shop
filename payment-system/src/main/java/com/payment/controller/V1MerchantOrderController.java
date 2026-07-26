@@ -2,6 +2,7 @@ package com.payment.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.payment.annotation.RateLimit;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
@@ -84,8 +85,11 @@ public class V1MerchantOrderController {
 
     /**
      * 到店自提核销：仅能核销当前门店的自提订单。
+     * 连续错误输入按租户+IP 限流，失败尝试写入审计日志。
      */
     @SaCheckLogin(type = "merchant")
+    @RateLimit(prefix = "merchant:pickup:verify", key = "#tenantId", window = 60, maxRequests = 30,
+            includeIp = true, message = "核销尝试过于频繁，请稍后再试")
     @PostMapping("/pickups/verify")
     public Result<PickupVerificationVO> verifyPickup(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                 @RequestBody VerifyPickupRequest request) {

@@ -50,6 +50,15 @@ public class OrderDeliveryRecord implements Serializable {
     /** JSON 到店自提凭证 */
     private String payload;
 
+    /** 取货码 SHA-256 哈希（hex），核销校验与同租户唯一性依据 */
+    private String pickupCodeHash;
+
+    /** 自提门店 ID */
+    private Long storeId;
+
+    /** 核销人（平台用户 ID），状态变为 CONFIRMED 时记录 */
+    private Long verifiedBy;
+
     /** 交付失败原因，交付状态为 FAILED 时记录具体失败信息 */
     private String failReason;
 

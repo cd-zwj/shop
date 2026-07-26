@@ -8,6 +8,7 @@ import com.payment.mapper.OrderDeliveryRecordMapper;
 import com.payment.mapper.OrderFulfillmentActionMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.service.AuditLogService;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
@@ -20,6 +21,8 @@ import org.mockito.ArgumentCaptor;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,10 +45,12 @@ class OrderDeliveryServiceImplTest {
         SalesOrder order = order("COMPLETED");
         when(fixture.deliveryRecordMapper.selectOne(any())).thenReturn(record);
         when(fixture.salesOrderMapper.selectById(3L)).thenReturn(order);
+        when(fixture.deliveryRecordMapper.update(any(), any())).thenReturn(1);
 
-        fixture.service.verifyPickup(9L, 7L, "12345678", 100L);
+        OrderDeliveryRecord result = fixture.service.verifyPickup(9L, 7L, "12345678", 100L);
 
-        assertEquals("CONFIRMED", record.getStatus());
+        assertEquals("CONFIRMED", result.getStatus());
+        assertEquals(100L, result.getVerifiedBy());
         assertEquals("COMPLETED", order.getOrderStatus());
         ArgumentCaptor<OrderFulfillmentAction> captor = ArgumentCaptor.forClass(OrderFulfillmentAction.class);
         verify(fixture.actionMapper).insert(captor.capture());
@@ -62,7 +67,43 @@ class OrderDeliveryServiceImplTest {
 
         assertThrows(BusinessException.class, () -> fixture.service.verifyPickup(9L, 7L, "12345678", 100L));
 
-        verify(fixture.deliveryRecordMapper, never()).updateById(any(OrderDeliveryRecord.class));
+        verify(fixture.deliveryRecordMapper, never()).update(any(), any());
+        verify(fixture.actionMapper, never()).insert(any(OrderFulfillmentAction.class));
+        verify(fixture.auditLogService).log(eq(9L), eq(100L), eq("MERCHANT"), any(),
+                eq("ORDER_FULFILLMENT"), eq("PICKUP_VERIFY_FAILED"), eq("Store"), eq(7L), any(), any());
+    }
+
+    @Test
+    void verifyPickupShouldRejectStoreMismatchAndAuditFailure() {
+        Fixture fixture = new Fixture();
+        OrderDeliveryRecord record = record();
+        record.setStoreId(8L);
+        when(fixture.deliveryRecordMapper.selectOne(any())).thenReturn(record);
+
+        assertThrows(BusinessException.class, () -> fixture.service.verifyPickup(9L, 7L, "12345678", 100L));
+
+        verify(fixture.deliveryRecordMapper, never()).update(any(), any());
+        verify(fixture.auditLogService).log(eq(9L), eq(100L), eq("MERCHANT"), any(),
+                eq("ORDER_FULFILLMENT"), eq("PICKUP_VERIFY_FAILED"), eq("Store"), eq(7L), any(), any());
+    }
+
+    @Test
+    void verifyPickupShouldReturnLatestRecordWhenConcurrentlyConfirmed() {
+        Fixture fixture = new Fixture();
+        OrderDeliveryRecord record = record();
+        when(fixture.deliveryRecordMapper.selectOne(any())).thenReturn(record);
+        when(fixture.salesOrderMapper.selectById(3L)).thenReturn(order("COMPLETED"));
+        // 并发场景：条件更新未命中（另一请求已核销），应幂等返回最新记录且不重复留痕。
+        when(fixture.deliveryRecordMapper.update(any(), any())).thenReturn(0);
+        OrderDeliveryRecord latest = record();
+        latest.setStatus("CONFIRMED");
+        latest.setVerifiedBy(200L);
+        when(fixture.deliveryRecordMapper.selectById(anyLong())).thenReturn(latest);
+
+        OrderDeliveryRecord result = fixture.service.verifyPickup(9L, 7L, "12345678", 100L);
+
+        assertEquals("CONFIRMED", result.getStatus());
+        assertEquals(200L, result.getVerifiedBy());
         verify(fixture.actionMapper, never()).insert(any(OrderFulfillmentAction.class));
     }
 
@@ -73,6 +114,7 @@ class OrderDeliveryServiceImplTest {
         record.setOrderId(3L);
         record.setOrderNo("SO001");
         record.setOrderItemId(11L);
+        record.setStoreId(7L);
         record.setStatus("DELIVERED");
         return record;
     }
@@ -91,12 +133,14 @@ class OrderDeliveryServiceImplTest {
         private final OrderFulfillmentActionMapper actionMapper = mock(OrderFulfillmentActionMapper.class);
         private final OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         private final UserNotificationService notificationService = mock(UserNotificationService.class);
+        private final AuditLogService auditLogService = mock(AuditLogService.class);
         private final OrderDeliveryServiceImpl service = new OrderDeliveryServiceImpl(
                 salesOrderMapper,
                 salesOrderItemMapper,
                 deliveryRecordMapper,
                 actionMapper,
                 outboxPublisher,
-                notificationService);
+                notificationService,
+                auditLogService);
     }
 }
