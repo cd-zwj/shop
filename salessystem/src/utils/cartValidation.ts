@@ -1,6 +1,6 @@
 import type { CartItem } from '../types/cart';
 import type { Product } from '../types/catalog';
-import { formatCurrency } from './display';
+import { formatCurrencyFen } from './display';
 
 export interface CartValidationIssue {
   productId: number;
@@ -61,7 +61,7 @@ export async function validateCartItemsAgainstCatalog(
       issues.push({
         productId: item.productId,
         severity: 'warning',
-        message: `${product.name} 价格已从 ${formatCurrency(item.price)} 调整为 ${formatCurrency(product.price)}`,
+        message: `${product.name} 价格已从 ${formatCurrencyFen(item.price)} 调整为 ${formatCurrencyFen(product.price)}`,
       });
     }
 

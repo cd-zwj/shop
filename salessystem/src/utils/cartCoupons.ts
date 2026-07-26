@@ -37,15 +37,23 @@ export interface SelectedCouponResolution {
   reason?: string;
 }
 
+// 单位约定：购物车小计 subtotal 与本文件所有返回的 discountAmount 均为“分”
+// （与 CartItem.price、ProductVO.price 一致）；优惠券面额/门槛字段
+// （thresholdAmount/discountAmount/maxDiscountAmount）来自后端，单位为“元”，
+// 在本文件内统一乘 100 换算后参与比较和计算。
+
+const FEN_PER_YUAN = 100;
+
 export function calculateCartCouponDiscount(coupon: CouponLike, subtotal: number) {
   if (coupon.couponType === 'FIXED') {
-    return coupon.discountAmount ?? 0;
+    return (coupon.discountAmount ?? 0) * FEN_PER_YUAN;
   }
 
   const rate = coupon.discountRate ?? 1;
   const discount = subtotal * (1 - rate);
-  if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
-    return coupon.maxDiscountAmount;
+  const maxDiscountFen = (coupon.maxDiscountAmount ?? 0) * FEN_PER_YUAN;
+  if (maxDiscountFen > 0 && discount > maxDiscountFen) {
+    return maxDiscountFen;
   }
   return discount;
 }
@@ -58,7 +66,7 @@ export function getSelectableCartCoupons(
 
   const options: SelectableCartCoupon[] = [
     ...data.myUsableCoupons.map((coupon) => {
-      const isUsable = subtotal >= coupon.thresholdAmount;
+      const isUsable = subtotal >= coupon.thresholdAmount * FEN_PER_YUAN;
       const discount = calculateCartCouponDiscount(coupon, subtotal);
 
       return {
@@ -77,7 +85,8 @@ export function getSelectableCartCoupons(
       const hasOwnedUsable = data.myUsableCoupons.some((coupon) => coupon.couponTemplateId === template.id);
       if (hasOwnedUsable) return [];
 
-      const isUsable = subtotal >= template.thresholdAmount && template.receivable && template.remainingStock > 0;
+      const isUsable = subtotal >= template.thresholdAmount * FEN_PER_YUAN
+        && template.receivable && template.remainingStock > 0;
       const discount = calculateCartCouponDiscount(template, subtotal);
 
       return [{
@@ -133,7 +142,7 @@ function getCouponDescription(coupon: CouponLike & { thresholdAmount: number }) 
 }
 
 function getTemplateUnavailableReason(template: CouponTemplate, subtotal: number) {
-  if (subtotal < template.thresholdAmount) {
+  if (subtotal < template.thresholdAmount * FEN_PER_YUAN) {
     return getThresholdReason(template.thresholdAmount, subtotal);
   }
   if (template.remainingStock <= 0) {
@@ -146,5 +155,5 @@ function getTemplateUnavailableReason(template: CouponTemplate, subtotal: number
 }
 
 function getThresholdReason(thresholdAmount: number, subtotal: number) {
-  return `还差 ¥${(thresholdAmount - subtotal).toFixed(2)}`;
+  return `还差 ¥${(thresholdAmount - subtotal / FEN_PER_YUAN).toFixed(2)}`;
 }

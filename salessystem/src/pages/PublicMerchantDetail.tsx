@@ -4,7 +4,7 @@ import { ArrowLeft, MapPin, Search, Share2, ShoppingBag, Star } from 'lucide-rea
 import { useNavigate, useParams } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { AppStore, Product, Tenant } from '../types/catalog';
-import { formatCurrency, getImageUrl } from '../utils/display';
+import { formatCurrencyFen, getImageUrl } from '../utils/display';
 
 export default function PublicMerchantDetail() {
   const navigate = useNavigate();
@@ -180,7 +180,7 @@ export default function PublicMerchantDetail() {
                   <h3 className="line-clamp-1 text-lg font-black text-slate-900 md:text-xl">{product.name}</h3>
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-xl font-black tracking-tighter text-primary md:text-2xl">
-                      {formatCurrency(product.price)}
+                      {formatCurrencyFen(product.price)}
                     </span>
                     <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white shadow-lg transition-all hover:bg-primary active:scale-95 md:rounded-2xl">
                       <ShoppingBag size={18} />

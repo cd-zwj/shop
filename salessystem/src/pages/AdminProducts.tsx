@@ -16,7 +16,7 @@ import {
 import { cn } from '../lib/utils';
 import { appCatalogService } from '../services/modules/appCatalog';
 import type { Product } from '../types/catalog';
-import { formatCurrency, getImageUrl } from '../utils/display';
+import { formatCurrencyFen, getImageUrl } from '../utils/display';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Array<Product & { tenantName: string }>>([]);
@@ -207,7 +207,7 @@ export default function AdminProducts() {
                       <td className="px-8 py-6 text-center">
                         <span className="text-xs font-bold text-slate-600">{p.tenantName}</span>
                       </td>
-                      <td className="px-8 py-6 font-black text-slate-900 tracking-tight">{formatCurrency(p.price)}</td>
+                      <td className="px-8 py-6 font-black text-slate-900 tracking-tight">{formatCurrencyFen(p.price)}</td>
                       <td className="px-8 py-6">
                         <div className="flex justify-center">
                           <span className={cn(

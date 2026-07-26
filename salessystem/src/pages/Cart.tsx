@@ -25,7 +25,7 @@ import {
 import { ApiError } from '../types/api';
 import type { Address } from '../types/addressNotification';
 import type { CouponTemplate, UserCoupon } from '../types/coupon';
-import { formatCurrency, getImageUrl } from '../utils/display';
+import { formatCurrencyFen, getImageUrl } from '../utils/display';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import { validateCartItemsAgainstCatalog } from '../utils/cartValidation';
 import {
@@ -528,7 +528,7 @@ export default function Cart() {
                         <div className="mt-6 flex items-end justify-between">
                           <div className="flex flex-col gap-1">
                             <span className="text-2xl font-black tracking-tight text-slate-900">
-                              {formatCurrency(item.price)}
+                              {formatCurrencyFen(item.price)}
                             </span>
                             {typeof item.stock === 'number' && (
                               <span className="text-xs font-bold text-slate-400">
@@ -660,7 +660,7 @@ export default function Cart() {
                   {selectedCouponByTenant[group.tenantId] && getSelectedCouponDiscount(group.tenantId, group.subtotal) > 0 && (
                     <div className="flex items-center justify-between text-xs text-orange-600 font-bold bg-orange-50/50 p-2.5 rounded-xl border border-orange-100">
                       <span>已选: {selectedCouponByTenant[group.tenantId]?.name}</span>
-                      <span>优惠: -{formatCurrency(getSelectedCouponDiscount(group.tenantId, group.subtotal))}</span>
+                      <span>优惠: -{formatCurrencyFen(getSelectedCouponDiscount(group.tenantId, group.subtotal))}</span>
                     </div>
                   )}
                 </div>
@@ -699,14 +699,14 @@ export default function Cart() {
                       {selectedCouponByTenant[group.tenantId] && getSelectedCouponDiscount(group.tenantId, group.subtotal) > 0 ? (
                         <span className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-slate-400 line-through">
-                            {formatCurrency(group.subtotal)}
+                            {formatCurrencyFen(group.subtotal)}
                           </span>
                           <span className="text-primary">
-                            {formatCurrency(Math.max(0, group.subtotal - getSelectedCouponDiscount(group.tenantId, group.subtotal)))}
+                            {formatCurrencyFen(Math.max(0, group.subtotal - getSelectedCouponDiscount(group.tenantId, group.subtotal)))}
                           </span>
                         </span>
                       ) : (
-                        formatCurrency(group.subtotal)
+                        formatCurrencyFen(group.subtotal)
                       )}
                     </p>
                     </div>
@@ -740,18 +740,18 @@ export default function Cart() {
               {totalDiscount > 0 ? (
                 <div className="flex items-baseline gap-2">
                   <span className="text-sm font-semibold text-slate-400 line-through">
-                    {formatCurrency(subtotal)}
+                    {formatCurrencyFen(subtotal)}
                   </span>
                   <span className="text-3xl font-black tracking-tight text-primary">
-                    {formatCurrency(Math.max(0, subtotal - totalDiscount))}
+                    {formatCurrencyFen(Math.max(0, subtotal - totalDiscount))}
                   </span>
                   <span className="text-xs font-bold text-orange-600 bg-orange-50 px-2 py-0.5 rounded-md ml-1">
-                    已省 {formatCurrency(totalDiscount)}
+                    已省 {formatCurrencyFen(totalDiscount)}
                   </span>
                 </div>
               ) : (
                 <span className="text-3xl font-black tracking-tight text-slate-900">
-                  {formatCurrency(subtotal)}
+                  {formatCurrencyFen(subtotal)}
                 </span>
               )}
             </div>

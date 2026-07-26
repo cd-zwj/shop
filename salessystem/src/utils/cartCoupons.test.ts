@@ -46,16 +46,19 @@ const templateCoupon: CouponTemplate = {
 };
 
 describe('cartCoupons', () => {
-  it('calculates fixed and capped rate discounts', () => {
-    expect(calculateCartCouponDiscount(ownedCoupon, 120)).toBe(20);
-    expect(calculateCartCouponDiscount(templateCoupon, 300)).toBe(15);
+  // 小计单位为分；券面额/门槛单位为元（详见 cartCoupons.ts 顶部单位约定）。
+  it('calculates fixed and capped rate discounts in fen', () => {
+    // 满 ¥100 减 ¥20：小计 ¥120（12000 分）→ 折扣 2000 分
+    expect(calculateCartCouponDiscount(ownedCoupon, 12000)).toBe(2000);
+    // 九折封顶 ¥15：小计 ¥300（30000 分）→ 10% 折扣 3000 分超上限，取 1500 分
+    expect(calculateCartCouponDiscount(templateCoupon, 30000)).toBe(1500);
   });
 
   it('marks selected coupons unusable when refreshed subtotal no longer reaches threshold', () => {
     const resolution = resolveSelectedCartCoupon(
       { availableTemplates: [], myUsableCoupons: [ownedCoupon] },
       { key: 'owned-10', id: 10, type: 'OWNED', name: '满百减二十' },
-      80,
+      8000,
     );
 
     expect(resolution).toEqual({
@@ -71,7 +74,7 @@ describe('cartCoupons', () => {
         availableTemplates: [{ ...templateCoupon, receivable: false }],
         myUsableCoupons: [],
       },
-      100,
+      10000,
     );
 
     expect(option).toMatchObject({

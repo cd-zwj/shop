@@ -25,7 +25,7 @@ import type { Product, Tenant } from '../types/catalog';
 
 type ProductWithTenant = Product & { tenantId: number };
 import { cn } from '../lib/utils';
-import { formatCurrency, getImageUrl } from '../utils/display';
+import { formatCurrencyFen, getImageUrl } from '../utils/display';
 import { getErrorMessage } from '../utils/errorMessage';
 
 export default function Home() {
@@ -219,7 +219,7 @@ export default function Home() {
                   </div>
                   <div className="mt-1 flex items-center justify-between">
                     <div className="text-red-500">
-                      <span className="text-sm font-black">{product ? formatCurrency(product.price) : '...'}</span>
+                      <span className="text-sm font-black">{product ? formatCurrencyFen(product.price) : '...'}</span>
                     </div>
                     <button
                       onClick={(e) => {

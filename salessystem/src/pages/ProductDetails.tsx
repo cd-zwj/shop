@@ -27,7 +27,7 @@ import { ApiError } from '../types/api';
 import type { Product, Tenant } from '../types/catalog';
 import type { CartItem } from '../types/cart';
 import { cn } from '../lib/utils';
-import { formatCurrency, getImageUrl } from '../utils/display';
+import { formatCurrencyFen, getImageUrl } from '../utils/display';
 import { getErrorMessage } from '../utils/errorMessage';
 import { openAlipayPaymentWindow, saveAlipayPaymentPayload } from '../utils/alipayPayment';
 import {
@@ -337,7 +337,7 @@ export default function ProductDetails() {
             <>
               <div className="mb-10 flex items-end gap-3 border-b border-slate-100 pb-8">
                 <span className="text-4xl font-black tracking-tight text-slate-900">
-                  {product ? formatCurrency(product.price) : '...'}
+                  {product ? formatCurrencyFen(product.price) : '...'}
                 </span>
                 {product?.stock !== undefined && product?.stock !== null && (
                   <span className={cn('mb-1.5 rounded-md border px-3 py-1 text-xs font-black', inventory.toneClass)}>
