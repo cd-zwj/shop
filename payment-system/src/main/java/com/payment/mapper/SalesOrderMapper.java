@@ -6,6 +6,7 @@ import com.payment.entity.SalesOrder;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -14,6 +15,35 @@ import java.util.List;
  */
 @Mapper
 public interface SalesOrderMapper extends BaseMapper<SalesOrder> {
+
+    /**
+     * 按订单号加行锁读取，作为“支付成功”与“超时关闭”的唯一并发裁决点。
+     * 调用方必须处于事务中。
+     */
+    @Select("""
+            SELECT * FROM sales_order
+            WHERE order_no = #{orderNo} AND deleted = 0
+            FOR UPDATE
+            """)
+    SalesOrder selectByOrderNoForUpdate(@Param("orderNo") String orderNo);
+
+    /** 支付渠道确认成功后，抢占订单为资金已确认中间态。 */
+    @Update("""
+            UPDATE sales_order
+            SET order_status = 'PAID', pay_status = 'SUCCESS', update_time = NOW()
+            WHERE id = #{id} AND deleted = 0
+              AND order_status = 'CREATED' AND pay_status = 'WAIT_PAY'
+            """)
+    int claimPayment(@Param("id") Long id);
+
+    /** 支付后处理完成后，将受控中间态推进到待备货。 */
+    @Update("""
+            UPDATE sales_order
+            SET order_status = 'PENDING_PREPARATION', update_time = NOW()
+            WHERE id = #{id} AND deleted = 0
+              AND order_status = 'PAID' AND pay_status = 'SUCCESS'
+            """)
+    int completePaymentProcessing(@Param("id") Long id);
 
     Page<SalesOrder> selectMerchantOrders(Page<SalesOrder> page,
                                           @Param("tenantId") Long tenantId,

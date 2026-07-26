@@ -117,6 +117,7 @@ public class PaymentV1Consumer {
      * @param body 消息体 JSON 字符串，必须包含 bizNo（销售订单编号）
      */
     @RabbitListener(queues = RabbitMQConfig.V1_ORDER_PAID_QUEUE)
+    @Transactional(rollbackFor = Exception.class)
     public void handleOrderPaid(String body) {
         Map<String, Object> payload = JsonUtils.fromJson(body, new TypeReference<Map<String, Object>>() {
         });
@@ -163,21 +164,28 @@ public class PaymentV1Consumer {
      *
      * @param orderNo 销售订单编号
      */
-    @Transactional(rollbackFor = Exception.class)
     public void processOrderPaid(String orderNo) {
-        SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getOrderNo, orderNo)
-                .eq(SalesOrder::getDeleted, 0));
+        // 支付确认与超时关闭以 sales_order 行锁为唯一裁决点。
+        // 正常支付回调已在 PaymentBillV1ServiceImpl 中先将订单抢占为 PAID/SUCCESS；
+        // CLOSED/CANCELLED 或仍 CREATED 的订单绝不在消费端反向改为已支付。
+        SalesOrder salesOrder = salesOrderMapper.selectByOrderNoForUpdate(orderNo);
         if (salesOrder == null) {
             log.warn("订单支付成功消息对应订单不存在, orderNo={}", orderNo);
             return;
         }
         if (PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())
-                && !OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())) {
+                && !OrderStatusEnum.PAID.name().equals(salesOrder.getOrderStatus())) {
+            // 已推进到待备货或后续履约状态，消息幂等返回。
             return;
         }
+        if (!PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())
+                || !OrderStatusEnum.PAID.name().equals(salesOrder.getOrderStatus())) {
+            throw new IllegalStateException("订单未取得支付处理所有权, orderNo=" + orderNo
+                    + ", orderStatus=" + salesOrder.getOrderStatus()
+                    + ", payStatus=" + salesOrder.getPayStatus());
+        }
 
-        // 先扣库存，再落已支付状态，避免出现"订单已支付但库存完全没动"的长期不一致。
+        // 持有订单行锁期间扣库存、结算、积分与交付，避免并发消息重复执行。
         List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
         for (SalesOrderItem orderItem : orderItems) {
             if (!"STORE_PICKUP".equals(salesOrder.getFulfillmentMode()) || salesOrder.getStoreId() == null) {
@@ -194,9 +202,11 @@ public class PaymentV1Consumer {
             );
         }
 
-        salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
+        int stateUpdated = salesOrderMapper.completePaymentProcessing(salesOrder.getId());
+        if (stateUpdated != 1) {
+            throw new IllegalStateException("订单支付后处理状态并发更新失败, orderNo=" + orderNo);
+        }
         salesOrder.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
-        salesOrderMapper.updateById(salesOrder);
 
         // 商户钱包部分在充值成功时已经进入商户财务余额，订单消费时不重复入账。
         // 商户结算应以订单实际应付金额为基数，避免优惠券/积分/折扣订单按原价多入账。

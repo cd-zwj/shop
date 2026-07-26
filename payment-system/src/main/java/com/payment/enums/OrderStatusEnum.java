@@ -9,8 +9,9 @@ public enum OrderStatusEnum {
     /** 已创建：订单刚生成，等待用户支付 */
     CREATED,
     /**
-     * 已支付（遗留状态）：仅存在于历史数据，新订单支付成功后直接进入
-     * {@link #PENDING_PREPARATION}，不再写入该状态。
+     * 资金已确认、等待异步支付后处理的受控中间态。
+     * 外部支付回调先抢占到该状态，ORDER_PAID 消费者完成库存扣减、结算与
+     * 交付事件入队后再推进到 {@link #PENDING_PREPARATION}。
      */
     PAID,
     /** 已支付，等待商户开始备货 */

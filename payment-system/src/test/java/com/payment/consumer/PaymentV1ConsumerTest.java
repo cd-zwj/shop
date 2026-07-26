@@ -90,8 +90,8 @@ class PaymentV1ConsumerTest {
         salesOrder.setOrderNo("SO001");
         salesOrder.setTenantId(9L);
         salesOrder.setPlatformUserId(100L);
-        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
-        salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setOrderStatus(OrderStatusEnum.PAID.name());
+        salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
         salesOrder.setTotalAmount(new BigDecimal("10.00"));
         salesOrder.setMerchantWalletDeductAmount(BigDecimal.ZERO);
         salesOrder.setFulfillmentMode("STORE_PICKUP");
@@ -102,7 +102,7 @@ class PaymentV1ConsumerTest {
         item.setProductId(1L);
         item.setQuantity(2);
 
-        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
         org.mockito.Mockito.doThrow(new RuntimeException("stock failed"))
                 .when(fixture.storeInventoryService).deductLocked(
@@ -123,7 +123,7 @@ class PaymentV1ConsumerTest {
         when(fixture.messageIdempotentService.isProcessed(
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PICKUP",
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
-        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_PICKUP\"}");
@@ -144,7 +144,7 @@ class PaymentV1ConsumerTest {
         when(fixture.messageIdempotentService.isProcessed(
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PAYABLE",
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
-        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_PAYABLE\"}");
@@ -165,7 +165,7 @@ class PaymentV1ConsumerTest {
         when(fixture.messageIdempotentService.isProcessed(
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_ZERO",
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
-        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_ZERO\"}");
@@ -187,7 +187,7 @@ class PaymentV1ConsumerTest {
         when(fixture.messageIdempotentService.isProcessed(
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_LEGACY",
                 RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
-        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
         fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_LEGACY\"}");
@@ -201,8 +201,8 @@ class PaymentV1ConsumerTest {
         salesOrder.setOrderNo(orderNo);
         salesOrder.setTenantId(9L);
         salesOrder.setPlatformUserId(100L);
-        salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
-        salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setOrderStatus(OrderStatusEnum.PAID.name());
+        salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
         salesOrder.setFulfillmentMode("STORE_PICKUP");
         salesOrder.setStoreId(88L);
         salesOrder.setDeleted(0);
@@ -228,18 +228,23 @@ class PaymentV1ConsumerTest {
         private final UserNotificationService notificationService = mock(UserNotificationService.class);
         private final MessageIdempotentService messageIdempotentService = mock(MessageIdempotentService.class);
         private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService = mock(com.payment.service.delivery.OrderDeliveryService.class);
-        private final PaymentV1Consumer consumer = new PaymentV1Consumer(
-                walletRechargeService,
-                salesOrderMapper,
-                salesOrderItemMapper,
-                storeInventoryService,
-                settlementService,
-                memberPointsAccountService,
-                pointsRuleMapper,
-                memberService,
-                notificationService,
-                messageIdempotentService,
-                orderDeliveryService
-        );
+        private final PaymentV1Consumer consumer;
+
+        private ConsumerFixture() {
+            when(salesOrderMapper.completePaymentProcessing(any())).thenReturn(1);
+            consumer = new PaymentV1Consumer(
+                    walletRechargeService,
+                    salesOrderMapper,
+                    salesOrderItemMapper,
+                    storeInventoryService,
+                    settlementService,
+                    memberPointsAccountService,
+                    pointsRuleMapper,
+                    memberService,
+                    notificationService,
+                    messageIdempotentService,
+                    orderDeliveryService
+            );
+        }
     }
 }

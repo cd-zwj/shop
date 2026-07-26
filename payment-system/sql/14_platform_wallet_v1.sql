@@ -150,6 +150,7 @@ CREATE TABLE IF NOT EXISTS `sales_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no_v1` (`order_no`),
   KEY `idx_sales_tenant_user` (`tenant_id`, `platform_user_id`),
+  KEY `idx_sales_order_expire_scan` (`order_status`, `pay_status`, `expire_time`, `id`),
   KEY `idx_sales_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消费订单表';
 

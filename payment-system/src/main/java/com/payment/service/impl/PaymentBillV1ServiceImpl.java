@@ -12,8 +12,10 @@ import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PaymentCallbackRecord;
+import com.payment.entity.SalesOrder;
 import com.payment.enums.CallbackStatusEnum;
 import com.payment.enums.MessageProcessStatusEnum;
+import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.PaymentLateCallbackActionEnum;
@@ -21,6 +23,7 @@ import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.PaymentBizTypeEnum;
 import com.payment.mapper.PaymentBillMapper;
 import com.payment.mapper.PaymentCallbackRecordMapper;
+import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.CompensationTaskFactory;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.PaymentBillV1Service;
@@ -61,6 +64,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
 
     private final PaymentBillMapper paymentBillMapper;
     private final PaymentCallbackRecordMapper callbackRecordMapper;
+    private final SalesOrderMapper salesOrderMapper;
     private final CompensationTaskFactory compensationTaskFactory;
     private final OutboxPublisher outboxPublisher;
     private final List<PaymentProvider> paymentProviders;
@@ -219,18 +223,41 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     /**
      * 关闭支付账单（内部方法）。
      * <p>
-     * 仅对待支付状态的账单执行关闭，记录关闭原因到扩展 JSON。
+     * 条件更新闭账：仅 WAIT_PAY/PAYING -> CLOSED，记录关闭原因到扩展 JSON。
+     * 并发场景下若账单已被渠道确认成功，本次关闭不生效（受影响行数 0），
+     * 调用方据此可知账单已进入迟到回调退款流程。重读真实状态回填入参实体，
+     * 便于上层据真实状态决定后续动作。
      */
     private void closePaymentBill(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
         }
-
+        String extensionJson = buildClosedStatusReasonJson(paymentBill, statusReason);
+        int updated = paymentBillMapper.closeIfPending(
+                paymentBill.getBillNo(), statusReason.getRemark(), extensionJson);
+        if (updated == 0) {
+            PaymentBill latest = paymentBillMapper.selectOne(new LambdaQueryWrapper<PaymentBill>()
+                    .eq(PaymentBill::getBillNo, paymentBill.getBillNo()));
+            if (latest != null) {
+                paymentBill.setPayStatus(latest.getPayStatus());
+                paymentBill.setStatusRemark(latest.getStatusRemark());
+                paymentBill.setExtensionJson(latest.getExtensionJson());
+            }
+            return;
+        }
         paymentBill.setPayStatus(PayStatusEnum.CLOSED.name());
         paymentBill.setStatusRemark(statusReason.getRemark());
-        applyStatusReason(paymentBill, statusReason);
-        paymentBill.setUpdateTime(LocalDateTime.now());
-        paymentBillMapper.updateById(paymentBill);
+        paymentBill.setExtensionJson(extensionJson);
+    }
+
+    /**
+     * 构造关闭原因写入的扩展 JSON（原 applyStatusReason 的非破坏性版本，
+     * 避免在条件 UPDATE 前先污染内存实体字段影响判断）。
+     */
+    private String buildClosedStatusReasonJson(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
+        ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
+        extension.put(RefundConstants.EXTENSION_STATUS_REASON_CODE, statusReason.getCode());
+        return JsonUtils.toJson(extension);
     }
 
     /**
@@ -309,11 +336,67 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     /**
      * 处理支付成功结果。
      * <p>
-     * 若账单已关闭，则根据迟到回调策略决定是标记成功、触发退款还是转人工审核。
+     * 销售订单以 sales_order 行锁作为支付成功与超时关闭的唯一裁决点：
+     * CREATED/WAIT_PAY 抢占为 PAID/SUCCESS 后才允许发布 ORDER_PAID；若订单已关闭，
+     * 只登记渠道资金成功并触发迟到退款，绝不恢复订单或发布履约事件。
      */
     private void handlePaidResult(PaymentBill paymentBill, String thirdPartyBillNo, String callbackStatus) {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
+        }
+
+        if (PaymentBizTypeEnum.SALES_ORDER.name().equals(paymentBill.getBizType())) {
+            SalesOrder order = salesOrderMapper.selectByOrderNoForUpdate(paymentBill.getBizNo());
+            if (order == null) {
+                throw new BusinessException("支付单关联订单不存在: " + paymentBill.getBizNo());
+            }
+            // 获取订单锁后重读账单，避免使用等待锁期间已经被关闭的陈旧状态。
+            PaymentBill latestBill = getByBillNo(paymentBill.getBillNo());
+            if (latestBill != null) {
+                paymentBill = latestBill;
+            }
+            if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
+                return;
+            }
+            if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())) {
+                PaymentStatusReasonEnum reason = resolveStatusReason(paymentBill);
+                if (reason == null) {
+                    reason = PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED;
+                }
+                handleClosedBillLateSuccess(paymentBill, thirdPartyBillNo, callbackStatus, reason);
+                return;
+            }
+
+            if (OrderStatusEnum.CLOSED.name().equals(order.getOrderStatus())
+                    || OrderStatusEnum.CANCELLED.name().equals(order.getOrderStatus())) {
+                PaymentStatusReasonEnum reason = resolveStatusReason(paymentBill);
+                if (reason == null) {
+                    reason = OrderStatusEnum.CLOSED.name().equals(order.getOrderStatus())
+                            ? PaymentStatusReasonEnum.SALES_ORDER_TIMEOUT_REFUND_REQUIRED
+                            : PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED;
+                }
+                handleClosedBillLateSuccess(paymentBill, thirdPartyBillNo, callbackStatus, reason);
+                return;
+            }
+
+            if (OrderStatusEnum.CREATED.name().equals(order.getOrderStatus())
+                    && PayStatusEnum.WAIT_PAY.name().equals(order.getPayStatus())) {
+                int claimed = salesOrderMapper.claimPayment(order.getId());
+                if (claimed != 1) {
+                    throw new BusinessException("订单支付状态并发更新，请重试: " + order.getOrderNo());
+                }
+                // 在同一事务中：订单先取得支付所有权，再将账单置成功并写 Outbox。
+                markBillPaid(paymentBill, thirdPartyBillNo, callbackStatus, true, null, true);
+                return;
+            }
+
+            // PAID 说明另一支付成功事务已抢占；PENDING_PREPARATION 及后续表示已处理。
+            // 都不得重复发布 Outbox。若账单仍未成功，仅补记资金状态。
+            if (PayStatusEnum.SUCCESS.name().equals(order.getPayStatus())) {
+                markBillPaid(paymentBill, thirdPartyBillNo, callbackStatus, false, null, true);
+                return;
+            }
+            throw new BusinessException("当前订单状态不允许确认支付: " + order.getOrderStatus());
         }
 
         PaymentStatusReasonEnum statusReason = resolveStatusReason(paymentBill);
@@ -321,7 +404,6 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             handleClosedBillLateSuccess(paymentBill, thirdPartyBillNo, callbackStatus, statusReason);
             return;
         }
-
         markBillPaid(paymentBill, thirdPartyBillNo, callbackStatus, true, null, true);
     }
 
@@ -384,10 +466,11 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     }
 
     /**
-     * 将账单标记为已支付。
+     * 将账单标记为已支付（条件更新：仅 WAIT_PAY/PAYING -> SUCCESS）。
      * <p>
      * 更新支付状态、回调状态、第三方交易号，可选清除状态原因。
-     * 当 publishBizSuccess 为 true 时，通过 Outbox 发布业务成功事件。
+     * 当 publishBizSuccess 为 true 且账单确为新成功时，通过 Outbox 发布业务成功事件。
+     * 若账单已被并发更新为终态（成功/关闭），重读真实状态后再决定是否仍需返回成功。
      */
     private void markBillPaid(PaymentBill paymentBill,
                               String thirdPartyBillNo,
@@ -398,16 +481,41 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             return;
         }
-
+        if (clearStatusReason) {
+            clearStatusReason(paymentBill);
+        }
+        int updated;
+        if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())) {
+            // 迟到支付：只记录渠道成功事实，不走正常业务成功更新条件。
+            updated = paymentBillMapper.markLatePaidIfClosed(
+                    paymentBill.getBillNo(), callbackStatus, thirdPartyBillNo, statusRemark);
+        } else {
+            updated = paymentBillMapper.markPaidIfPending(
+                    paymentBill.getBillNo(),
+                    callbackStatus,
+                    thirdPartyBillNo,
+                    statusRemark,
+                    paymentBill.getExtensionJson());
+        }
+        if (updated == 0) {
+            // 并发：账单已被另一线程更新为终态，重读真实状态。
+            PaymentBill latest = paymentBillMapper.selectOne(new LambdaQueryWrapper<PaymentBill>()
+                    .eq(PaymentBill::getBillNo, paymentBill.getBillNo()));
+            if (latest != null) {
+                paymentBill.setPayStatus(latest.getPayStatus());
+                paymentBill.setCallbackStatus(latest.getCallbackStatus());
+                paymentBill.setThirdPartyBillNo(latest.getThirdPartyBillNo());
+                paymentBill.setStatusRemark(latest.getStatusRemark());
+                paymentBill.setExtensionJson(latest.getExtensionJson());
+            }
+            // 账单已被关闭 => 迟到回调路径由调用方按原因分流；
+            // 账单已 SUCCESS => 幂等，下方不发 Outbox。
+            return;
+        }
         paymentBill.setPayStatus(PayStatusEnum.SUCCESS.name());
         paymentBill.setCallbackStatus(callbackStatus);
         paymentBill.setThirdPartyBillNo(thirdPartyBillNo);
         paymentBill.setStatusRemark(statusRemark);
-        if (clearStatusReason) {
-            clearStatusReason(paymentBill);
-        }
-        paymentBill.setUpdateTime(LocalDateTime.now());
-        paymentBillMapper.updateById(paymentBill);
 
         if (publishBizSuccess) {
             publishBizSuccess(paymentBill);
@@ -475,9 +583,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
      * 将状态原因编码写入账单扩展 JSON。
      */
     private void applyStatusReason(PaymentBill paymentBill, PaymentStatusReasonEnum statusReason) {
-        ObjectNode extension = parseExtensionJson(paymentBill.getExtensionJson());
-        extension.put(RefundConstants.EXTENSION_STATUS_REASON_CODE, statusReason.getCode());
-        paymentBill.setExtensionJson(JsonUtils.toJson(extension));
+        paymentBill.setExtensionJson(buildClosedStatusReasonJson(paymentBill, statusReason));
     }
 
     /**

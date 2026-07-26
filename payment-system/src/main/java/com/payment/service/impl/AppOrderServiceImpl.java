@@ -584,7 +584,7 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
         releaseDiscountAssets(salesOrder, "订单超时");
         releaseStoreInventory(salesOrder);
-        closeUnpaidBills(salesOrder.getOrderNo(), PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED);
+        closeUnpaidBills(salesOrder.getOrderNo(), PaymentStatusReasonEnum.SALES_ORDER_TIMEOUT_REFUND_REQUIRED);
         return true;
     }
 
@@ -1389,24 +1389,10 @@ public class AppOrderServiceImpl implements AppOrderService {
             throw new BusinessException("支付账单不存在: " + paymentBillNo);
         }
 
-        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getOrderNo, bill.getBizNo())
-                .eq(SalesOrder::getDeleted, 0));
-        if (order == null) {
-            throw new BusinessException("订单不存在: " + bill.getBizNo());
-        }
-
-        if (PayStatusEnum.SUCCESS.name().equals(order.getPayStatus())) {
-            return;
-        }
-
+        // 支付成功的唯一入口在 PaymentBillV1ServiceImpl：该服务先锁订单并抢占为
+        // PAID/SUCCESS，再原子写 ORDER_PAID Outbox；消费者随后持订单锁完成库存、
+        // 结算并推进到 PENDING_PREPARATION。此处不得直接结算或反写关闭订单。
         if (PayStatusEnum.SUCCESS.name().equals(bill.getPayStatus())) {
-            order.setPayStatus(PayStatusEnum.SUCCESS.name());
-            // 与 MQ 消费路径保持一致：支付成功直接进入待备货，避免订单停留在
-            // 没有履约入口的 PAID 状态（商家无法开始备货、取货码无法核销）。
-            order.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
-            salesOrderMapper.updateById(order);
-            settlePaidOrder(order);
             return;
         }
 

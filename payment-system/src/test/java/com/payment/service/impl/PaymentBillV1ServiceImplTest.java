@@ -4,12 +4,15 @@ import com.payment.util.JsonUtils;
 import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.MessageOutbox;
+import com.payment.entity.SalesOrder;
+import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.PayStatusEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.mapper.CompensationTaskMapper;
 import com.payment.mapper.MessageOutboxMapper;
 import com.payment.mapper.PaymentBillMapper;
 import com.payment.mapper.PaymentCallbackRecordMapper;
+import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
 import org.junit.jupiter.api.Test;
@@ -35,6 +38,7 @@ class PaymentBillV1ServiceImplTest {
     void closedSalesOrderLateCallbackShouldPrepareRefundInsteadOfPublishingOrderPaid() {
         PaymentBillMapper paymentBillMapper = mock(PaymentBillMapper.class);
         PaymentCallbackRecordMapper callbackRecordMapper = mock(PaymentCallbackRecordMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         CompensationTaskMapper compensationTaskMapper = mock(CompensationTaskMapper.class);
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
         RefundService refundService = mock(RefundService.class);
@@ -48,10 +52,14 @@ class PaymentBillV1ServiceImplTest {
                 "SALES_ORDER",
                 PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED
         ));
+        when(salesOrderMapper.selectByOrderNoForUpdate("BIZ-PB100"))
+                .thenReturn(closedOrder("BIZ-PB100"));
+        when(paymentBillMapper.markLatePaidIfClosed(any(), any(), any(), any())).thenReturn(1);
 
         PaymentBillV1ServiceImpl service = new PaymentBillV1ServiceImpl(
                 paymentBillMapper,
                 callbackRecordMapper,
+                salesOrderMapper,
                 new CompensationTaskFactoryImpl(compensationTaskMapper),
                 new OutboxPublisherImpl(messageOutboxMapper),
                 List.of(provider),
@@ -66,9 +74,8 @@ class PaymentBillV1ServiceImplTest {
 
         service.handleCallback("ALIPAY_PAGE", dto);
 
-        ArgumentCaptor<PaymentBill> billCaptor = ArgumentCaptor.forClass(PaymentBill.class);
-        verify(paymentBillMapper).updateById(billCaptor.capture());
-        assertEquals(PayStatusEnum.SUCCESS.name(), billCaptor.getValue().getPayStatus());
+        verify(paymentBillMapper).markLatePaidIfClosed(
+                eq("PB100"), any(), eq("trade-1"), any());
         verify(refundService).prepareLateCallbackRefund(any(PaymentBill.class), eq(PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED));
         verify(messageOutboxMapper, never()).insert(any(MessageOutbox.class));
     }
@@ -77,6 +84,7 @@ class PaymentBillV1ServiceImplTest {
     void closedRechargeLateCallbackShouldRecoverAndInsertOutboxRecord() {
         PaymentBillMapper paymentBillMapper = mock(PaymentBillMapper.class);
         PaymentCallbackRecordMapper callbackRecordMapper = mock(PaymentCallbackRecordMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         CompensationTaskMapper compensationTaskMapper = mock(CompensationTaskMapper.class);
         MessageOutboxMapper messageOutboxMapper = mock(MessageOutboxMapper.class);
         RefundService refundService = mock(RefundService.class);
@@ -90,6 +98,7 @@ class PaymentBillV1ServiceImplTest {
                 "RECHARGE",
                 PaymentStatusReasonEnum.RECHARGE_TIMEOUT_RECOVERABLE
         ));
+        when(paymentBillMapper.markLatePaidIfClosed(any(), any(), any(), any())).thenReturn(1);
         doAnswer(invocation -> {
             MessageOutbox outbox = invocation.getArgument(0);
             outbox.setId(1L);
@@ -99,6 +108,7 @@ class PaymentBillV1ServiceImplTest {
         PaymentBillV1ServiceImpl service = new PaymentBillV1ServiceImpl(
                 paymentBillMapper,
                 callbackRecordMapper,
+                salesOrderMapper,
                 new CompensationTaskFactoryImpl(compensationTaskMapper),
                 new OutboxPublisherImpl(messageOutboxMapper),
                 List.of(provider),
@@ -115,6 +125,15 @@ class PaymentBillV1ServiceImplTest {
 
         verify(refundService, never()).prepareLateCallbackRefund(any(), any());
         verify(messageOutboxMapper).insert(any(MessageOutbox.class));
+    }
+
+    private SalesOrder closedOrder(String orderNo) {
+        SalesOrder order = new SalesOrder();
+        order.setId(10L);
+        order.setOrderNo(orderNo);
+        order.setOrderStatus(OrderStatusEnum.CLOSED.name());
+        order.setPayStatus(PayStatusEnum.CLOSED.name());
+        return order;
     }
 
     private PaymentBill buildClosedBill(String billNo, String bizType, PaymentStatusReasonEnum reasonEnum) {
