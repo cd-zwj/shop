@@ -52,8 +52,8 @@ class V1MerchantSupportServiceTest {
     }
 
     @Test
-    void cashierShouldAccessOrdersOnly() {
-        when(tenantEmployeeMapper.selectOne(any())).thenReturn(employee(" cashier "));
+    void pickupClerkShouldAccessOrdersOnly() {
+        when(tenantEmployeeMapper.selectOne(any())).thenReturn(employee(" pickup_clerk "));
 
         assertDoesNotThrow(() -> service.requirePermission(1L, 100L, MerchantPermission.ORDER_MANAGE));
 

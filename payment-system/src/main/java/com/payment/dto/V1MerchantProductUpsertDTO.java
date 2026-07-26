@@ -41,14 +41,8 @@ public class V1MerchantProductUpsertDTO {
     /** 所属门店 ID */
     private Long storeId;
 
-    /** 履约形态：ONLINE_VIRTUAL / OFFLINE_SERVICE / EXPRESS_DELIVERY */
+    /** 履约形态，当前仅支持 STORE_PICKUP */
     private String fulfillmentMode;
-
-    /** 虚拟商品类型 ID */
-    private Long virtualTypeId;
-
-    /** 虚拟商品分类 ID */
-    private Long virtualCategoryId;
 
     /** 库存数量 */
     @NotNull(message = "库存不能为空")
@@ -60,16 +54,4 @@ public class V1MerchantProductUpsertDTO {
      */
     private String status;
 
-    /**
-     * 商品类型：PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION
-     * 不传时由服务层兜底为 PHYSICAL。
-     */
-    private String productType;
-
-    /**
-     * 交付配置(JSON 字符串)，按 productType 解读，例如：
-     * VIRTUAL = {"contentUrl":"...","accountInfo":"..."}
-     * SUBSCRIPTION = {"validityDays":30}
-     */
-    private String deliveryConfig;
 }

@@ -74,8 +74,7 @@ INSERT INTO sys_permission (permission_code, permission_name, module, descriptio
 
 -- 积分权限 (points模块) - 用户端
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
-('points:view', '查看积分', 'points', '查看积分余额和记录'),
-('points:exchange', '积分兑换', 'points', '使用积分兑换');
+('points:view', '查看积分', 'points', '查看积分余额和记录');
 
 -- 充值权限 (recharge模块) - 用户端
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
@@ -109,10 +108,6 @@ INSERT INTO sys_permission (permission_code, permission_name, module, descriptio
 -- 销售统计权限 (statistics模块) - 商家端
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
 ('statistics:view', '查看统计', 'statistics', '查看销售统计数据');
-
--- POS收银权限 (pos模块) - 商家端
-INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
-('pos:checkout', 'POS收银', 'pos', 'POS收银功能');
 
 -- 商家信息权限 (merchant模块) - 商家端
 INSERT INTO sys_permission (permission_code, permission_name, module, description) VALUES
@@ -155,7 +150,7 @@ INSERT INTO sys_role_permission (role_id, permission_id)
 SELECT 1, id FROM sys_permission WHERE permission_code IN (
     'user:info', 'user:logout',
     'order:create', 'order:pay', 'order:query', 'order:cancel',
-    'points:view', 'points:exchange',
+    'points:view',
     'recharge:create', 'recharge:view',
     'miniprogram:bindPhone', 'miniprogram:bindWechat',
     'product:view', 'product:list', 'product:search',
@@ -172,7 +167,6 @@ SELECT 2, id FROM sys_permission WHERE permission_code IN (
     'withdrawal:create', 'withdrawal:view',
     'analysis:sales', 'analysis:dashboard',
     'statistics:view',
-    'pos:checkout',
     'merchant:info',
     'ai:chat', 'ai:analysis',
     'file:upload'

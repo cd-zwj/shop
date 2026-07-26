@@ -10,6 +10,12 @@ public enum OrderStatusEnum {
     CREATED,
     /** 已支付：用户完成支付，等待后续交付或处理 */
     PAID,
+    /** 已支付，等待商户开始备货 */
+    PENDING_PREPARATION,
+    /** 商户正在备货 */
+    PREPARING,
+    /** 商户已确认备货完成，订单履约结束 */
+    COMPLETED,
     /** 已取消：用户或系统主动取消订单 */
     CANCELLED,
     /** 已关闭：订单超时未支付或由平台关闭 */

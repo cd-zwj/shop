@@ -33,7 +33,7 @@ public class PointsLog implements Serializable {
     private Long userId;
 
     /**
-     * 变动类型：EARN-获得，USE-使用，EXPIRE-过期，EXCHANGE-兑换
+     * 变动类型：EARN-获得，USE-使用，EXPIRE-过期
      */
     private String changeType;
 

@@ -88,15 +88,6 @@ INSERT INTO `product` (`tenant_id`, `product_code`, `name`, `description`, `pric
 (1, 'PROD004', '蓝牙耳机', '降噪蓝牙耳机', 299.00, '数码', NULL, 1, 0),
 (1, 'PROD005', '充电宝', '20000mAh 大容量充电宝', 89.00, '数码', NULL, 1, 0);
 
--- ========== 商品库存 ==========
-
-INSERT INTO `product_stock` (`tenant_id`, `product_id`, `quantity`, `version`, `update_time`) VALUES
-(1, 1, 100, 0, NOW()),
-(1, 2, 50, 0, NOW()),
-(1, 3, 200, 0, NOW()),
-(1, 4, 30, 0, NOW()),
-(1, 5, 80, 0, NOW());
-
 -- ========== 测试优惠券模板 ==========
 
 INSERT INTO `coupon_template` (`template_no`, `tenant_id`, `template_scope`, `template_name`, `coupon_type`, `threshold_amount`, `discount_amount`, `total_quantity`, `per_user_limit`, `can_stack_balance`, `can_stack_points`, `can_stack_other_coupon`, `applicable_product_scope`, `status`) VALUES

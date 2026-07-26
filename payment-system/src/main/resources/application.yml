@@ -259,13 +259,6 @@ minio:
   path-prefix: uploads/
   url-expiry-days: 7
 
-# Netty配置
-netty:
-  server:
-    port: 8888
-    boss-threads: 1
-    worker-threads: 4
-
 auth:
   password-recovery:
     expose-reset-code: false

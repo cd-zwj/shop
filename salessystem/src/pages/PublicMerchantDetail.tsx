@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ArrowLeft, MapPin, Search, Share2, ShoppingBag, Star } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { appCatalogService } from '../services/modules/appCatalog';
-import type { Product, Tenant } from '../types/catalog';
+import type { AppStore, Product, Tenant } from '../types/catalog';
 import { formatCurrency, getImageUrl } from '../utils/display';
 
 export default function PublicMerchantDetail() {
@@ -12,6 +12,8 @@ export default function PublicMerchantDetail() {
   const tenantId = Number(id);
   const [merchant, setMerchant] = useState<Tenant | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<AppStore[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -26,13 +28,16 @@ export default function PublicMerchantDetail() {
       }
 
       try {
-        const [tenant, tenantProducts] = await Promise.all([
+        const [tenant, tenantStores] = await Promise.all([
           appCatalogService.getTenant(tenantId),
-          appCatalogService.listTenantProducts(tenantId),
+          appCatalogService.listTenantStores(tenantId),
         ]);
         if (!isMounted) return;
         setMerchant(tenant);
-        setProducts(tenantProducts);
+        setStores(tenantStores);
+        const initialStoreId = tenantStores[0]?.id;
+        setSelectedStoreId(initialStoreId ?? null);
+        setProducts([]);
       } catch {
         if (!isMounted) return;
         setError('商户信息加载失败，请稍后重试');
@@ -49,6 +54,15 @@ export default function PublicMerchantDetail() {
       isMounted = false;
     };
   }, [tenantId]);
+
+  useEffect(() => {
+    if (!tenantId || !selectedStoreId) {
+      return;
+    }
+    void appCatalogService.listTenantProducts(tenantId, selectedStoreId)
+      .then(setProducts)
+      .catch(() => setProducts([]));
+  }, [selectedStoreId, tenantId]);
 
   return (
     <div className="flex flex-col gap-0 pb-32">
@@ -128,6 +142,19 @@ export default function PublicMerchantDetail() {
             </div>
           </header>
 
+          <div className="mb-6 flex gap-2 overflow-x-auto">
+            {stores.map((store) => (
+              <button
+                key={store.id}
+                type="button"
+                onClick={() => setSelectedStoreId(store.id)}
+                className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold ${selectedStoreId === store.id ? 'border-primary bg-primary text-white' : 'border-slate-200 text-slate-700'}`}
+              >
+                {store.storeName}
+              </button>
+            ))}
+          </div>
+
           {error && (
             <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               {error}
@@ -139,7 +166,7 @@ export default function PublicMerchantDetail() {
               <motion.div
                 key={product.id}
                 whileHover={{ y: -8 }}
-                onClick={() => navigate(`/product/${product.id}?tenantId=${tenantId}`)}
+                onClick={() => navigate(`/product/${product.id}?tenantId=${tenantId}&storeId=${selectedStoreId}`)}
                 className="group flex cursor-pointer flex-col gap-4 rounded-[32px] border border-slate-50 p-3 transition-all hover:shadow-2xl hover:shadow-slate-200/50 md:gap-5 md:rounded-[40px] md:p-4"
               >
                 <div className="aspect-square overflow-hidden rounded-[24px] bg-slate-100 md:rounded-[32px]">

@@ -32,7 +32,7 @@ public class TenantEmployee implements Serializable {
     /** 员工编号，系统生成的唯一标识，用于在租户内区分员工 */
     private String employeeNo;
 
-    /** 员工角色，如 OWNER-店主、MANAGER-店员、CASHIER-收银员 等 */
+    /** 员工角色，如 OWNER-店主、MANAGER-店长、PICKUP_CLERK-自提店员 等 */
     private String employeeRole;
 
     /** 员工状态：0-禁用，1-正常；禁用后该员工无法访问租户后台 */

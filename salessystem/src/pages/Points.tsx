@@ -1,105 +1,47 @@
 import { useCallback, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AlertCircle, Coins, ArrowLeft, Clock, RefreshCw, ShoppingBag, Sparkles } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Clock, Coins, RefreshCw, Sparkles } from 'lucide-react';
 import { EmptyState } from '../components/ui/EmptyState';
-import { appPointsService } from '../services/modules/appPoints';
-import { appCatalogService } from '../services/modules/appCatalog';
-import type { PointsBalance, PointsLog, ExchangeProduct } from '../types/points';
-import type { Product } from '../types/catalog';
 import { useToast } from '../context/ToastContext';
-import { cn } from '../lib/utils';
-import { getImageUrl } from '../utils/display';
+import { appPointsService } from '../services/modules/appPoints';
+import type { PointsBalance, PointsLog } from '../types/points';
 import { getPointsTracePresentation } from '../utils/assetTracePresentation';
 import { getErrorMessage } from '../utils/errorMessage';
-
-type ProductWithTenant = Product & { tenantId: number };
+import { cn } from '../lib/utils';
 
 export default function Points() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { tenantId: tenantIdParam } = useParams<{ tenantId: string }>();
   const tenantId = Number(tenantIdParam);
-
   const [balance, setBalance] = useState<PointsBalance | null>(null);
   const [logs, setLogs] = useState<PointsLog[]>([]);
-  const [exchangeProducts, setExchangeProducts] = useState<ExchangeProduct[]>([]);
-  const [productDetails, setProductDetails] = useState<Record<number, Product>>({});
-  
-  const [activeTab, setActiveTab] = useState<'logs' | 'exchange'>('logs');
   const [isLoading, setIsLoading] = useState(true);
-  const [isExchanging, setIsExchanging] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [productLookupWarning, setProductLookupWarning] = useState<string | null>(null);
 
-  // Pagination for logs
-
-  // Fetch initial data
   const loadPointsData = useCallback(async () => {
-    if (!tenantId || isNaN(tenantId)) {
+    if (!tenantId || Number.isNaN(tenantId)) {
       const message = '缺少商户参数';
       setError(message);
       showToast(message, 'error');
       setIsLoading(false);
       return;
     }
+
     setIsLoading(true);
     setError(null);
-    setProductLookupWarning(null);
-
     try {
-      const balanceData = await appPointsService.getPointsBalance(tenantId);
+      const [balanceData, logsData] = await Promise.all([
+        appPointsService.getPointsBalance(tenantId),
+        appPointsService.getPointsLogs(tenantId, 1, 20),
+      ]);
       setBalance(balanceData);
-
-      // Load products for lookup
-      let productsList: Product[] = [];
-      try {
-        const list = await appCatalogService.listTenantProducts(tenantId);
-        productsList = list.map((p) => ({ ...p, tenantId }));
-      } catch (e) {
-        setProductLookupWarning(getErrorMessage(e, '部分兑换商品详情加载失败，可稍后重试'));
-      }
-
-      // Load exchange products
-      const exchanges = await appPointsService.getExchangeProducts(tenantId);
-      setExchangeProducts(exchanges);
-
-      // Resolve product details
-      const resolvedDetails: Record<number, Product> = {};
-      productsList.forEach((p) => {
-        resolvedDetails[p.id] = p;
-      });
-
-      // For any exchange products not in tenant product list, query individually
-      const missingProductIds = exchanges
-        .map((ep) => ep.productId)
-        .filter((id) => !resolvedDetails[id]);
-
-      if (missingProductIds.length > 0) {
-        try {
-          const missingDetails = await Promise.all(
-            missingProductIds.map((id) => appCatalogService.getProduct(id))
-          );
-          missingDetails.forEach((p) => {
-            if (p) resolvedDetails[p.id] = { ...p, tenantId } as ProductWithTenant;
-          });
-        } catch (e) {
-          setProductLookupWarning(getErrorMessage(e, '部分兑换商品详情加载失败，可稍后重试'));
-        }
-      }
-
-      setProductDetails(resolvedDetails);
-
-      // Load logs
-      const logsData = await appPointsService.getPointsLogs(tenantId, 1, 20);
       setLogs(logsData.records ?? []);
-    } catch (e) {
-      const message = getErrorMessage(e, '获取积分中心数据失败');
+    } catch (err) {
+      const message = getErrorMessage(err, '获取积分中心数据失败');
       setError(message);
       setBalance(null);
       setLogs([]);
-      setExchangeProducts([]);
-      setProductDetails({});
       showToast(message, 'error');
     } finally {
       setIsLoading(false);
@@ -110,306 +52,80 @@ export default function Points() {
     void loadPointsData();
   }, [loadPointsData]);
 
-  const handleExchange = async (ep: ExchangeProduct) => {
-    if (!balance || balance.points < ep.pointsRequired) {
-      showToast('积分不足，无法兑换该商品', 'error');
-      return;
-    }
-
-    setIsExchanging(ep.id);
-    try {
-      await appPointsService.exchangeProduct(tenantId, ep.id);
-      showToast('积分兑换成功！已生成兑换订单。', 'success');
-      
-      // Reload balance, logs and exchange list
-      await loadPointsData();
-    } catch (e: unknown) {
-      const errMsg = e instanceof Error ? e.message : '兑换失败，请稍后重试';
-      showToast(errMsg, 'error');
-    } finally {
-      setIsExchanging(null);
-    }
-  };
-
-  const formatDate = (isoString: string) => {
-    if (!isoString) return '';
-    const date = new Date(isoString);
-    if (isNaN(date.getTime())) return isoString.split('T')[0] || '';
-    return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).replace(/\//g, '-');
-  };
-
-  const groupLogsByDate = (logsList: PointsLog[]) => {
-    const groups: Record<string, PointsLog[]> = {};
-    logsList.forEach((log) => {
-      const dateStr = log.createTime ? log.createTime.split('T')[0] : '其他';
-      if (!groups[dateStr]) {
-        groups[dateStr] = [];
-      }
-      groups[dateStr].push(log);
-    });
-    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
-  };
-
   const expiringSoonPoints = balance?.expiringSoonPoints ?? 0;
+  const groups = groupLogsByDate(logs);
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 pb-12 md:mt-8">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white">积分中心</h1>
-            <p className="text-xs font-semibold text-slate-400 mt-0.5">
-              消费赚取积分，兑换精美礼品
-            </p>
-          </div>
+      <header className="flex items-center gap-3 border-b border-slate-100 pb-4">
+        <button type="button" onClick={() => navigate(-1)} className="rounded-full p-2 text-slate-600 transition-colors hover:bg-slate-50">
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-black text-slate-900">积分中心</h1>
+          <p className="mt-0.5 text-xs font-semibold text-slate-400">消费可获得积分，积分仅用于门店经营活动。</p>
         </div>
       </header>
 
       {error && (
-        <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="h-5 w-5 flex-none" />
-            <span className="text-sm font-bold">{error}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadPointsData()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-black text-red-700 shadow-sm transition-all hover:bg-red-100"
-          >
-            <RefreshCw className="h-4 w-4" />
-            重试
+        <div className="flex flex-col gap-4 rounded-lg border border-red-100 bg-red-50 px-6 py-5 text-red-700 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3"><AlertCircle className="h-5 w-5 flex-none" /><span className="text-sm font-bold">{error}</span></div>
+          <button type="button" onClick={() => void loadPointsData()} className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-bold text-red-700 shadow-sm hover:bg-red-100">
+            <RefreshCw className="h-4 w-4" />重试
           </button>
         </div>
       )}
 
-      {/* Points Balance Card */}
-      <section className="relative overflow-hidden bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-900/10">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
-        <div className="relative z-10 flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
-              <Coins className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              当前可用积分
-            </span>
-            <div className="text-5xl font-black tracking-tight text-white mt-2 flex items-baseline gap-1">
-              {isLoading ? '...' : (balance?.points ?? 0).toLocaleString()}
-              <span className="text-sm font-semibold text-slate-400 ml-1">分</span>
-            </div>
-            <p className="text-xs font-semibold text-slate-400 mt-3 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
-              可用积分在兑换商品时可抵扣等值商品
-            </p>
-            {expiringSoonPoints > 0 && (
-              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-yellow-500/15 px-3 py-1 text-xs font-bold text-yellow-200">
-                <Clock className="h-3.5 w-3.5" />
-                近 30 天将过期 {expiringSoonPoints.toLocaleString()} 分
-              </p>
-            )}
-          </div>
-        </div>
+      <section className="bg-slate-900 p-6 text-white shadow-xl shadow-slate-900/10 sm:p-8">
+        <span className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-400"><Coins className="h-4 w-4 fill-yellow-500 text-yellow-500" />当前可用积分</span>
+        <div className="mt-2 flex items-baseline gap-1 text-5xl font-black">{isLoading ? '...' : (balance?.points ?? 0).toLocaleString()}<span className="ml-1 text-sm font-semibold text-slate-400">分</span></div>
+        <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-slate-400"><Sparkles className="h-3.5 w-3.5 text-yellow-500" />积分余额和明细仅反映已生效的门店活动。</p>
+        {expiringSoonPoints > 0 && <p className="mt-3 inline-flex items-center gap-1.5 bg-yellow-500/15 px-3 py-1 text-xs font-bold text-yellow-200"><Clock className="h-3.5 w-3.5" />近 30 天将过期 {expiringSoonPoints.toLocaleString()} 分</p>}
       </section>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-200">
-        {[
-          { key: 'logs', label: '积分明细' },
-          { key: 'exchange', label: '积分兑换' },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as 'logs' | 'exchange')}
-            className={cn(
-              'flex-1 text-center py-3.5 text-sm font-bold border-b-2 transition-all',
-              activeTab === tab.key
-                ? 'border-primary text-primary font-extrabold'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            )}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Content */}
-      <div className="min-h-[300px]">
-        {productLookupWarning && !error && (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            <AlertCircle className="h-4 w-4 flex-none" />
-            {productLookupWarning}
-          </div>
-        )}
+      <section className="min-h-[300px]">
+        <h2 className="mb-4 text-lg font-black text-slate-900">积分明细</h2>
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-400">
-            <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
-            <span className="text-sm font-medium">获取积分中心数据中...</span>
-          </div>
+          <div className="flex flex-col items-center justify-center gap-3 py-20 text-slate-400"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary/20 border-t-primary" /><span className="text-sm font-medium">获取积分中心数据中...</span></div>
+        ) : groups.length === 0 ? (
+          <EmptyState icon={<Clock className="h-12 w-12" />} title="暂无积分明细" subtitle="您最近还没有积分变动。" />
         ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.15 }}
-            >
-              {/* TAB: LOGS */}
-              {activeTab === 'logs' && (
-                logs.length === 0 ? (
-                  <EmptyState icon={<Clock className="w-12 h-12" />} title="暂无积分明细" subtitle="您最近还没有积分变动，快去消费赚取吧！" />
-                ) : (
-                  <div className="flex flex-col gap-6">
-                    {groupLogsByDate(logs).map(([date, logItems]) => (
-                      <div key={date} className="flex flex-col gap-3">
-                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider ml-1">
-                          {date}
-                        </h3>
-                        <div className="overflow-hidden rounded-3xl border border-slate-100 bg-white dark:bg-slate-900 shadow-sm divide-y divide-slate-50">
-                          {logItems.map((log) => {
-                            const trace = getPointsTracePresentation(log);
-                            const isGrant = trace.tone === 'positive';
-                            return (
-                              <div key={log.id} className="flex items-center justify-between p-5 transition-colors hover:bg-slate-50/50">
-                                <div className="flex items-center gap-4">
-                                  <div className={cn(
-                                    'flex h-10 w-10 items-center justify-center rounded-2xl font-black text-sm',
-                                    isGrant ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
-                                  )}>
-                                    {isGrant ? '+' : '-'}
-                                  </div>
-                                  <div>
-                                    <div className="font-extrabold text-slate-800 dark:text-white">
-                                      {trace.title}
-                                    </div>
-                                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-slate-400">
-                                      <span>{trace.source}</span>
-                                      <span className="text-slate-200">•</span>
-                                      <span>{formatDate(log.createTime)}</span>
-                                    </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-bold text-slate-400">
-                                      {trace.hint && <span>{trace.hint}</span>}
-                                      {trace.actionPath && (
-                                        <button
-                                          type="button"
-                                          onClick={() => navigate(trace.actionPath!)}
-                                          className="text-primary hover:text-primary/80"
-                                        >
-                                          {trace.actionLabel}
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <div className={cn(
-                                    'text-lg font-black',
-                                    isGrant ? 'text-green-600' : 'text-red-600'
-                                  )}>
-                                    {trace.effect}
-                                  </div>
-                                  <div className="text-[10px] font-bold text-slate-400 mt-0.5">
-                                    {trace.balance}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-
-              {/* TAB: EXCHANGE */}
-              {activeTab === 'exchange' && (
-                exchangeProducts.length === 0 ? (
-                  <EmptyState icon={<ShoppingBag className="w-12 h-12" />} title="暂无可兑换的商品" subtitle="店铺最近没有上架积分兑换商品哦，敬请期待！" />
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {exchangeProducts.map((ep) => {
-                      const product = productDetails[ep.productId];
-                      const isOutOfStock = ep.stock <= 0;
-                      const isPointsInsufficient = (balance?.points ?? 0) < ep.pointsRequired;
-                      const canExchange = ep.status === 1 && !isOutOfStock && !isPointsInsufficient;
-
-                      return (
-                        <div
-                          key={ep.id}
-                          className="flex flex-col overflow-hidden rounded-3xl border border-slate-100 bg-white dark:bg-slate-900 shadow-sm transition-all duration-300 hover:shadow-md"
-                        >
-                          <div className="relative aspect-square bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                            <img
-                              src={getImageUrl(product?.imageUrl)}
-                              alt={product?.name || '积分商品'}
-                              className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-                            />
-                            {isOutOfStock && (
-                              <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center backdrop-blur-[2px]">
-                                <span className="border-2 border-white/60 text-white/90 font-black text-xs px-3 py-1.5 transform -rotate-12 rounded-lg">
-                                  已兑完
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex flex-col gap-2 p-4 flex-1">
-                            <h3 className="line-clamp-2 text-sm font-bold leading-relaxed text-slate-800 dark:text-white flex-1">
-                              {product?.name || '积分礼品商品'}
-                            </h3>
-                            <div className="flex items-baseline gap-0.5 text-yellow-600 dark:text-yellow-500 mt-1">
-                              <span className="text-lg font-black">{ep.pointsRequired}</span>
-                              <span className="text-[10px] font-bold">积分</span>
-                            </div>
-                            
-                            <div className="mt-2 flex justify-between items-center border-t border-slate-50 dark:border-slate-800/50 pt-3 gap-2">
-                              <span className="text-[10px] font-bold text-slate-400">
-                                剩 {ep.stock} 件
-                              </span>
-                              <button
-                                disabled={!canExchange || isExchanging !== null}
-                                onClick={() => handleExchange(ep)}
-                                className={cn(
-                                  'px-4 py-1.5 rounded-full text-[10px] font-black tracking-wide transition-all shadow-sm active:scale-95 shrink-0',
-                                  canExchange
-                                    ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                                    : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                                )}
-                              >
-                                {isExchanging === ep.id ? (
-                                  <div className="w-3.5 h-3.5 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
-                                ) : isOutOfStock ? (
-                                  '已兑完'
-                                ) : isPointsInsufficient ? (
-                                  '积分不足'
-                                ) : (
-                                  '兑换'
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
-              )}
-            </motion.div>
-          </AnimatePresence>
+          <div className="flex flex-col gap-6">
+            {groups.map(([date, items]) => <div key={date} className="flex flex-col gap-3">
+              <h3 className="ml-1 text-xs font-black uppercase text-slate-400">{date}</h3>
+              <div className="divide-y divide-slate-50 border border-slate-100 bg-white shadow-sm">
+                {items.map((log) => <PointsLogRow key={log.id} log={log} navigate={navigate} />)}
+              </div>
+            </div>)}
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
+}
+
+function PointsLogRow({ log, navigate }: { log: PointsLog; navigate: ReturnType<typeof useNavigate> }) {
+  const trace = getPointsTracePresentation(log);
+  const isGrant = trace.tone === 'positive';
+  return <div className="flex items-center justify-between p-5 transition-colors hover:bg-slate-50/50">
+    <div className="flex items-center gap-4">
+      <div className={cn('flex h-10 w-10 items-center justify-center rounded-md font-black text-sm', isGrant ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600')}>{isGrant ? '+' : '-'}</div>
+      <div><div className="font-bold text-slate-800">{trace.title}</div><div className="mt-0.5 text-xs font-semibold text-slate-400">{trace.source} · {formatDate(log.createTime)}</div>{trace.actionPath && <button type="button" onClick={() => navigate(trace.actionPath!)} className="mt-1 text-[11px] font-bold text-primary">{trace.actionLabel}</button>}</div>
+    </div>
+    <div className={cn('text-lg font-black', isGrant ? 'text-green-600' : 'text-red-600')}>{trace.effect}</div>
+  </div>;
+}
+
+function groupLogsByDate(logs: PointsLog[]) {
+  const groups = new Map<string, PointsLog[]>();
+  logs.forEach((log) => {
+    const date = log.createTime?.split('T')[0] || '其他';
+    groups.set(date, [...(groups.get(date) ?? []), log]);
+  });
+  return [...groups.entries()].sort(([left], [right]) => right.localeCompare(left));
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value?.split('T')[0] || '' : date.toLocaleString('zh-CN', { hour12: false });
 }

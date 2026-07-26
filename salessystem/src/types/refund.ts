@@ -5,6 +5,7 @@ export interface RefundCreateDTO {
   refundAmount: number;
   reason: string;
   description?: string;
+  evidenceUrls?: string[];
 }
 
 export interface Refund {
@@ -26,8 +27,17 @@ export interface Refund {
   availableActions?: string[] | null;
   reason: string;
   description: string | null;
+  evidenceUrls?: string[];
   rejectReason: string | null;
   auditTime: string | null;
   completeTime: string | null;
   createTime: string;
+}
+
+export interface AfterSaleAction {
+  action: string;
+  operatorRole: 'USER' | 'MERCHANT' | 'ADMIN' | 'SYSTEM' | string;
+  remark: string | null;
+  evidenceUrls: string[];
+  createTime: string | null;
 }

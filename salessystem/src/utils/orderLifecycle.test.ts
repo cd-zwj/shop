@@ -180,13 +180,13 @@ describe('orderLifecycle', () => {
     expect(getOrderLifecyclePresentation(baseOrder).label).toBe('已支付');
     expect(getOrderLifecyclePresentation(baseOrder, {
       items: [{ deliveryStatus: 'PENDING' }],
-    }).label).toBe('待发货');
+    }).label).toBe('待备货');
     expect(getOrderLifecyclePresentation(baseOrder, {
       items: [{ deliveryStatus: 'DELIVERING' }],
-    }).label).toBe('发货中');
+    }).label).toBe('备货中');
     expect(getOrderLifecyclePresentation(baseOrder, {
       items: [{ deliveryStatus: 'DELIVERED' }],
-    }).label).toBe('已发货');
+    }).label).toBe('待备货');
     expect(getOrderLifecyclePresentation(baseOrder, {
       items: [{ deliveryStatus: 'CONFIRMED' }],
     }).label).toBe('已完成');

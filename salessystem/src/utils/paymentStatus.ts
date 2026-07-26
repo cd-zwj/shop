@@ -61,7 +61,7 @@ export function getPaymentStatusPresentation(paymentBill?: Pick<PaymentBill, 'pa
         title: '支付已确认',
         description: '本次支付已经成功确认，可以继续查看订单或钱包结果。',
         badgeLabel: '支付成功',
-        nextStep: '等待商家履约，或进入订单详情查看发货、卡密、服务核销状态。',
+        nextStep: '等待商家备货，并在订单详情查看取货码和进度。',
       };
     case 'failed':
       return {

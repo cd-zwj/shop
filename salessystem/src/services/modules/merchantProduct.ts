@@ -2,8 +2,6 @@ import { request } from '../request';
 import type { PageResult } from '../../types/api';
 import type {
   MerchantProduct,
-  MerchantCardKey,
-  MerchantCardKeySummary,
   MerchantProductChangeLog,
   MerchantProductFilters,
   MerchantProductUpsertPayload,
@@ -71,34 +69,5 @@ export const merchantProductService = {
     });
   },
 
-  listCardKeys(tenantId: number, productId: number, filters: { current?: number; size?: number; status?: string } = {}) {
-    return request<PageResult<MerchantCardKey>>({
-      url: `/v1/merchant/tenants/${tenantId}/products/${productId}/card-keys`,
-      method: 'get',
-      params: {
-        current: filters.current ?? 1,
-        size: filters.size ?? 10,
-        status: filters.status || undefined,
-      },
-      authRole: 'merchant',
-    });
-  },
-
-  getCardKeySummary(tenantId: number, productId: number) {
-    return request<MerchantCardKeySummary>({
-      url: `/v1/merchant/tenants/${tenantId}/products/${productId}/card-keys/summary`,
-      method: 'get',
-      authRole: 'merchant',
-    });
-  },
-
-  uploadCardKeys(tenantId: number, productId: number, codes: string[]) {
-    return request<MerchantCardKeySummary>({
-      url: `/v1/merchant/tenants/${tenantId}/products/${productId}/card-keys/upload`,
-      method: 'post',
-      data: { codes },
-      authRole: 'merchant',
-    });
-  },
 };
 

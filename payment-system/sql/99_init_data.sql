@@ -53,12 +53,6 @@ INSERT INTO `points_rule` (`tenant_id`, `rule_name`, `rule_type`, `points_amount
 (1, '每日签到', 'SIGNIN', 10, NULL, 1),
 (1, '分享好友', 'SHARE', 20, NULL, 1);
 
--- 插入默认积分兑换商品
-INSERT INTO `exchange_product` (`tenant_id`, `product_name`, `points_required`, `stock`, `exchange_limit`, `description`, `status`, `sort_order`) VALUES
-(1, '10元优惠券', 1000, 100, 5, '满50元可用', 1, 1),
-(1, '20元优惠券', 2000, 50, 3, '满100元可用', 1, 2),
-(1, '精美礼品', 5000, 20, 1, '限量版礼品', 1, 3);
-
 -- 为默认租户创建商家余额记录
 INSERT INTO `merchant_balance` (`tenant_id`, `balance`, `frozen_balance`, `total_income`, `total_withdrawal`) VALUES
 (1, 0.00, 0.00, 0.00, 0.00);

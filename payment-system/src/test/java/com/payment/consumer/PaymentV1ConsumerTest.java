@@ -12,7 +12,7 @@ import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
 import com.payment.service.MerchantSettlementService;
 import com.payment.service.MessageIdempotentService;
-import com.payment.service.ProductInventoryService;
+import com.payment.service.StoreInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
 import org.junit.jupiter.api.Test;
@@ -94,6 +94,8 @@ class PaymentV1ConsumerTest {
         salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
         salesOrder.setTotalAmount(new BigDecimal("10.00"));
         salesOrder.setMerchantWalletDeductAmount(BigDecimal.ZERO);
+        salesOrder.setFulfillmentMode("STORE_PICKUP");
+        salesOrder.setStoreId(88L);
         salesOrder.setDeleted(0);
 
         SalesOrderItem item = new SalesOrderItem();
@@ -103,10 +105,31 @@ class PaymentV1ConsumerTest {
         when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
         org.mockito.Mockito.doThrow(new RuntimeException("stock failed"))
-                .when(fixture.productInventoryService).deductStock(9L, 1L, 2, "SO001");
+                .when(fixture.storeInventoryService).deductLocked(
+                        9L, 88L, 1L, 2, "SALES_ORDER", "SO001", 100L);
 
         assertThrows(RuntimeException.class, () -> fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO001\"}"));
         verify(fixture.salesOrderMapper, never()).updateById(any(SalesOrder.class));
+    }
+
+    @Test
+    void handleOrderPaidShouldDeductStoreStockForPickupOrder() {
+        ConsumerFixture fixture = new ConsumerFixture();
+        SalesOrder salesOrder = paidOrderFixture("SO_PICKUP");
+        salesOrder.setFulfillmentMode("STORE_PICKUP");
+        salesOrder.setStoreId(88L);
+        SalesOrderItem item = orderItemFixture();
+
+        when(fixture.messageIdempotentService.isProcessed(
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PICKUP",
+                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(salesOrder);
+        when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
+
+        fixture.consumer.handleOrderPaid("{\"bizNo\":\"SO_PICKUP\"}");
+
+        verify(fixture.storeInventoryService).deductLocked(
+                9L, 88L, 1L, 2, "SALES_ORDER", "SO_PICKUP", 100L);
     }
 
     @Test
@@ -180,6 +203,8 @@ class PaymentV1ConsumerTest {
         salesOrder.setPlatformUserId(100L);
         salesOrder.setOrderStatus(OrderStatusEnum.CREATED.name());
         salesOrder.setPayStatus(PayStatusEnum.WAIT_PAY.name());
+        salesOrder.setFulfillmentMode("STORE_PICKUP");
+        salesOrder.setStoreId(88L);
         salesOrder.setDeleted(0);
         return salesOrder;
     }
@@ -195,7 +220,7 @@ class PaymentV1ConsumerTest {
         private final WalletRechargeService walletRechargeService = mock(WalletRechargeService.class);
         private final SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         private final SalesOrderItemMapper salesOrderItemMapper = mock(SalesOrderItemMapper.class);
-        private final ProductInventoryService productInventoryService = mock(ProductInventoryService.class);
+        private final StoreInventoryService storeInventoryService = mock(StoreInventoryService.class);
         private final MerchantSettlementService settlementService = mock(MerchantSettlementService.class);
         private final MemberPointsAccountService memberPointsAccountService = mock(MemberPointsAccountService.class);
         private final MemberService memberService = mock(MemberService.class);
@@ -207,7 +232,7 @@ class PaymentV1ConsumerTest {
                 walletRechargeService,
                 salesOrderMapper,
                 salesOrderItemMapper,
-                productInventoryService,
+                storeInventoryService,
                 settlementService,
                 memberPointsAccountService,
                 pointsRuleMapper,

@@ -51,17 +51,17 @@ describe('appCatalogService', () => {
   });
 
   describe('listTenantProducts', () => {
-    it('应调用 GET /v1/app/tenants/:tenantId/products', async () => {
+    it('应携带门店ID调用 GET /v1/app/tenants/:tenantId/products', async () => {
       // Arrange
       const products = [{ id: 1, name: '商品1' }, { id: 2, name: '商品2' }];
       mockRequest.mockResolvedValue(products);
 
       // Act
-      const result = await appCatalogService.listTenantProducts(42);
+      const result = await appCatalogService.listTenantProducts(42, 9);
 
       // Assert
       expect(mockRequest).toHaveBeenCalledWith({
-        url: '/v1/app/tenants/42/products',
+        url: '/v1/app/tenants/42/products?storeId=9',
         method: 'get',
         authRole: false,
       });
@@ -70,17 +70,17 @@ describe('appCatalogService', () => {
   });
 
   describe('getProduct', () => {
-    it('应调用 GET /v1/app/products/:productId', async () => {
+    it('应携带门店ID调用 GET /v1/app/products/:productId', async () => {
       // Arrange
       const product = { id: 100, name: '测试商品', price: 99.9 };
       mockRequest.mockResolvedValue(product);
 
       // Act
-      const result = await appCatalogService.getProduct(100);
+      const result = await appCatalogService.getProduct(100, 9);
 
       // Assert
       expect(mockRequest).toHaveBeenCalledWith({
-        url: '/v1/app/products/100',
+        url: '/v1/app/products/100?storeId=9',
         method: 'get',
         authRole: false,
       });

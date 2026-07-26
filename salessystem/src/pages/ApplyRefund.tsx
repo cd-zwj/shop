@@ -5,7 +5,7 @@ import { appOrderService } from '../services/modules/appOrder';
 import { appRefundService } from '../services/modules/appRefund';
 import { useToast } from '../context/ToastContext';
 import type { SalesOrderDetail } from '../types/order';
-import type { Refund } from '../types/refund';
+import type { AfterSaleAction, Refund } from '../types/refund';
 import { formatCurrency } from '../utils/display';
 import {
   getRefundProgressPresentation,
@@ -22,6 +22,8 @@ export default function ApplyRefund() {
   
   const [orderDetail, setOrderDetail] = useState<SalesOrderDetail | null>(null);
   const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [actionLists, setActionLists] = useState<Record<number, AfterSaleAction[]>>({});
+  const [loadingActionId, setLoadingActionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -32,6 +34,7 @@ export default function ApplyRefund() {
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [reason, setReason] = useState('不想要了');
   const [description, setDescription] = useState('');
+  const [evidenceUrls, setEvidenceUrls] = useState('');
 
   const reasons = [
     '不想要了',
@@ -88,6 +91,7 @@ export default function ApplyRefund() {
         refundAmount,
         reason,
         description: description.trim() || undefined,
+        evidenceUrls: evidenceUrls.split(/\n|,/).map((value) => value.trim()).filter(Boolean),
       });
       showToast('退款申请已提交，请等待商家审核', 'success');
       await loadData();
@@ -111,6 +115,19 @@ export default function ApplyRefund() {
 
   const handleReapplyRefund = () => {
     refundFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const loadActions = async (refundId: number) => {
+    if (!orderDetail || actionLists[refundId]) return;
+    setLoadingActionId(refundId);
+    try {
+      const actions = await appRefundService.listActions(orderDetail.order.tenantId, refundId);
+      setActionLists((current) => ({ ...current, [refundId]: actions }));
+    } catch (err) {
+      showToast(getErrorMessage(err, '加载售后处理记录失败'), 'error');
+    } finally {
+      setLoadingActionId(null);
+    }
   };
 
   if (isLoading) {
@@ -241,6 +258,36 @@ export default function ApplyRefund() {
                     )}
                   </div>
 
+                  {refund.evidenceUrls && refund.evidenceUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className="font-semibold text-slate-500">售后凭证</span>
+                      {refund.evidenceUrls.map((url, index) => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer" className="text-primary underline">
+                          凭证 {index + 1}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => void loadActions(refund.id)}
+                    disabled={loadingActionId === refund.id}
+                    className="w-fit text-xs font-bold text-primary disabled:text-slate-400"
+                  >
+                    {loadingActionId === refund.id ? '加载处理中...' : '查看处理记录'}
+                  </button>
+                  {actionLists[refund.id] && (
+                    <ol className="border-l border-slate-200 pl-3 text-xs text-slate-600">
+                      {actionLists[refund.id].map((action, index) => (
+                        <li key={`${action.action}-${action.createTime}-${index}`} className="mb-3 last:mb-0">
+                          <p className="font-bold text-slate-800">{formatAfterSaleAction(action.action)} · {formatOperatorRole(action.operatorRole)}</p>
+                          <p>{action.createTime || '--'}{action.remark ? `：${action.remark}` : ''}</p>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+
                   {refund.refundStatus === 'PENDING' && (
                     <button
                       onClick={() => handleCancelRefund(refund.id)}
@@ -306,6 +353,20 @@ export default function ApplyRefund() {
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label htmlFor="evidenceUrls" className="text-sm font-bold text-slate-700">
+                  售后凭证地址 (选填)
+                </label>
+                <textarea
+                  id="evidenceUrls"
+                  rows={3}
+                  placeholder="每行一条已上传的图片或视频地址，最多6条"
+                  value={evidenceUrls}
+                  onChange={(e) => setEvidenceUrls(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm font-medium text-slate-800 outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                />
               </div>
 
               {/* Refund Amount */}
@@ -379,4 +440,17 @@ export default function ApplyRefund() {
       </div>
     </div>
   );
+}
+
+function formatAfterSaleAction(action: string) {
+  const labels: Record<string, string> = {
+    USER_APPLY: '提交申请', USER_CANCEL: '取消申请', MERCHANT_APPROVE: '商家同意',
+    MERCHANT_REJECT: '商家驳回', PLATFORM_APPROVE: '平台同意', PLATFORM_REJECT: '平台驳回',
+    REFUND_COMPLETED: '退款完成',
+  };
+  return labels[action] || action;
+}
+
+function formatOperatorRole(role: string) {
+  return ({ USER: '用户', MERCHANT: '商户', ADMIN: '平台', SYSTEM: '系统' } as Record<string, string>)[role] || role;
 }

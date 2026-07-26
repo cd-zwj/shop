@@ -4,24 +4,25 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.RefundCreateDTO;
-import com.payment.entity.ExchangeProduct;
 import com.payment.entity.OrderDeliveryRecord;
 import com.payment.entity.RefundApplication;
+import com.payment.entity.AfterSaleAction;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.enums.DeliveryStatusEnum;
 import com.payment.enums.OrderStatusEnum;
 import com.payment.enums.RefundApplicationStatus;
-import com.payment.mapper.ExchangeProductMapper;
 import com.payment.mapper.RefundApplicationMapper;
+import com.payment.mapper.AfterSaleActionMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
-import com.payment.service.PointsService;
 import com.payment.service.RefundApplicationService;
 import com.payment.service.RefundService;
+import com.payment.service.StoreInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.delivery.OrderDeliveryService;
 import com.payment.util.BizNoGenerator;
+import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -47,7 +48,7 @@ import java.util.Set;
  * </ul>
  * <p>
  * 支持仅退款（REFUND_ONLY）和退货退款（RETURN_REFUND）两种类型。
- * 审核通过时根据交付状态决定是否需要先撤销交付资源（卡密作废、权益冻结等）。
+ * 审核通过时根据自提凭证状态决定是否需要撤销领取凭证。
  *
  * @see com.payment.service.RefundApplicationService
  */
@@ -57,7 +58,10 @@ import java.util.Set;
 public class RefundApplicationServiceImpl implements RefundApplicationService {
 
     private static final Set<String> REFUNDABLE_ORDER_STATUSES = Set.of(
-            OrderStatusEnum.PAID.name()
+            OrderStatusEnum.PAID.name(),
+            OrderStatusEnum.PENDING_PREPARATION.name(),
+            OrderStatusEnum.PREPARING.name(),
+            OrderStatusEnum.COMPLETED.name()
     );
     private static final Set<String> ACTIVE_REFUND_STATUSES = Set.of(
             RefundApplicationStatus.PENDING.name(),
@@ -72,11 +76,11 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     private final RefundApplicationMapper refundApplicationMapper;
     private final SalesOrderMapper salesOrderMapper;
     private final SalesOrderItemMapper salesOrderItemMapper;
-    private final PointsService pointsService;
-    private final ExchangeProductMapper exchangeProductMapper;
     private final UserNotificationService notificationService;
     private final OrderDeliveryService orderDeliveryService;
     private final RefundService refundService;
+    private final StoreInventoryService storeInventoryService;
+    private final AfterSaleActionMapper afterSaleActionMapper;
 
     /**
      * 创建退款申请。
@@ -129,6 +133,8 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         app.setRefundAmount(dto.getRefundAmount());
         app.setReason(dto.getReason());
         app.setDescription(dto.getDescription());
+        app.setEvidenceUrlsJson(dto.getEvidenceUrls() == null || dto.getEvidenceUrls().isEmpty()
+                ? null : JsonUtils.toJson(dto.getEvidenceUrls()));
         applyRefundDisplaySnapshot(app, salesOrder, refundItem);
 
         try {
@@ -136,6 +142,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         } catch (DuplicateKeyException e) {
             throw new BusinessException("该订单已有进行中的退款申请");
         }
+        recordAction(app, "USER_APPLY", "USER", platformUserId, app.getDescription(), app.getEvidenceUrlsJson());
 
         log.info("退款申请已创建: refundNo={}, orderNo={}, amount={}", app.getRefundNo(), app.getOrderNo(), app.getRefundAmount());
 
@@ -218,6 +225,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         }
         app.setRefundStatus(RefundApplicationStatus.CANCELLED.name());
         refundApplicationMapper.updateById(app);
+        recordAction(app, "USER_CANCEL", "USER", platformUserId, null, null);
         log.info("退款申请已取消: refundNo={}", app.getRefundNo());
     }
 
@@ -265,15 +273,22 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())) {
             throw new BusinessException("只有待审核状态的退款申请才能审核");
         }
+        processDecision(app, adminId, approved, rejectReason, "MERCHANT",
+                approved ? "MERCHANT_APPROVE" : "MERCHANT_REJECT");
+    }
 
-        app.setAdminId(adminId);
+    private void processDecision(RefundApplication app, Long operatorId, boolean approved, String rejectionReason,
+                                 String operatorRole, String action) {
+        String normalizedReason = rejectionReason == null ? null : rejectionReason.trim();
+
+        app.setAdminId(operatorId);
         app.setAuditTime(LocalDateTime.now());
 
         if (approved) {
             app.setRefundStatus(RefundApplicationStatus.APPROVED.name());
             app.setRejectReason(null);
             refundApplicationMapper.updateById(app);
-            log.info("退款申请已通过: refundNo={}, adminId={}", app.getRefundNo(), adminId);
+            log.info("退款申请已通过: refundNo={}, operatorId={}, role={}", app.getRefundNo(), operatorId, operatorRole);
 
             DeliverySnapshot deliverySnapshot = resolveDeliverySnapshot(app);
             if (deliverySnapshot.revokeRequired()) {
@@ -282,6 +297,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
                     app.setRefundStatus(RefundApplicationStatus.FAILED.name());
                     app.setRejectReason(revokeFailure);
                     refundApplicationMapper.updateById(app);
+                    recordAction(app, action + "_FAILED", operatorRole, operatorId, revokeFailure, null);
                     log.warn("退款申请交付撤销失败: refundNo={}, reason={}", app.getRefundNo(), revokeFailure);
                     return;
                 }
@@ -291,15 +307,17 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
             app.setRefundStatus(RefundApplicationStatus.PROCESSING.name());
             applySnapshot(app, deliverySnapshot);
         } else {
-            if (rejectReason == null || rejectReason.isBlank()) {
+            if (normalizedReason == null || normalizedReason.isBlank()) {
                 throw new BusinessException("拒绝退款时必须填写拒绝原因");
             }
             app.setRefundStatus(RefundApplicationStatus.REJECTED.name());
-            app.setRejectReason(rejectReason);
-            log.info("退款申请已拒绝: refundNo={}, reason={}", app.getRefundNo(), rejectReason);
+            app.setRejectReason(normalizedReason);
+            log.info("退款申请已拒绝: refundNo={}, reason={}", app.getRefundNo(), normalizedReason);
         }
 
         refundApplicationMapper.updateById(app);
+        String actionRemark = "ADMIN".equals(operatorRole) ? normalizedReason : (approved ? null : normalizedReason);
+        recordAction(app, action, operatorRole, operatorId, actionRemark, null);
     }
 
     /**
@@ -308,8 +326,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
      * 退款到账后由退款服务调用。操作包括：
      * <ul>
      *   <li>将退款状态置为 COMPLETED</li>
-     *   <li>积分兑换订单回退积分</li>
-     *   <li>兜底回收交付资源（卡密作废/权益冻结）</li>
+ *   <li>兜底撤销自提凭证</li>
      * </ul>
      * 幂等处理：已完成的退款不会重复处理。
      *
@@ -338,12 +355,12 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         app.setRefundStatus(RefundApplicationStatus.COMPLETED.name());
         app.setCompleteTime(LocalDateTime.now());
         refundApplicationMapper.updateById(app);
+        recordAction(app, "REFUND_COMPLETED", "SYSTEM", null, null, null);
 
-        // 检查是否为积分兑换订单，如果是则回退积分
-        handlePointsRefundIfNeeded(app);
+        restockReturnedItem(app);
 
         // 退款到账后的交付回收兜底。审核阶段已尝试撤销已交付资源，这里依赖交付服务幂等，
-        // 防止人工补偿、对账重放或历史状态修复时遗漏卡密作废/权益冻结。
+        // 防止人工补偿、对账重放或历史状态修复时遗漏自提凭证撤销。
         try {
             if (app.getOrderItemId() != null) {
                 orderDeliveryService.revokeByOrderItem(app.getOrderItemId());
@@ -357,79 +374,26 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         log.info("退款已完成: refundNo={}, orderNo={}", app.getRefundNo(), app.getOrderNo());
     }
 
-    /**
-     * 积分兑换订单退款时回退积分。
-     * 判断依据：订单 source 为 EXCHANGE，或订单号以 "EX" 开头。
-     */
-    private void handlePointsRefundIfNeeded(RefundApplication app) {
-        SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+    private void restockReturnedItem(RefundApplication app) {
+        if (!"RETURN_REFUND".equals(app.getRefundType())) {
+            return;
+        }
+        if (app.getOrderItemId() == null) {
+            log.warn("整单退货退款缺少退货商品明细，未自动回补库存: refundNo={}", app.getRefundNo());
+            return;
+        }
+        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
                 .eq(SalesOrder::getOrderNo, app.getOrderNo())
                 .eq(SalesOrder::getTenantId, app.getTenantId()));
-
-        boolean isExchangeOrder = false;
-        Integer pointsToRefund = null;
-
-        if (salesOrder != null) {
-            // 通过 source 字段判断
-            if ("EXCHANGE".equalsIgnoreCase(salesOrder.getSource())) {
-                isExchangeOrder = true;
-            }
-            // 通过积分抵扣金额推算积分（1元=1积分的兜底逻辑）
-            if (isExchangeOrder && salesOrder.getPointsDeductAmount() != null
-                    && salesOrder.getPointsDeductAmount().signum() > 0) {
-                pointsToRefund = salesOrder.getPointsDeductAmount().intValue();
-            }
+        SalesOrderItem item = salesOrderItemMapper.selectById(app.getOrderItemId());
+        if (order == null || item == null || !order.getOrderNo().equals(item.getOrderNo())) {
+            throw new BusinessException("退款关联订单商品不存在");
         }
-
-        // 兜底：订单号以 "EX" 开头也视为积分兑换订单
-        if (!isExchangeOrder && app.getOrderNo() != null && app.getOrderNo().startsWith("EX")) {
-            isExchangeOrder = true;
+        if (order.getStoreId() == null || item.getQuantity() == null || item.getQuantity() <= 0) {
+            throw new BusinessException("退款订单缺少可回补的门店库存信息");
         }
-
-        if (!isExchangeOrder) {
-            return;
-        }
-
-        // 如果从订单上无法推算具体积分，尝试从兑换商品表查询
-        if (pointsToRefund == null || pointsToRefund <= 0) {
-            pointsToRefund = resolvePointsFromExchangeProduct(app);
-        }
-
-        if (pointsToRefund == null || pointsToRefund <= 0) {
-            log.warn("无法确定退款应返还的积分数量，跳过积分回退。refundNo={}, orderNo={}",
-                    app.getRefundNo(), app.getOrderNo());
-            return;
-        }
-
-        try {
-            pointsService.refundPoints(
-                    app.getPlatformUserId(),
-                    app.getTenantId(),
-                    pointsToRefund,
-                    app.getOrderNo(),
-                    "积分兑换商品退款回退，退款单号：" + app.getRefundNo()
-            );
-        } catch (Exception e) {
-            log.error("积分回退失败，refundNo={}, orderNo={}, points={}",
-                    app.getRefundNo(), app.getOrderNo(), pointsToRefund, e);
-            throw new BusinessException("积分回退失败，请稍后重试");
-        }
-    }
-
-    /**
-     * 从兑换商品表中查找关联的积分数量。
-     * 尝试通过退款申请的 orderItemId 或退款金额匹配。
-     */
-    private Integer resolvePointsFromExchangeProduct(RefundApplication app) {
-        // 尝试通过 orderItemId 查找
-        if (app.getOrderItemId() != null) {
-            ExchangeProduct ep = exchangeProductMapper.selectById(app.getOrderItemId());
-            if (ep != null && ep.getPointsRequired() != null && ep.getPointsRequired() > 0) {
-                return ep.getPointsRequired();
-            }
-        }
-        log.warn("无法从兑换商品表推算积分数量，refundNo={}", app.getRefundNo());
-        return null;
+        storeInventoryService.restock(app.getTenantId(), order.getStoreId(), item.getProductId(), item.getQuantity(),
+                "REFUND_APPLICATION", app.getRefundNo(), app.getAdminId(), "退货退款入库");
     }
 
     private void validateRefundType(String refundType) {
@@ -550,8 +514,8 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
                 : statuses.stream().distinct().sorted().reduce((left, right) -> left + "," + right).orElse(DeliveryStatusEnum.PENDING.name());
         boolean quickRefundSuggested = !revokeRequired;
         String suggestion = quickRefundSuggested
-                ? "未发货/未交付，商家同意后可快速进入渠道退款"
-                : "已发货/已交付，商家同意后系统将先撤销交付再退款";
+                ? "未完成备货，商家同意后可快速进入渠道退款"
+                : "已生成取货凭证或已完成履约，商家同意后系统将先撤销凭证再退款";
         return new DeliverySnapshot(deliveryStatus, quickRefundSuggested, suggestion, revokeRequired);
     }
 
@@ -584,6 +548,54 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
             log.warn("交付撤销异常 refundNo={}, orderNo={}", app.getRefundNo(), app.getOrderNo(), e);
             return "交付撤销异常：" + e.getMessage();
         }
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void intervene(Long tenantId, Long refundId, Long adminId, boolean approved, String remark) {
+        if (remark == null || remark.isBlank()) {
+            throw new BusinessException("平台处理说明不能为空");
+        }
+        RefundApplication app = refundApplicationMapper.selectById(refundId);
+        if (app == null || !tenantId.equals(app.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())
+                && !RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
+            throw new BusinessException("当前售后状态不允许平台介入处理");
+        }
+        if (approved && RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
+            // A rejected request can be reconsidered only when the user has not opened a replacement request.
+            ensureNoActiveRefund(app.getOrderNo(), app.getOrderItemId(), tenantId);
+        }
+        processDecision(app, adminId, approved, remark, "ADMIN",
+                approved ? "PLATFORM_APPROVE" : "PLATFORM_REJECT");
+    }
+
+    @Override
+    public List<AfterSaleAction> listActions(Long tenantId, Long refundId) {
+        RefundApplication app = refundApplicationMapper.selectById(refundId);
+        if (app == null || !tenantId.equals(app.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        return afterSaleActionMapper.selectList(new LambdaQueryWrapper<AfterSaleAction>()
+                .eq(AfterSaleAction::getRefundApplicationId, refundId)
+                .eq(AfterSaleAction::getTenantId, tenantId)
+                .orderByAsc(AfterSaleAction::getCreateTime));
+    }
+
+    private void recordAction(RefundApplication app, String action, String operatorRole, Long operatorId,
+                              String remark, String evidenceUrlsJson) {
+        AfterSaleAction record = new AfterSaleAction();
+        record.setTenantId(app.getTenantId());
+        record.setRefundApplicationId(app.getId());
+        record.setRefundNo(app.getRefundNo());
+        record.setAction(action);
+        record.setOperatorRole(operatorRole);
+        record.setOperatorId(operatorId);
+        record.setRemark(remark);
+        record.setEvidenceUrlsJson(evidenceUrlsJson);
+        afterSaleActionMapper.insert(record);
     }
 
     private record DeliverySnapshot(String deliveryStatus,

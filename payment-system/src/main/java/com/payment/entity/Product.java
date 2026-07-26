@@ -12,8 +12,9 @@ import java.time.LocalDateTime;
 
 /**
  * 商品实体，对应数据库表 product。
- * <p>存储商品基本信息，支持实物、虚拟、卡密、服务、订阅等多种商品类型。
- * 通过 tenant_id 实现多租户数据隔离，通过 store_id 关联所属门店。</p>
+ * <p>存储实体商品基本信息。
+ * 通过 tenant_id 实现多租户数据隔离。门店售价、上下架状态和库存由
+ * {@code store_product} 与 {@code store_product_stock} 管理。</p>
  */
 @Data
 @TableName("product")
@@ -64,38 +65,15 @@ public class Product implements Serializable {
      */
     private String description;
 
-    /**
-     * 所属门店ID，关联 store 表
-     */
+    /** 当前目录查询所选门店，仅作为联表结果承载，不映射 product 表。 */
+    @TableField(exist = false)
     private Long storeId;
 
-    /** 虚拟商品类型 ID，关联 virtual_product_type。 */
-    private Long virtualTypeId;
-
-    /** 虚拟商品分类 ID，关联 virtual_product_category。 */
-    private Long virtualCategoryId;
-
-    /** 履约形态：ONLINE_VIRTUAL / OFFLINE_SERVICE / EXPRESS_DELIVERY。 */
+    /** 当前仅支持到店自提，仅作为目录查询结果承载，不映射 product 表。 */
+    @TableField(exist = false)
     private String fulfillmentMode;
 
-    /**
-     * 商品类型：PHYSICAL-实物 / VIRTUAL-虚拟 / CARD_KEY-卡密 / SERVICE-服务 / SUBSCRIPTION-订阅。
-     * <p>决定支付成功后走哪一种交付策略。</p>
-     */
-    private String productType;
-
-    /**
-     * 交付配置（JSON格式），按 productType 解读：
-     * <ul>
-     *   <li>VIRTUAL = {"contentUrl":"...","accountInfo":"..."}</li>
-     *   <li>CARD_KEY = 使用 card_key_pool 库存池上传和锁定卡密</li>
-     *   <li>SERVICE = 可留空，支付后系统生成核销码</li>
-     *   <li>SUBSCRIPTION = {"validityDays":30}</li>
-     * </ul>
-     */
-    private String deliveryConfig;
-
-    /** 当前可售库存，仅用于用户端详情等联表查询结果承载。 */
+    /** 当前门店可售库存，仅用于目录查询结果承载。 */
     @TableField(exist = false)
     private Integer stock;
 

@@ -100,7 +100,7 @@ export type {
 
 // 优惠券与积分类型
 export type { CouponTemplate, UserCoupon, CouponReceiveResult } from './coupon';
-export type { PointsBalance, PointsLog, ExchangeProduct } from './points';
+export type { PointsBalance, PointsLog } from './points';
 
 // 营销与会员类型
 export type {

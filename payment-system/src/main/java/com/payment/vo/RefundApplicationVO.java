@@ -7,6 +7,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.payment.util.JsonUtils;
 
 /**
  * 退款申请视图对象，过滤内部字段，金额转为分（Long）。
@@ -26,6 +28,7 @@ public class RefundApplicationVO {
     private Long refundAmount;
     private String reason;
     private String description;
+    private List<String> evidenceUrls;
     private String rejectReason;
     private String deliveryStatus;
     private Long refundableAmount;
@@ -56,6 +59,8 @@ public class RefundApplicationVO {
                 .refundAmount(VoConverterUtil.toFen(app.getRefundAmount()))
                 .reason(app.getReason())
                 .description(app.getDescription())
+                .evidenceUrls(app.getEvidenceUrlsJson() == null || app.getEvidenceUrlsJson().isBlank()
+                        ? List.of() : JsonUtils.fromJson(app.getEvidenceUrlsJson(), new TypeReference<List<String>>() { }))
                 .rejectReason(app.getRejectReason())
                 .deliveryStatus(app.getDeliveryStatus())
                 .refundableAmount(VoConverterUtil.toFen(app.getRefundableAmount()))

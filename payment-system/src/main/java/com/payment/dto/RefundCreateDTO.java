@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 用户提交退款申请请求体。
@@ -38,4 +39,8 @@ public class RefundCreateDTO {
     /** 详细描述 */
     @Size(max = 500, message = "详细描述最多500字")
     private String description;
+
+    /** 图片或视频凭证的已上传地址。 */
+    @Size(max = 6, message = "最多上传6个售后凭证")
+    private List<@Size(max = 500, message = "凭证地址不合法") String> evidenceUrls;
 }

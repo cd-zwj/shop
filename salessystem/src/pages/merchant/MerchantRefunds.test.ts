@@ -28,6 +28,7 @@ vi.mock('../../services/modules/merchantRefund', () => ({
   merchantRefundService: {
     listRefunds: vi.fn(),
     auditRefund: vi.fn(),
+    listActions: vi.fn(),
   },
 }));
 
@@ -111,6 +112,27 @@ describe('MerchantRefunds', () => {
     expect(element.textContent).toContain('RA202607080001');
     expect(element.textContent).toContain('商品不合适');
     expect(element.textContent).not.toContain('售后接口不可用');
+  });
+
+  it('loads the after-sale action timeline for a refund', async () => {
+    mockedRefundService.listRefunds.mockResolvedValue({
+      records: [buildRefund()], total: 1, page: 1, size: 50, pages: 1,
+    });
+    mockedRefundService.listActions.mockResolvedValue([
+      { action: 'USER_APPLY', operatorRole: 'USER', remark: '商品有瑕疵', evidenceUrls: [], createTime: '2026-07-08 10:00:00' },
+    ]);
+
+    const element = await renderMerchantRefunds();
+    const actionButton = Array.from(element.querySelectorAll('button')).find((button) => button.textContent?.includes('查看处理记录'));
+    expect(actionButton).toBeTruthy();
+
+    await act(async () => {
+      actionButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedRefundService.listActions).toHaveBeenCalledWith(9, 1);
+    expect(element.textContent).toContain('提交申请 · 用户');
   });
 });
 

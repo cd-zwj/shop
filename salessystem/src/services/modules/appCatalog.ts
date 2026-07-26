@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { Product, Tenant } from '../../types/catalog';
+import type { AppStore, Product, Tenant } from '../../types/catalog';
 
 export const appCatalogService = {
   listTenants() {
@@ -18,17 +18,25 @@ export const appCatalogService = {
     });
   },
 
-  listTenantProducts(tenantId: number) {
-    return request<Product[]>({
-      url: `/v1/app/tenants/${tenantId}/products`,
+  listTenantStores(tenantId: number) {
+    return request<AppStore[]>({
+      url: `/v1/app/tenants/${tenantId}/stores`,
       method: 'get',
       authRole: false,
     });
   },
 
-  getProduct(productId: number) {
+  listTenantProducts(tenantId: number, storeId: number) {
+    return request<Product[]>({
+      url: `/v1/app/tenants/${tenantId}/products?storeId=${encodeURIComponent(storeId)}`,
+      method: 'get',
+      authRole: false,
+    });
+  },
+
+  getProduct(productId: number, storeId: number) {
     return request<Product>({
-      url: `/v1/app/products/${productId}`,
+      url: `/v1/app/products/${productId}?storeId=${encodeURIComponent(storeId)}`,
       method: 'get',
       authRole: false,
     });

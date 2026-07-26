@@ -12,14 +12,7 @@ import java.time.LocalDateTime;
 /**
  * 订单交付记录，对应数据库表 order_delivery_record。
  * <p>
- * 所有商品类型共用一张表，{@code payload} 按 {@code productType} 解读：
- * <ul>
- *   <li>VIRTUAL：{"contentUrl":"...","accountInfo":"..."}</li>
- *   <li>CARD_KEY：{"cardKeyId":1,"code":"XXXX-XXXX","placeholder":false}</li>
- *   <li>SERVICE：{"verifyCode":"123456","placeholder":false}</li>
- *   <li>SUBSCRIPTION：{"validityDays":30}（expireTime 字段另存）</li>
- *   <li>PHYSICAL：{"shippingNo":"SF1234","logisticsCompany":"顺丰"}</li>
- * </ul>
+ * payload 仅保存到店自提凭证，例如 {"pickupCode":"12345678","storeId":1}。
  */
 @Data
 @TableName("order_delivery_record")
@@ -51,13 +44,10 @@ public class OrderDeliveryRecord implements Serializable {
     /** 商品名称快照，便于用户侧已购列表展示历史商品 */
     private String productName;
 
-    /** 商品类型，决定 payload 的解读方式 */
-    private String productType;
-
     /** 状态：PENDING / DELIVERED / CONFIRMED / REVOKED / FAILED */
     private String status;
 
-    /** JSON 交付内容，按 productType 解读 */
+    /** JSON 到店自提凭证 */
     private String payload;
 
     /** 交付失败原因，交付状态为 FAILED 时记录具体失败信息 */
@@ -71,9 +61,6 @@ public class OrderDeliveryRecord implements Serializable {
 
     /** 用户确认收货时间，状态变为 CONFIRMED 时记录 */
     private LocalDateTime confirmedTime;
-
-    /** 交付内容过期时间，适用于虚拟商品、卡密等有时效性的商品 */
-    private LocalDateTime expireTime;
 
     /** 交付撤销时间，状态变为 REVOKED 时记录（如退款后回收权益） */
     private LocalDateTime revokedTime;

@@ -22,6 +22,12 @@ export function buildOrderPayload(
     throw new Error('当前仅支持按单个商户提交订单');
   }
 
+  const isStorePickup = items.every((item) => item.fulfillmentMode === 'STORE_PICKUP');
+  const pickupStoreIds = [...new Set(items.map((item) => item.storeId).filter((storeId): storeId is number => typeof storeId === 'number'))];
+  if (!isStorePickup || pickupStoreIds.length !== 1 || items.some((item) => typeof item.storeId !== 'number')) {
+    throw new Error('到店自提商品必须绑定同一个门店');
+  }
+
   return {
     tenantId,
     totalAmount: items.reduce((sum, item) => sum + item.price * item.quantity, 0),
@@ -36,16 +42,13 @@ export function buildOrderPayload(
     paymentChannelCode,
     selectedUserCouponId,
     addressId,
+    fulfillmentMode: isStorePickup ? 'STORE_PICKUP' : undefined,
+    storeId: isStorePickup ? pickupStoreIds[0] : undefined,
   };
 }
 
-export function requiresShippingAddress(items: CartItem[]) {
-  return items.some((item) => {
-    const productType = item.productType;
-    return !productType
-      || productType === 'PHYSICAL'
-      || item.fulfillmentMode === 'EXPRESS_DELIVERY';
-  });
+export function requiresShippingAddress(_items: CartItem[]) {
+  return false;
 }
 
 export function createOrderForItems(

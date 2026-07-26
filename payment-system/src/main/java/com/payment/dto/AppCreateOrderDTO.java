@@ -53,6 +53,10 @@ public class AppCreateOrderDTO {
     private Long selectedUserCouponId;
     /** 用户选择的收货地址 ID；实物商品为空时使用默认地址 */
     private Long addressId;
+    /** 订单履约方式；当前支持 STORE_PICKUP 到店自提 */
+    private String fulfillmentMode;
+    /** 到店自提时选择的门店 ID，必须与商品绑定门店一致 */
+    private Long storeId;
     /** 实际使用积分数 */
     private Integer usedPoints;
     /** 用户期望使用的积分数 */

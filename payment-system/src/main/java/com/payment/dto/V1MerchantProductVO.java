@@ -41,14 +41,8 @@ public class V1MerchantProductVO {
     /** 所属门店 ID */
     private Long storeId;
 
-    /** 履约形态：ONLINE_VIRTUAL / OFFLINE_SERVICE / EXPRESS_DELIVERY */
+    /** 履约形态，当前仅支持 STORE_PICKUP */
     private String fulfillmentMode;
-
-    /** 虚拟商品类型 ID */
-    private Long virtualTypeId;
-
-    /** 虚拟商品分类 ID */
-    private Long virtualCategoryId;
 
     /** 库存数量 */
     private Integer stock;
@@ -58,11 +52,6 @@ public class V1MerchantProductVO {
      */
     private String status;
 
-    /** 商品类型：PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION */
-    private String productType;
-
-    /** 交付配置(JSON 字符串)，按 productType 解读 */
-    private String deliveryConfig;
 
     /** 创建时间 */
     private LocalDateTime createTime;

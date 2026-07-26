@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { Refund, RefundCreateDTO } from '../../types/refund';
+import type { AfterSaleAction, Refund, RefundCreateDTO } from '../../types/refund';
 import type { PageResult } from '../../types/api';
 
 export const appRefundService = {
@@ -33,6 +33,14 @@ export const appRefundService = {
     return request<void>({
       url: `/v1/app/tenants/${tenantId}/refunds/${refundId}/cancel`,
       method: 'put',
+      authRole: 'user',
+    });
+  },
+
+  listActions(tenantId: number, refundId: number) {
+    return request<AfterSaleAction[]>({
+      url: `/v1/app/tenants/${tenantId}/refunds/${refundId}/actions`,
+      method: 'get',
       authRole: 'user',
     });
   },

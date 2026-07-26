@@ -5,13 +5,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
-import com.payment.dto.V1MerchantCardKeySummaryVO;
-import com.payment.dto.V1MerchantCardKeyUploadDTO;
-import com.payment.dto.V1MerchantCardKeyVO;
 import com.payment.dto.V1MerchantProductChangeLogVO;
 import com.payment.dto.V1MerchantProductUpsertDTO;
 import com.payment.dto.V1MerchantProductVO;
-import com.payment.service.CardKeyPoolService;
 import com.payment.service.V1MerchantProductService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
@@ -22,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 /**
  * 商户端商品管理控制器（Merchant 端）。
- * <p>提供商户对自有商品的 CRUD 操作，以及卡密池的查询、汇总和批量上传功能。
+ * <p>提供商户对实体商品的 CRUD 操作。
  * 需要商户角色登录，并通过商户员工本地权限矩阵控制访问。</p>
  */
 @RestController
@@ -31,7 +27,6 @@ import org.springframework.web.bind.annotation.*;
 public class V1MerchantProductController {
 
     private final V1MerchantProductService v1MerchantProductService;
-    private final CardKeyPoolService cardKeyPoolService;
     private final V1MerchantSupportService v1MerchantSupportService;
 
     @SaCheckLogin(type = "merchant")
@@ -91,36 +86,6 @@ public class V1MerchantProductController {
         Long platformUserId = requireProductPermission(tenantId);
         v1MerchantProductService.deleteProduct(tenantId, platformUserId, productId);
         return Result.success();
-    }
-
-    @SaCheckLogin(type = "merchant")
-    @GetMapping("/{productId}/card-keys")
-    public Result<PageResult<V1MerchantCardKeyVO>> listCardKeys(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                                @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
-                                                                @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
-                                                                @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
-                                                                @RequestParam(required = false) String status) {
-        Long platformUserId = requireProductPermission(tenantId);
-        Page<V1MerchantCardKeyVO> page = cardKeyPoolService.listMerchantCardKeys(
-                tenantId, platformUserId, productId, current, size, status);
-        return Result.success(new PageResult<>(page.getRecords(), page.getTotal(), (int) page.getCurrent(), (int) page.getSize()));
-    }
-
-    @SaCheckLogin(type = "merchant")
-    @GetMapping("/{productId}/card-keys/summary")
-    public Result<V1MerchantCardKeySummaryVO> getCardKeySummary(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                               @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
-        Long platformUserId = requireProductPermission(tenantId);
-        return Result.success(cardKeyPoolService.getMerchantSummary(tenantId, platformUserId, productId));
-    }
-
-    @SaCheckLogin(type = "merchant")
-    @PostMapping("/{productId}/card-keys/upload")
-    public Result<V1MerchantCardKeySummaryVO> uploadCardKeys(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                            @PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
-                                                            @Valid @RequestBody V1MerchantCardKeyUploadDTO dto) {
-        Long platformUserId = requireProductPermission(tenantId);
-        return Result.success(cardKeyPoolService.uploadMerchantCardKeys(tenantId, platformUserId, productId, dto));
     }
 
     private Long requireProductPermission(Long tenantId) {

@@ -63,35 +63,11 @@ public final class ProductDetailPresentation {
     }
 
     private static Fulfillment fulfillment(Product product) {
-        String mode = product.getFulfillmentMode();
-        String type = product.getProductType();
-        if ("ONLINE_VIRTUAL".equals(mode)) {
-            if ("CARD_KEY".equals(type)) {
-                return new Fulfillment("卡密自动交付", "支付成功后，系统会自动发放可用卡密。");
-            }
-            if ("SUBSCRIPTION".equals(type)) {
-                return new Fulfillment("订阅权益", "支付成功后订阅权益会自动激活，并生成线上交付记录。");
-            }
-            return new Fulfillment("线上交付", "支付成功后，系统会生成线上交付记录。");
-        }
-        if ("OFFLINE_SERVICE".equals(mode)) {
-            return new Fulfillment("线下服务", "支付成功后生成服务凭证，到店或按商家约定核销。");
-        }
-        return new Fulfillment("快递发货", "支付后由商家按订单信息安排发货。");
+        return new Fulfillment("到店自提", "支付成功后生成自提码，请到所选门店出示核销。");
     }
 
     private static String afterSalesNote(Product product) {
-        String mode = product.getFulfillmentMode();
-        String type = product.getProductType();
-        if ("ONLINE_VIRTUAL".equals(mode)) {
-            return "CARD_KEY".equals(type)
-                    ? "卡密未使用前可提交售后申请，已使用内容需由商家审核。"
-                    : "虚拟内容交付后仍可提交售后申请，处理结果以商家审核为准。";
-        }
-        if ("OFFLINE_SERVICE".equals(mode)) {
-            return "服务未核销前可申请售后，已核销订单需商家审核。";
-        }
-        return "实物商品按订单售后流程处理，退款或退货退款由商家审核。";
+        return "商品可在售后期限内申请退款或退货退款，处理结果以商家审核为准。";
     }
 
     private static String purchaseLimitNote(Product product) {
@@ -107,21 +83,7 @@ public final class ProductDetailPresentation {
     }
 
     private static DeliveryAccess deliveryAccess(Product product) {
-        String mode = product.getFulfillmentMode();
-        String type = product.getProductType();
-        if ("ONLINE_VIRTUAL".equals(mode)) {
-            if ("CARD_KEY".equals(type)) {
-                return new DeliveryAccess("支付完成并交付成功后，可在“我的已购”中重新查看和复制兑换码。", "前往我的已购");
-            }
-            if ("SUBSCRIPTION".equals(type)) {
-                return new DeliveryAccess("支付完成后订阅权益会自动激活，可在“我的已购”查看有效期和交付记录。", "查看权益记录");
-            }
-            return new DeliveryAccess("支付完成后，文件、链接或账号信息会进入“我的已购”，后续可随时重新打开。", "查看已购内容");
-        }
-        if ("OFFLINE_SERVICE".equals(mode)) {
-            return new DeliveryAccess("支付完成后会生成服务核销凭证，可在“我的已购”中向商户出示或复制核销码。", "查看服务凭证");
-        }
-        return new DeliveryAccess("支付完成后，发货进度和物流信息会同步到订单详情和“我的已购”。", "查看订单履约");
+        return new DeliveryAccess("支付完成后会生成自提凭证，请在订单详情中向门店出示。", "查看自提凭证");
     }
 
     private static String unit(Product product) {

@@ -118,7 +118,11 @@ export function isClosedOrder(order?: Partial<SalesOrder> | null) {
 }
 
 export function isPaidOrder(order?: Partial<SalesOrder> | null) {
-  return order?.payStatus === 'SUCCESS' || order?.orderStatus === 'PAID';
+  return order?.payStatus === 'SUCCESS'
+    || order?.orderStatus === 'PAID'
+    || order?.orderStatus === 'PENDING_PREPARATION'
+    || order?.orderStatus === 'PREPARING'
+    || order?.orderStatus === 'COMPLETED';
 }
 
 export function getOrderLifecyclePresentation(
@@ -356,7 +360,7 @@ function resolveDeliveryLifecycle(items?: OrderLifecycleContext['items']): Order
     return {
       label: '已支付',
       description: '支付已完成，系统正在等待商家或交付任务接管订单。',
-      nextStep: '下一步：等待商家发货、卡密交付或服务核销。',
+      nextStep: '下一步：等待商家开始备货。',
       tab: 'processing',
       tone: 'blue',
       nextActions: baseActions,
@@ -381,8 +385,8 @@ function resolveDeliveryLifecycle(items?: OrderLifecycleContext['items']): Order
   if (statuses.every((status) => status === 'CONFIRMED')) {
     return {
       label: '已完成',
-      description: '商品或服务已确认完成，订单履约结束。',
-      nextStep: '可继续查看已购内容、再次购买，或在售后期内申请售后。',
+      description: '商家已确认备货完成，订单履约结束。',
+      nextStep: '可评价门店，或在售后期内申请售后。',
       tab: 'completed',
       tone: 'green',
       nextActions: [
@@ -394,9 +398,9 @@ function resolveDeliveryLifecycle(items?: OrderLifecycleContext['items']): Order
 
   if (statuses.some((status) => status === 'DELIVERED' || status === 'CONFIRMED')) {
     return {
-      label: '已发货',
-      description: '商家已发货或虚拟内容已交付，可在订单或已购内容中查看。',
-      nextStep: '下一步：确认收货、查看卡密/文件/核销码，或按需申请售后。',
+      label: '待备货',
+      description: '支付已完成，取货码已生成，商家将准备商品。',
+      nextStep: '下一步：等待商家开始备货。',
       tab: 'processing',
       tone: 'green',
       nextActions: [
@@ -408,9 +412,9 @@ function resolveDeliveryLifecycle(items?: OrderLifecycleContext['items']): Order
 
   if (statuses.some((status) => status === 'DELIVERING')) {
     return {
-      label: '发货中',
-      description: '商家或系统正在处理发货、卡密发放或服务凭证生成。',
-      nextStep: '预计节点：交付完成后会更新为已发货，并在已购内容中开放查看。',
+      label: '备货中',
+      description: '商家正在准备商品。',
+      nextStep: '预计节点：商家确认备货完成后订单将进入已完成。',
       tab: 'processing',
       tone: 'blue',
       nextActions: baseActions,
@@ -418,8 +422,8 @@ function resolveDeliveryLifecycle(items?: OrderLifecycleContext['items']): Order
   }
 
   return {
-    label: '待发货',
-    description: '支付已完成，订单正在等待商家发货或系统自动交付。',
+    label: '待备货',
+    description: '支付已完成，订单正在等待商家备货。',
     nextStep: '下一步：等待商家处理；长时间无进展可联系商户。',
     tab: 'processing',
     tone: 'blue',
@@ -470,9 +474,8 @@ export function getOrderProgressPresentation(
 }
 
 function isFulfillmentLifecycle(label: string) {
-  return label === '待发货'
-    || label === '发货中'
-    || label === '已发货'
+  return label === '待备货'
+    || label === '备货中'
     || label === '履约失败'
     || label === '退款中';
 }
@@ -517,7 +520,7 @@ export function buildMerchantWorkItems(input: MerchantWorkInput): MerchantWorkIt
     {
       key: 'fulfillment',
       label: '待履约订单',
-      description: '用户已支付，需要商家发货、卡密交付或服务核销。',
+      description: '用户已支付，需要商家开始备货并确认备货完成。',
       count: fulfillmentOrders,
       path: '/merchant/orders?tab=shipping',
       tone: 'blue',

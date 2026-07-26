@@ -33,7 +33,7 @@ cd payment-system
 # 初始化数据库
 mysql -u root -p < sql/import_all.sql
 
-# 启动（默认 dev profile）
+# 启动（默认 dev profile，Flyway 会自动执行 V1-V24 增量迁移）
 mvn spring-boot:run
 
 # API 文档（需开启 Swagger）
@@ -55,10 +55,14 @@ npm run dev
 ### Docker 部署
 
 ```bash
+# 先创建 .env，并填写强密码；不可使用示例占位值
+cp .env.example .env
 docker-compose up -d
 ```
 
 本地 Docker 默认关闭 Elasticsearch，商品搜索会降级到 MySQL 模糊查询。AI/Milvus、OAuth、微信支付、线上支付回调和真实短信服务需要额外第三方配置，本地开发可以不启用。
+
+`sql/import_all.sql` 负责基础表和初始数据；后端启动时 Flyway 会按版本执行 `payment-system/src/main/resources/db/migration` 中的增量迁移，其中包括实体商品、门店库存、履约、评价和售后表结构。不要在生产环境手工跳过 Flyway。
 
 ## 本地模式能力边界
 

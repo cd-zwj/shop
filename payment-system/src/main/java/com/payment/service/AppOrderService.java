@@ -158,6 +158,9 @@ public interface AppOrderService {
      */
     void cancelOrder(Long platformUserId, String orderNo);
 
+    /** 批量关闭已过期且尚未支付的订单，并释放其锁定库存和支付资产。 */
+    int expireUnpaidOrders();
+
     /**
      * 处理支付回调：根据 PaymentBill 的状态更新关联 SalesOrder。
      *

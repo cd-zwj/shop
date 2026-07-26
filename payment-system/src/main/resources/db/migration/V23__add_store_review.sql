@@ -1,0 +1,23 @@
+CREATE TABLE store_review (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键',
+    tenant_id BIGINT NOT NULL COMMENT '租户ID',
+    store_id BIGINT NOT NULL COMMENT '门店ID',
+    order_id BIGINT NOT NULL COMMENT '订单ID',
+    order_no VARCHAR(64) NOT NULL COMMENT '订单编号',
+    platform_user_id BIGINT NOT NULL COMMENT '评价用户ID',
+    rating TINYINT NOT NULL COMMENT '评分1至5',
+    content VARCHAR(1000) NULL COMMENT '评价内容',
+    image_urls_json TEXT NULL COMMENT '评价图片地址JSON',
+    merchant_reply VARCHAR(1000) NULL COMMENT '商家回复',
+    merchant_reply_operator_id BIGINT NULL COMMENT '商家回复操作人',
+    merchant_reply_time DATETIME NULL COMMENT '商家回复时间',
+    status VARCHAR(16) NOT NULL DEFAULT 'VISIBLE' COMMENT 'VISIBLE/HIDDEN',
+    moderation_remark VARCHAR(500) NULL COMMENT '平台处理说明',
+    moderation_operator_id BIGINT NULL COMMENT '平台处理人',
+    moderation_time DATETIME NULL COMMENT '平台处理时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_store_review_order (order_id),
+    KEY idx_store_review_tenant_store (tenant_id, store_id, create_time),
+    KEY idx_store_review_tenant_status (tenant_id, status, create_time)
+) COMMENT='门店订单评价';

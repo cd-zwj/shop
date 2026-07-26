@@ -17,7 +17,6 @@ import com.payment.entity.OrderDiscountSnapshot;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PointsRule;
 import com.payment.entity.Product;
-import com.payment.entity.ProductStock;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
 import com.payment.entity.TenantEmployee;
@@ -31,7 +30,7 @@ import com.payment.enums.DeliveryStatusEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.DiscountSourceEnum;
 import com.payment.mapper.PointsRuleMapper;
-import com.payment.mapper.ProductMapper;
+import com.payment.mapper.StoreProductMapper;
 import com.payment.mapper.OrderDiscountSnapshotMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
@@ -45,6 +44,7 @@ import com.payment.service.MerchantWalletService;
 import com.payment.service.OrderPricingService;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.service.PromotionService;
+import com.payment.service.StoreInventoryService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.UserBehaviorLogService;
 import com.payment.service.WithdrawalService;
@@ -67,7 +67,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -95,7 +94,6 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final SalesOrderItemMapper salesOrderItemMapper;
     private final TenantEmployeeMapper tenantEmployeeMapper;
     private final TenantMemberMapper tenantMemberMapper;
-    private final ProductMapper productMapper;
     private final UnifiedWalletService unifiedWalletService;
     private final MerchantWalletService merchantWalletService;
     private final PaymentBillV1Service paymentBillV1Service;
@@ -108,30 +106,10 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final OrderDiscountSnapshotMapper orderDiscountSnapshotMapper;
     private final UserBehaviorLogService userBehaviorLogService;
     private final com.payment.service.delivery.OrderDeliveryService orderDeliveryService;
+    private final StoreInventoryService storeInventoryService;
     private final UserShippingAddressMapper userShippingAddressMapper;
 
-    public AppOrderServiceImpl(SalesOrderMapper salesOrderMapper,
-                               SalesOrderItemMapper salesOrderItemMapper,
-                               TenantEmployeeMapper tenantEmployeeMapper,
-                               TenantMemberMapper tenantMemberMapper,
-                               ProductMapper productMapper,
-                               UnifiedWalletService unifiedWalletService,
-                               MerchantWalletService merchantWalletService,
-                               PaymentBillV1Service paymentBillV1Service,
-                               WithdrawalService withdrawalService,
-                               MemberPointsAccountService memberPointsAccountService,
-                               PointsRuleMapper pointsRuleMapper,
-                               OrderPricingService orderPricingService,
-                               CouponService couponService,
-                               PromotionService promotionService,
-                               OrderDiscountSnapshotMapper orderDiscountSnapshotMapper,
-                               UserBehaviorLogService userBehaviorLogService,
-                               com.payment.service.delivery.OrderDeliveryService orderDeliveryService) {
-        this(salesOrderMapper, salesOrderItemMapper, tenantEmployeeMapper, tenantMemberMapper, productMapper,
-                unifiedWalletService, merchantWalletService, paymentBillV1Service, withdrawalService,
-                memberPointsAccountService, pointsRuleMapper, orderPricingService, couponService, promotionService,
-                orderDiscountSnapshotMapper, userBehaviorLogService, orderDeliveryService, null);
-    }
+    private final StoreProductMapper storeProductMapper;
 
     /**
      * 创建订单并发起支付。
@@ -167,7 +145,10 @@ public class AppOrderServiceImpl implements AppOrderService {
 
     private OrderPaymentVO createOrderInTenantContext(Long platformUserId, AppCreateOrderDTO dto) {
         List<OrderLine> orderLines = buildOrderLines(dto);
-        ShippingAddressSnapshot shippingAddressSnapshot = resolveShippingAddressSnapshot(platformUserId, dto, orderLines);
+        String fulfillmentMode = resolveOrderFulfillmentMode(dto, orderLines);
+        Long storeId = resolveOrderStoreId(dto, orderLines, fulfillmentMode);
+        ShippingAddressSnapshot shippingAddressSnapshot = resolveShippingAddressSnapshot(
+                platformUserId, dto, orderLines, fulfillmentMode);
         ensureTenantMember(dto.getTenantId(), platformUserId);
 
         String orderNo = BizNoGenerator.generate("SO");
@@ -193,13 +174,15 @@ public class AppOrderServiceImpl implements AppOrderService {
         salesOrder.setSubject(resolveSubject(dto.getSubject(), orderLines));
         salesOrder.setSource(dto.getSource());
         applyShippingAddressSnapshot(salesOrder, shippingAddressSnapshot);
-        salesOrder.setStoreId(resolveStoreId(orderLines));
+        salesOrder.setStoreId(storeId);
+        salesOrder.setFulfillmentMode(fulfillmentMode);
         salesOrder.setWalletStrategy(dto.getWalletStrategy().name());
         salesOrder.setExpireTime(LocalDateTime.now().plusMinutes(30));
         salesOrder.setDeleted(0);
         salesOrderMapper.insert(salesOrder);
 
         insertOrderItems(salesOrder, orderLines);
+        reserveStoreInventory(salesOrder);
         insertDiscountSnapshots(salesOrder, pricingResult.getDiscountSnapshots());
         lockCouponIfNeeded(dto, salesOrder, pricingResult);
         holdPointsIfNeeded(salesOrder, pricingResult);
@@ -546,25 +529,67 @@ public class AppOrderServiceImpl implements AppOrderService {
             merchantWalletService.credit(salesOrder.getTenantId(), platformUserId, salesOrder.getMerchantWalletDeductAmount(), "ORDER_CANCEL_REFUND", orderNo, "取消订单回退");
         }
         releaseDiscountAssets(salesOrder, "订单取消");
+        releaseStoreInventory(salesOrder);
 
         salesOrder.setOrderStatus(OrderStatusEnum.CANCELLED.name());
         salesOrder.setPayStatus(PayStatusEnum.CLOSED.name());
         salesOrderMapper.updateById(salesOrder);
 
-        List<PaymentBill> paymentBills = paymentBillV1Service.listByBizTypeAndBizNo(
-                PaymentBizTypeEnum.SALES_ORDER.name(),
-                orderNo
-        );
-        if (paymentBills.isEmpty()) {
-            return;
-        }
+        closeUnpaidBills(orderNo, PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED);
+    }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int expireUnpaidOrders() {
+        LocalDateTime now = LocalDateTime.now();
+        List<SalesOrder> orders = salesOrderMapper.selectList(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getDeleted, 0)
+                .eq(SalesOrder::getOrderStatus, OrderStatusEnum.CREATED.name())
+                .eq(SalesOrder::getPayStatus, PayStatusEnum.WAIT_PAY.name())
+                .le(SalesOrder::getExpireTime, now)
+                .orderByAsc(SalesOrder::getExpireTime)
+                .last("LIMIT 100"));
+        int expired = 0;
+        for (SalesOrder order : orders) {
+            if (expireOrder(order, now)) {
+                expired++;
+            }
+        }
+        return expired;
+    }
+
+    private boolean expireOrder(SalesOrder salesOrder, LocalDateTime now) {
+        int updated = salesOrderMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<SalesOrder>()
+                        .eq(SalesOrder::getId, salesOrder.getId())
+                        .eq(SalesOrder::getOrderStatus, OrderStatusEnum.CREATED.name())
+                        .eq(SalesOrder::getPayStatus, PayStatusEnum.WAIT_PAY.name())
+                        .le(SalesOrder::getExpireTime, now)
+                        .set(SalesOrder::getOrderStatus, OrderStatusEnum.CLOSED.name())
+                        .set(SalesOrder::getPayStatus, PayStatusEnum.CLOSED.name()));
+        if (updated != 1) {
+            return false;
+        }
+        if (amountOrZero(salesOrder.getUnifiedWalletDeductAmount()).compareTo(BigDecimal.ZERO) > 0) {
+            unifiedWalletService.credit(salesOrder.getPlatformUserId(), salesOrder.getUnifiedWalletDeductAmount(),
+                    "ORDER_TIMEOUT_REFUND", salesOrder.getOrderNo(), "订单超时回退");
+        }
+        if (amountOrZero(salesOrder.getMerchantWalletDeductAmount()).compareTo(BigDecimal.ZERO) > 0) {
+            merchantWalletService.credit(salesOrder.getTenantId(), salesOrder.getPlatformUserId(),
+                    salesOrder.getMerchantWalletDeductAmount(), "ORDER_TIMEOUT_REFUND", salesOrder.getOrderNo(), "订单超时回退");
+        }
+        releaseDiscountAssets(salesOrder, "订单超时");
+        releaseStoreInventory(salesOrder);
+        closeUnpaidBills(salesOrder.getOrderNo(), PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED);
+        return true;
+    }
+
+    private void closeUnpaidBills(String orderNo, PaymentStatusReasonEnum reason) {
+        List<PaymentBill> paymentBills = paymentBillV1Service.listByBizTypeAndBizNo(
+                PaymentBizTypeEnum.SALES_ORDER.name(), orderNo);
         for (PaymentBill paymentBill : paymentBills) {
             if (!PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
-                paymentBillV1Service.markBillClosed(
-                        paymentBill.getBillNo(),
-                        PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED
-                );
+                paymentBillV1Service.markBillClosed(paymentBill.getBillNo(), reason);
             }
         }
     }
@@ -604,25 +629,18 @@ public class AppOrderServiceImpl implements AppOrderService {
             mergedQuantities.merge(item.getProductId(), item.getQuantity(), Integer::sum);
         }
 
-        Set<Long> productIds = mergedQuantities.keySet();
-        Map<Long, Product> productMap = productMapper.selectBatchIds(productIds).stream()
-                .collect(Collectors.toMap(Product::getId, Function.identity()));
-        List<ProductStock> stockRows = productMapper.selectStockByTenantAndProductIds(dto.getTenantId(), productIds);
-        Map<Long, Integer> stockMap = (stockRows == null ? List.<ProductStock>of() : stockRows).stream()
-                .collect(Collectors.toMap(
-                        ProductStock::getProductId,
-                        stock -> stock.getQuantity() == null ? 0 : stock.getQuantity(),
-                        (left, right) -> left
-                ));
-
+        if (dto.getStoreId() == null || dto.getStoreId() <= 0) {
+            throw new BusinessException("请选择自提门店");
+        }
         List<OrderLine> orderLines = new ArrayList<>();
         for (Map.Entry<Long, Integer> entry : mergedQuantities.entrySet()) {
             Long productId = entry.getKey();
             Integer quantity = entry.getValue();
 
-            Product product = productMap.get(productId);
+            Product product = storeProductMapper.selectVisibleProductByStore(
+                    dto.getTenantId(), productId, dto.getStoreId());
             if (product == null) {
-                throw new BusinessException("商品不存在, productId=" + productId);
+                throw new BusinessException("商品在所选门店不可售, productId=" + productId);
             }
             if (product.getDeleted() != null && product.getDeleted() == 1) {
                 throw new BusinessException("商品已删除, productId=" + productId);
@@ -646,7 +664,7 @@ public class AppOrderServiceImpl implements AppOrderService {
                             + "，请刷新购物车后重新结算");
                 }
             }
-            Integer stockQuantity = stockMap.get(productId);
+            Integer stockQuantity = product.getStock();
             if (stockQuantity == null || stockQuantity < quantity) {
                 throw new BusinessException(buildStockChangedMessage(product, stockQuantity));
             }
@@ -674,8 +692,9 @@ public class AppOrderServiceImpl implements AppOrderService {
 
     private ShippingAddressSnapshot resolveShippingAddressSnapshot(Long platformUserId,
                                                                    AppCreateOrderDTO dto,
-                                                                   List<OrderLine> orderLines) {
-        if (!requiresShippingAddress(orderLines)) {
+                                                                   List<OrderLine> orderLines,
+                                                                   String fulfillmentMode) {
+        if (!requiresShippingAddress(orderLines, fulfillmentMode)) {
             return null;
         }
         if (userShippingAddressMapper == null) {
@@ -711,15 +730,8 @@ public class AppOrderServiceImpl implements AppOrderService {
                 .last("LIMIT 1"));
     }
 
-    private boolean requiresShippingAddress(List<OrderLine> orderLines) {
-        return orderLines.stream().anyMatch(orderLine -> {
-            String productType = orderLine.product().getProductType();
-            String fulfillmentMode = orderLine.product().getFulfillmentMode();
-            return productType == null
-                    || productType.isBlank()
-                    || com.payment.enums.ProductTypeEnum.PHYSICAL.name().equals(productType)
-                    || "EXPRESS_DELIVERY".equals(fulfillmentMode);
-        });
+    private boolean requiresShippingAddress(List<OrderLine> orderLines, String fulfillmentMode) {
+        return false;
     }
 
     private void applyShippingAddressSnapshot(SalesOrder salesOrder, ShippingAddressSnapshot snapshot) {
@@ -878,7 +890,7 @@ public class AppOrderServiceImpl implements AppOrderService {
     /**
      * 插入订单商品明细。
      * <p>
-     * 冗余商品类型与初始交付状态，避免后续商品改类型影响历史订单的交付路由。
+     * 订单项初始为待备货状态。
      *
      * @param salesOrder 订单实体
      * @param orderLines 订单行列表
@@ -894,11 +906,6 @@ public class AppOrderServiceImpl implements AppOrderService {
             orderItem.setPrice(orderLine.product().getPrice());
             orderItem.setQuantity(orderLine.quantity());
             orderItem.setSubtotal(orderLine.subtotal());
-            // 冗余商品类型与初始交付状态，避免后续商品改类型影响历史订单的交付路由
-            String productType = orderLine.product().getProductType();
-            orderItem.setProductType(productType == null || productType.isBlank()
-                    ? com.payment.enums.ProductTypeEnum.PHYSICAL.name()
-                    : productType);
             orderItem.setDeliveryStatus(com.payment.enums.DeliveryStatusEnum.PENDING.name());
             return orderItem;
         }).collect(java.util.stream.Collectors.toList());
@@ -949,18 +956,26 @@ public class AppOrderServiceImpl implements AppOrderService {
         return firstLine.product().getName() + "等" + orderLines.size() + "件商品";
     }
 
-    /**
-     * 解析门店 ID，取订单行中第一个非空的 storeId。
-     *
-     * @param orderLines 订单行列表
-     * @return 门店 ID，无门店时返回 null
-     */
-    private Long resolveStoreId(List<OrderLine> orderLines) {
-        return orderLines.stream()
-                .map(orderLine -> orderLine.product().getStoreId())
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+    private String resolveOrderFulfillmentMode(AppCreateOrderDTO dto, List<OrderLine> orderLines) {
+        String requestedMode = trim(dto.getFulfillmentMode());
+        if (requestedMode != null && !"STORE_PICKUP".equalsIgnoreCase(requestedMode)) {
+            throw new BusinessException("当前仅支持指定到店自提履约方式");
+        }
+        boolean allPickupProducts = orderLines.stream().allMatch(orderLine ->
+                "STORE_PICKUP".equals(orderLine.product().getFulfillmentMode()));
+        if (!allPickupProducts) {
+            throw new BusinessException("到店自提订单只能包含已配置到店自提的商品");
+        }
+        return "STORE_PICKUP";
+    }
+
+    private Long resolveOrderStoreId(AppCreateOrderDTO dto,
+                                     List<OrderLine> orderLines,
+                                     String fulfillmentMode) {
+        if (dto.getStoreId() == null || dto.getStoreId() <= 0) {
+            throw new BusinessException("请选择自提门店");
+        }
+        return dto.getStoreId();
     }
 
     /**
@@ -1087,6 +1102,10 @@ public class AppOrderServiceImpl implements AppOrderService {
         return amount == null ? BigDecimal.ZERO : amount;
     }
 
+    private BigDecimal amountOrZero(BigDecimal amount) {
+        return amount == null ? BigDecimal.ZERO : amount;
+    }
+
     /**
      * 校验外部支付渠道不为空。
      *
@@ -1110,6 +1129,7 @@ public class AppOrderServiceImpl implements AppOrderService {
      * @param salesOrder 已支付的订单
      */
     private void settlePaidOrder(SalesOrder salesOrder) {
+        deductInventoryForWalletPaidOrder(salesOrder);
         confirmDiscountAssets(salesOrder);
         BigDecimal settlementAmount = salesOrder.getPayableAmount().subtract(salesOrder.getMerchantWalletDeductAmount());
         if (settlementAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -1134,6 +1154,45 @@ public class AppOrderServiceImpl implements AppOrderService {
         // 钱包支付链路与外部支付回调链路都汇入此处,统一在事务内入队交付事件。
         // 写 Outbox 与订单状态变更必须原子化:Outbox 写失败应回滚订单状态,由调用方重试。
         orderDeliveryService.enqueueDelivery(salesOrder.getOrderNo());
+    }
+
+    private void deductInventoryForWalletPaidOrder(SalesOrder salesOrder) {
+        if (storeInventoryService == null) {
+            // 仅供未注入门店库存服务的局部单元测试构造器使用。
+            return;
+        }
+        List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
+        for (SalesOrderItem item : orderItems) {
+            if ("STORE_PICKUP".equals(salesOrder.getFulfillmentMode())) {
+                if (salesOrder.getStoreId() == null) {
+                    throw new BusinessException("到店自提订单缺少门店信息");
+                }
+                storeInventoryService.deductLocked(
+                        salesOrder.getTenantId(), salesOrder.getStoreId(), item.getProductId(), item.getQuantity(),
+                        "SALES_ORDER", salesOrder.getOrderNo(), salesOrder.getPlatformUserId());
+                continue;
+            }
+        }
+    }
+
+    private void reserveStoreInventory(SalesOrder salesOrder) {
+        if (storeInventoryService == null || salesOrder.getStoreId() == null) {
+            return;
+        }
+        for (SalesOrderItem item : salesOrderItemMapper.selectByOrderId(salesOrder.getId())) {
+            storeInventoryService.lock(salesOrder.getTenantId(), salesOrder.getStoreId(), item.getProductId(),
+                    item.getQuantity(), "SALES_ORDER", salesOrder.getOrderNo());
+        }
+    }
+
+    private void releaseStoreInventory(SalesOrder salesOrder) {
+        if (storeInventoryService == null || salesOrder.getStoreId() == null) {
+            return;
+        }
+        for (SalesOrderItem item : salesOrderItemMapper.selectByOrderId(salesOrder.getId())) {
+            storeInventoryService.release(salesOrder.getTenantId(), salesOrder.getStoreId(), item.getProductId(),
+                    item.getQuantity(), "SALES_ORDER", salesOrder.getOrderNo());
+        }
     }
 
     /**

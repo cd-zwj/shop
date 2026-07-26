@@ -6,6 +6,7 @@ import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
 import com.payment.entity.RefundApplication;
+import com.payment.vo.AfterSaleActionVO;
 import com.payment.service.RefundApplicationService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
@@ -16,6 +17,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 商户端退款审核控制器（Merchant 端）。
@@ -71,6 +74,15 @@ public class V1MerchantRefundController {
         refundApplicationService.auditRefund(tenantId, refundId, platformUserId,
                 request.isApproved(), request.getRejectReason());
         return Result.success();
+    }
+
+    @SaCheckLogin(type = "merchant")
+    @GetMapping("/{refundId}/actions")
+    public Result<List<AfterSaleActionVO>> listActions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId) {
+        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.REFUND_MANAGE);
+        return Result.success(refundApplicationService.listActions(tenantId, refundId).stream()
+                .map(AfterSaleActionVO::from).toList());
     }
 
     @Data

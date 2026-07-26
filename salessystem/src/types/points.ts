@@ -24,14 +24,3 @@ export interface PointsLog {
   createTime: string;
   trace?: AssetTracePresentation | null;
 }
-
-export interface ExchangeProduct {
-  id: number;
-  tenantId: number;
-  productId: number;
-  pointsRequired: number;
-  stock: number;
-  status: number; // 1=上架 0=下架
-  createTime: string;
-  updateTime: string;
-}

@@ -69,7 +69,6 @@ public class SalesOrderDetailVO {
         private Long price;
         private Integer quantity;
         private Long subtotal;
-        private String productType;
         private String deliveryStatus;
         private String deliveredTime;
     }
@@ -139,7 +138,6 @@ public class SalesOrderDetailVO {
                 .price(VoConverterUtil.toFen(item.getPrice()))
                 .quantity(item.getQuantity())
                 .subtotal(VoConverterUtil.toFen(item.getSubtotal()))
-                .productType(item.getProductType())
                 .deliveryStatus(item.getDeliveryStatus())
                 .deliveredTime(VoConverterUtil.formatTime(item.getDeliveredTime()))
                 .build();

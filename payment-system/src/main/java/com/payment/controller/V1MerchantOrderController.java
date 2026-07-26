@@ -7,13 +7,16 @@ import com.payment.common.Result;
 import com.payment.constant.MerchantPermission;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.OrderDeliveryRecord;
+import com.payment.entity.OrderFulfillmentAction;
 import com.payment.service.AppOrderService;
+import com.payment.service.OrderFulfillmentService;
 import com.payment.service.delivery.OrderDeliveryService;
 import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
-import com.payment.vo.OrderDeliveryVO;
+import com.payment.vo.PickupVerificationVO;
 import com.payment.vo.SalesOrderListVO;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +24,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 商户端订单管理控制器（Merchant 端）。
  * <p>显式携带 tenantId，避免一个商户员工绑定多个商户时出现歧义。
- * 提供订单列表查询、订单详情查看、实物商品发货和服务商品核销等功能。</p>
+ * 提供到店自提订单的列表、详情和取货码核销功能。</p>
  */
 @RestController
 @RequestMapping("/v1/merchant/tenants/{tenantId}/orders")
@@ -31,6 +34,7 @@ public class V1MerchantOrderController {
     private final AppOrderService appOrderService;
     private final V1MerchantSupportService v1MerchantSupportService;
     private final OrderDeliveryService orderDeliveryService;
+    private final OrderFulfillmentService orderFulfillmentService;
 
     /**
      * 分页查询商户订单列表。
@@ -79,39 +83,59 @@ public class V1MerchantOrderController {
     }
 
     /**
-     * 实物商品发货：填写物流单号后将订单项的交付状态置为 DELIVERED。
+     * 到店自提核销：仅能核销当前门店的自提订单。
      */
     @SaCheckLogin(type = "merchant")
-    @PostMapping("/items/{orderItemId}/ship")
-    public Result<OrderDeliveryVO> shipItem(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                            @PathVariable @Min(value = 1, message = "ID必须大于0") Long orderItemId,
-                                            @RequestBody ShipRequest request) {
-        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.ORDER_MANAGE);
-        OrderDeliveryRecord record = orderDeliveryService.markShipped(
-                tenantId, orderItemId, request.getShippingNo(), request.getLogisticsCompany());
-        return Result.success(OrderDeliveryVO.from(record));
+    @PostMapping("/pickups/verify")
+    public Result<PickupVerificationVO> verifyPickup(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                @RequestBody VerifyPickupRequest request) {
+        Long operatorId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        OrderDeliveryRecord record = orderDeliveryService.verifyPickup(tenantId, request.getStoreId(), request.getPickupCode(), operatorId);
+        return Result.success(PickupVerificationVO.from(record, request.getStoreId()));
     }
 
-    /**
-     * 服务商品核销：商户录入用户出示的核销码后将交付状态置为 CONFIRMED。
-     */
     @SaCheckLogin(type = "merchant")
-    @PostMapping("/services/verify")
-    public Result<OrderDeliveryVO> verifyService(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                 @RequestBody VerifyServiceRequest request) {
-        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.ORDER_MANAGE);
-        OrderDeliveryRecord record = orderDeliveryService.verifyService(tenantId, request.getVerifyCode());
-        return Result.success(OrderDeliveryVO.from(record));
+    @PostMapping("/{orderNo}/fulfillment/start")
+    public Result<Void> startPreparation(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                         @PathVariable String orderNo,
+                                         @RequestBody(required = false) FulfillmentRequest request) {
+        Long operatorId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        orderFulfillmentService.startPreparation(tenantId, orderNo, operatorId, request == null ? null : request.getRemark());
+        return Result.success();
+    }
+
+    @SaCheckLogin(type = "merchant")
+    @PostMapping("/{orderNo}/fulfillment/complete")
+    public Result<Void> completePreparation(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                            @PathVariable String orderNo,
+                                            @RequestBody(required = false) FulfillmentRequest request) {
+        Long operatorId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        orderFulfillmentService.completePreparation(tenantId, orderNo, operatorId, request == null ? null : request.getRemark());
+        return Result.success();
+    }
+
+    @SaCheckLogin(type = "merchant")
+    @GetMapping("/{orderNo}/fulfillment-actions")
+    public Result<java.util.List<OrderFulfillmentAction>> listFulfillmentActions(
+            @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+            @PathVariable String orderNo) {
+        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
+        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
+        return Result.success(orderFulfillmentService.listActions(tenantId, orderNo));
     }
 
     @Data
-    public static class ShipRequest {
-        private String shippingNo;
-        private String logisticsCompany;
+    public static class VerifyPickupRequest {
+        private Long storeId;
+        private String pickupCode;
     }
 
     @Data
-    public static class VerifyServiceRequest {
-        private String verifyCode;
+    public static class FulfillmentRequest {
+        @Size(max = 255, message = "履约备注不能超过255个字符")
+        private String remark;
     }
 }

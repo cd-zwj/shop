@@ -26,20 +26,7 @@ CREATE TABLE IF NOT EXISTS `product` (
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品表';
 
--- 商品库存表
-CREATE TABLE IF NOT EXISTS `product_stock` (
-  `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` BIGINT(20) NOT NULL COMMENT '租户ID',
-  `product_id` BIGINT(20) NOT NULL COMMENT '商品ID',
-  `quantity` INT NOT NULL DEFAULT '0' COMMENT '库存数量',
-  `version` INT NOT NULL DEFAULT '0' COMMENT '版本号（乐观锁）',
-  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_product_id` (`product_id`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='商品库存表';
-
--- 商品价格/库存变更流水
+-- 商品价格变更流水；门店库存流水记录在 store_inventory_change_log。
 CREATE TABLE IF NOT EXISTS `product_change_log` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `tenant_id` BIGINT(20) NOT NULL COMMENT '租户ID',

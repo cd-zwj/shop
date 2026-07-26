@@ -45,7 +45,7 @@ describe('merchantRefundPresentation', () => {
     });
 
     expect(presentation.statusDescription).toContain('同意后需先撤销交付再退款');
-    expect(presentation.nextAction).toContain('先确认卡密、虚拟内容、服务核销或物流状态');
+    expect(presentation.nextAction).toContain('先确认备货、取货码核销和库存回补状态');
   });
 
   it('surfaces failed refund as manual follow-up', () => {

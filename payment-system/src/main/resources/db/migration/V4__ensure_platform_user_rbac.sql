@@ -23,7 +23,6 @@ VALUES
     ('merchant:withdrawal:create', '商户提现申请', 'withdrawal', '商户端创建提现申请'),
     ('statistics:view', '查看统计', 'statistics', '查看销售统计数据'),
     ('statistics:export', '导出统计', 'statistics', '导出销售统计数据'),
-    ('pos:checkout', 'POS收银', 'pos', 'POS收银功能'),
     ('file:list', '文件列表', 'file', '查看上传文件列表'),
     ('admin:dashboard', '管理后台概览', 'admin', '管理后台数据概览'),
     ('admin:user:list', '平台用户列表', 'admin', '查看平台用户列表与详情'),
@@ -82,7 +81,6 @@ JOIN sys_permission p ON p.permission_code IN (
     'merchant:withdrawal:create',
     'statistics:view',
     'statistics:export',
-    'pos:checkout',
     'file:list'
 )
 WHERE r.role_code = 'merchant'

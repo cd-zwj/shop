@@ -53,6 +53,8 @@ export default function ProductDetails() {
 
   const queryTenantId = searchParams.get('tenantId');
   const tenantId = queryTenantId ? Number(queryTenantId) : undefined;
+  const queryStoreId = searchParams.get('storeId');
+  const storeId = queryStoreId ? Number(queryStoreId) : undefined;
   const resolvedTenantId = product?.tenantId ?? tenantId;
 
   const thumbnails = [
@@ -64,7 +66,7 @@ export default function ProductDetails() {
     let isMounted = true;
 
     async function loadProduct() {
-      if (!productId) {
+      if (!productId || !storeId) {
         setError('商品参数无效');
         setIsLoading(false);
         return;
@@ -74,7 +76,7 @@ export default function ProductDetails() {
       setError('');
 
       try {
-        const detail = await appCatalogService.getProduct(productId);
+        const detail = await appCatalogService.getProduct(productId, storeId);
         if (!isMounted) return;
         setProduct(detail);
         const nextTenantId = detail.tenantId ?? tenantId;
@@ -106,7 +108,7 @@ export default function ProductDetails() {
     return () => {
       isMounted = false;
     };
-  }, [productId, reloadKey, tenantId]);
+  }, [productId, reloadKey, storeId, tenantId]);
 
   const productPresentation = getProductDetailPresentation(product);
   const inventory = productPresentation.inventory;
@@ -124,13 +126,13 @@ export default function ProductDetails() {
     return {
       productId: detail.id,
       tenantId: resolvedTenantId ?? 0,
+      storeId: detail.storeId,
       name: detail.name,
       price: detail.price,
       quantity: 1,
       imageUrl: detail.imageUrl,
       stock: detail.stock,
       category: detail.category,
-      productType: detail.productType,
       fulfillmentMode: detail.fulfillmentMode,
     };
   }
@@ -154,8 +156,10 @@ export default function ProductDetails() {
       return;
     }
 
-    addItem({ ...product, tenantId: resolvedTenantId }, 1);
-    setActionMessage('已加入购物车，可以继续选购或前往结算');
+    const added = addItem({ ...product, tenantId: resolvedTenantId }, 1);
+    setActionMessage(added
+      ? '已加入购物车，可以继续选购或前往结算'
+      : '购物车已包含其他门店商品，请先结算或清空购物车后再选择本门店商品');
   }
 
   async function handleBuyNow() {

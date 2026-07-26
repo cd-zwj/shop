@@ -27,6 +27,8 @@ export interface AppCreateOrderPayload {
   allowExternalPayFallback?: boolean;
   selectedUserCouponId?: number;
   addressId?: number;
+  fulfillmentMode?: 'STORE_PICKUP';
+  storeId?: number;
 }
 
 export interface OrderPayment {
@@ -58,6 +60,8 @@ export interface SalesOrder {
   payableAmount?: number | null;
   subject?: string | null;
   source?: string | null;
+  storeId?: number | null;
+  fulfillmentMode?: string | null;
   shippingAddressId?: number | null;
   shippingReceiverName?: string | null;
   shippingPhone?: string | null;
@@ -100,8 +104,6 @@ export interface SalesOrderItem {
   price: number;
   quantity: number;
   subtotal: number;
-  /** PHYSICAL / VIRTUAL / CARD_KEY / SERVICE / SUBSCRIPTION */
-  productType?: string | null;
   /** PENDING / DELIVERING / DELIVERED / CONFIRMED / FAILED / REVOKED */
   deliveryStatus?: string | null;
   deliveredTime?: string | null;

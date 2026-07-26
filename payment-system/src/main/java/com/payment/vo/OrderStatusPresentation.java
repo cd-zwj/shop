@@ -76,6 +76,33 @@ public final class OrderStatusPresentation {
                     List.of("REPURCHASE", "DETAIL"));
         }
 
+        if ("PENDING_PREPARATION".equals(order.getOrderStatus())) {
+            return new StatusPresentation(
+                    "待备货",
+                    "支付已完成，取货码已生成，等待商家开始备货。",
+                    "下一步：等待商家开始备货；如订单有问题可申请售后。",
+                    null,
+                    List.of("VIEW_DELIVERY", "REFUND"));
+        }
+
+        if ("PREPARING".equals(order.getOrderStatus())) {
+            return new StatusPresentation(
+                    "备货中",
+                    "商家正在准备商品。",
+                    "下一步：等待商家确认备货完成。",
+                    null,
+                    List.of("REFUND", "CONTACT_MERCHANT"));
+        }
+
+        if ("COMPLETED".equals(order.getOrderStatus())) {
+            return new StatusPresentation(
+                    "已完成",
+                    "商家已确认备货完成，订单履约结束。",
+                    "下一步：可评价门店，或在售后期内申请售后。",
+                    null,
+                    List.of("REPURCHASE", "REFUND"));
+        }
+
         if ("SUCCESS".equals(order.getPayStatus()) || "PAID".equals(order.getOrderStatus())) {
             return fromDelivery(items);
         }
@@ -98,7 +125,7 @@ public final class OrderStatusPresentation {
             return new StatusPresentation(
                     "已支付",
                     "支付已完成，系统正在等待商家或交付任务接管订单。",
-                    "下一步：等待商家发货、卡密交付或服务核销。",
+                    "下一步：等待商家开始备货。",
                     null,
                     List.of("REFUND", "CONTACT_MERCHANT"));
         }
@@ -123,25 +150,25 @@ public final class OrderStatusPresentation {
 
         if (statuses.stream().anyMatch(status -> "DELIVERED".equals(status) || "CONFIRMED".equals(status))) {
             return new StatusPresentation(
-                    "已发货",
-                    "商家已发货或虚拟内容已交付，可在订单或已购内容中查看。",
-                    "下一步：确认收货、查看卡密/文件/核销码，或按需申请售后。",
+                    "待备货",
+                    "支付已完成，取货码已生成，等待商家备货。",
+                    "下一步：等待商家开始备货。",
                     null,
                     List.of("VIEW_DELIVERY", "REFUND"));
         }
 
         if (statuses.stream().anyMatch("DELIVERING"::equals)) {
             return new StatusPresentation(
-                    "发货中",
-                    "商家或系统正在处理发货、卡密发放或服务凭证生成。",
-                    "预计节点：交付完成后会更新为已发货，并在已购内容中开放查看。",
+                    "备货中",
+                    "商家正在准备商品。",
+                    "预计节点：商家确认备货完成后订单将进入已完成。",
                     null,
                     List.of("REFUND", "CONTACT_MERCHANT"));
         }
 
         return new StatusPresentation(
-                "待发货",
-                "支付已完成，订单正在等待商家发货或系统自动交付。",
+                "待备货",
+                "支付已完成，订单正在等待商家备货。",
                 "下一步：等待商家处理；长时间无进展可联系商户。",
                 null,
                 List.of("REFUND", "CONTACT_MERCHANT"));

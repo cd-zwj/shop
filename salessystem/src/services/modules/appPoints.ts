@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { PointsBalance, PointsLog, ExchangeProduct } from '../../types/points';
+import type { PointsBalance, PointsLog } from '../../types/points';
 import type { PageResult } from '../../types/api';
 import type { AssetTracePresentation } from '../../types/wallet';
 
@@ -40,24 +40,6 @@ export const appPointsService = {
       ...result,
       records: (result.records ?? []).map((log) => normalizePointsLog(log, tenantId)),
     } satisfies PageResult<PointsLog>;
-  },
-
-  /** 兑换商品列表 */
-  getExchangeProducts(tenantId: number) {
-    return request<ExchangeProduct[]>({
-      url: `/v1/app/tenants/${tenantId}/points/exchange/products`,
-      method: 'get',
-      authRole: 'user',
-    });
-  },
-
-  /** 兑换商品 */
-  exchangeProduct(tenantId: number, exchangeProductId: number) {
-    return request<{ orderNo: string; message: string }>({
-      url: `/v1/app/tenants/${tenantId}/points/exchange/${exchangeProductId}`,
-      method: 'post',
-      authRole: 'user',
-    });
   },
 };
 export default appPointsService;

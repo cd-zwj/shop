@@ -33,7 +33,10 @@ export default function AdminProducts() {
         const allProducts = (await Promise.all(
           tenants.map(async (t) => {
             try {
-              const tenantProducts = await appCatalogService.listTenantProducts(t.id);
+              const stores = await appCatalogService.listTenantStores(t.id);
+              const tenantProducts = stores[0]
+                ? await appCatalogService.listTenantProducts(t.id, stores[0].id)
+                : [];
               return tenantProducts.map((p) => ({ ...p, tenantName: t.name }));
             } catch {
               return [];

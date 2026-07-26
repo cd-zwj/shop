@@ -17,6 +17,7 @@ public class ProductVO {
 
     private Long id;
     private Long tenantId;
+    private Long storeId;
     private String productCode;
     private String name;
     private Long price;
@@ -26,7 +27,6 @@ public class ProductVO {
     private String description;
     private Integer stock;
     private String fulfillmentMode;
-    private String productType;
     private Integer status;
     private String inventoryLabel;
     private String inventoryDescription;
@@ -47,6 +47,7 @@ public class ProductVO {
         return ProductVO.builder()
                 .id(product.getId())
                 .tenantId(product.getTenantId())
+                .storeId(product.getStoreId())
                 .productCode(product.getProductCode())
                 .name(product.getName())
                 .price(VoConverterUtil.toFen(product.getPrice()))
@@ -56,7 +57,6 @@ public class ProductVO {
                 .description(product.getDescription())
                 .stock(product.getStock())
                 .fulfillmentMode(product.getFulfillmentMode())
-                .productType(product.getProductType())
                 .status(product.getStatus())
                 .inventoryLabel(presentation.inventoryLabel())
                 .inventoryDescription(presentation.inventoryDescription())

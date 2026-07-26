@@ -17,11 +17,11 @@ describe('merchantPermissions', () => {
     expect(hasMerchantPermission('OWNER', 'withdrawal:manage')).toBe(true);
   });
 
-  it('keeps cashier focused on orders without refund authority', () => {
-    expect(hasMerchantPermission('CASHIER', 'order:manage')).toBe(true);
-    expect(hasMerchantPermission('CASHIER', 'refund:manage')).toBe(false);
-    expect(hasMerchantPermission('CASHIER', 'finance:view')).toBe(false);
-    expect(hasMerchantPermission('CASHIER', 'product:manage')).toBe(false);
+  it('keeps pickup clerks focused on orders without refund authority', () => {
+    expect(hasMerchantPermission('PICKUP_CLERK', 'order:manage')).toBe(true);
+    expect(hasMerchantPermission('PICKUP_CLERK', 'refund:manage')).toBe(false);
+    expect(hasMerchantPermission('PICKUP_CLERK', 'finance:view')).toBe(false);
+    expect(hasMerchantPermission('PICKUP_CLERK', 'product:manage')).toBe(false);
   });
 
   it('keeps finance staff out of product and marketing modules', () => {
@@ -39,7 +39,7 @@ describe('merchantPermissions', () => {
       { label: '优惠券', permission: 'marketing:manage' as const },
     ];
 
-    expect(filterMerchantPermissionItems('CASHIER', items).map((item) => item.label)).toEqual([
+    expect(filterMerchantPermissionItems('PICKUP_CLERK', items).map((item) => item.label)).toEqual([
       '工作台',
       '订单',
     ]);

@@ -75,7 +75,7 @@ public class SalesOrder implements Serializable {
     /** 订单标题/摘要，用于支付页面展示和第三方支付单描述 */
     private String subject;
 
-    /** 订单来源渠道，如：APP / H5 / MINI_PROGRAM / POS */
+    /** 订单来源渠道，当前仅允许 APP。 */
     private String source;
 
     /** 下单时选择的收货地址 ID，用于追溯来源地址 */
@@ -112,6 +112,9 @@ public class SalesOrder implements Serializable {
      * 门店ID
      */
     private Long storeId;
+
+    /** 订单履约方式，当前仅支持 STORE_PICKUP。 */
+    private String fulfillmentMode;
 
     /** 逻辑删除标记，0-未删除，1-已删除 */
     private Integer deleted;

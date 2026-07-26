@@ -1,6 +1,7 @@
 package com.payment.controller;
 
 import com.payment.common.Result;
+import com.payment.dto.AppStoreVO;
 import com.payment.service.AppCatalogService;
 import com.payment.vo.ProductVO;
 import com.payment.vo.TenantVO;
@@ -54,6 +55,12 @@ public class V1AppCatalogController {
         return Result.success(TenantVO.from(appCatalogService.getTenant(tenantId)));
     }
 
+    @GetMapping("/tenants/{tenantId}/stores")
+    public Result<List<AppStoreVO>> listStores(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
+        return Result.success(appCatalogService.listActiveTenantStores(tenantId)
+                .stream().map(AppStoreVO::from).collect(Collectors.toList()));
+    }
+
     /**
      * 获取商户下的商品列表。
      * <p>
@@ -63,24 +70,9 @@ public class V1AppCatalogController {
      * @return 商品列表
      */
     @GetMapping("/tenants/{tenantId}/products")
-    public Result<List<ProductVO>> listProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        return Result.success(appCatalogService.listTenantProducts(tenantId)
-                .stream().map(ProductVO::from).collect(Collectors.toList()));
-    }
-
-    /**
-     * 搜索商户下的商品。
-     * <p>
-     * 根据关键字在指定商户的商品中进行搜索，支持Elasticsearch全文检索。
-     *
-     * @param tenantId 商户ID，必须大于0
-     * @param keyword  搜索关键字
-     * @return 匹配的商品列表
-     */
-    @GetMapping("/tenants/{tenantId}/products/search")
-    public Result<List<ProductVO>> searchProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                  @RequestParam String keyword) {
-        return Result.success(appCatalogService.searchTenantProducts(keyword, tenantId)
+    public Result<List<ProductVO>> listProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                 @RequestParam @Min(value = 1, message = "门店ID必须大于0") Long storeId) {
+        return Result.success(appCatalogService.listTenantProducts(tenantId, storeId)
                 .stream().map(ProductVO::from).collect(Collectors.toList()));
     }
 
@@ -94,7 +86,8 @@ public class V1AppCatalogController {
      * @return 商品详情信息
      */
     @GetMapping("/products/{productId}")
-    public Result<ProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long productId) {
-        return Result.success(ProductVO.from(appCatalogService.getProductAndRecordView(productId)));
+    public Result<ProductVO> getProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long productId,
+                                        @RequestParam @Min(value = 1, message = "门店ID必须大于0") Long storeId) {
+        return Result.success(ProductVO.from(appCatalogService.getProductAndRecordView(productId, storeId)));
     }
 }

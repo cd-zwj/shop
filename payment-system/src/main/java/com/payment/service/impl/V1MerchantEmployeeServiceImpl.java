@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 public class V1MerchantEmployeeServiceImpl implements V1MerchantEmployeeService {
 
     private static final Set<String> SUPPORTED_ROLES = Set.of(
-            "OWNER", "ADMIN", "MANAGER", "OPERATOR", "CASHIER", "FINANCE");
+            "OWNER", "ADMIN", "MANAGER", "OPERATOR", "PICKUP_CLERK", "FINANCE");
     private static final Set<String> MANAGEMENT_ROLES = Set.of("OWNER", "ADMIN");
 
     private final TenantEmployeeMapper tenantEmployeeMapper;

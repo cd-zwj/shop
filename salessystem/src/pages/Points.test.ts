@@ -4,7 +4,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Points from './Points';
 import { ToastProvider } from '../context/ToastContext';
-import { appCatalogService } from '../services/modules/appCatalog';
 import { appPointsService } from '../services/modules/appPoints';
 
 vi.mock('motion/react', () => ({
@@ -18,20 +17,10 @@ vi.mock('../services/modules/appPoints', () => ({
   appPointsService: {
     getPointsBalance: vi.fn(),
     getPointsLogs: vi.fn(),
-    getExchangeProducts: vi.fn(),
-    exchangeProduct: vi.fn(),
-  },
-}));
-
-vi.mock('../services/modules/appCatalog', () => ({
-  appCatalogService: {
-    listTenantProducts: vi.fn(),
-    getProduct: vi.fn(),
   },
 }));
 
 const mockedPointsService = vi.mocked(appPointsService);
-const mockedCatalogService = vi.mocked(appCatalogService);
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
@@ -86,9 +75,7 @@ describe('Points', () => {
         createTime: '2026-07-06T10:00:00',
         updateTime: '2026-07-06T10:00:00',
       });
-    mockedPointsService.getExchangeProducts.mockResolvedValue([]);
     mockedPointsService.getPointsLogs.mockResolvedValue({ records: [], total: 0, page: 1, size: 20, pages: 0 });
-    mockedCatalogService.listTenantProducts.mockResolvedValue([]);
 
     const element = await renderPoints();
 

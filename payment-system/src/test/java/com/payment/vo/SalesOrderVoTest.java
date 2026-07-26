@@ -132,18 +132,17 @@ class SalesOrderVoTest {
     }
 
     @Test
-    void detailVoUsesDeliveryItemsToExplainFulfillmentState() {
+    void detailVoUsesPickupCertificateToExplainFulfillmentState() {
         SalesOrder order = buildOrder();
         order.setOrderStatus("PAID");
         order.setPayStatus("SUCCESS");
         SalesOrderItem item = new SalesOrderItem();
         item.setId(101L);
         item.setProductId(9L);
-        item.setProductName("虚拟卡密");
+        item.setProductName("门店自提商品");
         item.setPrice(new BigDecimal("10.00"));
         item.setQuantity(1);
         item.setSubtotal(new BigDecimal("10.00"));
-        item.setProductType("CARD_KEY");
         item.setDeliveryStatus("DELIVERED");
         com.payment.dto.SalesOrderDetailVO detail = new com.payment.dto.SalesOrderDetailVO();
         detail.setOrder(order);
@@ -151,9 +150,9 @@ class SalesOrderVoTest {
 
         SalesOrderDetailVO vo = SalesOrderDetailVO.from(detail);
 
-        assertThat(vo.getStatusLabel()).isEqualTo("已发货");
-        assertThat(vo.getStatusDescription()).contains("已交付");
-        assertThat(vo.getNextStep()).contains("查看卡密");
+        assertThat(vo.getStatusLabel()).isEqualTo("待备货");
+        assertThat(vo.getStatusDescription()).contains("取货码已生成");
+        assertThat(vo.getNextStep()).contains("商家开始备货");
         assertThat(vo.getAvailableActions()).contains("VIEW_DELIVERY", "REFUND");
     }
 

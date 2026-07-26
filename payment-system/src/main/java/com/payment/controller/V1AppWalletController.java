@@ -7,11 +7,9 @@ import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.*;
 import com.payment.entity.MemberPointsLog;
-import com.payment.entity.ExchangeProduct;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantRechargeRuleService;
 import com.payment.service.MerchantWalletService;
-import com.payment.service.PointsService;
 import com.payment.service.AppAssetSummaryService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.WalletRechargeService;
@@ -19,7 +17,6 @@ import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.PointsAccountVO;
 import com.payment.vo.PointsLogVO;
 import com.payment.vo.RechargeRuleVO;
-import org.springframework.beans.BeanUtils;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
@@ -28,14 +25,13 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * C端用户钱包与积分控制器。
  * <p>
  * 提供双钱包系统（统一钱包+商户钱包）的余额查询、交易记录、充值，以及
- * 积分账户查询、积分变动记录、积分兑换商品等功能。
+ * 积分账户查询和积分变动记录功能。
  * <p>
  * 双钱包体系：
  * <ul>
@@ -58,7 +54,6 @@ public class V1AppWalletController {
     private final WalletRechargeService walletRechargeService;
     private final MerchantRechargeRuleService merchantRechargeRuleService;
     private final MemberPointsAccountService memberPointsAccountService;
-    private final PointsService pointsService;
     private final AppAssetSummaryService appAssetSummaryService;
 
     /**
@@ -285,36 +280,4 @@ public class V1AppWalletController {
         return Result.success(PageResult.from(page, PointsLogVO::from));
     }
 
-    /**
-     * 查询可兑换商品列表。
-     * <p>
-     * 获取指定商户下所有可用积分兑换的商品列表。
-     *
-     * @param tenantId 商户ID，必须大于0
-     * @return 可兑换商品列表
-     */
-    @SaCheckLogin(type = "platform")
-    @GetMapping("/tenants/{tenantId}/points/exchange/products")
-    public Result<List<ExchangeProductVO>> listExchangeProducts(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId) {
-        return Result.success(pointsService.listExchangeProducts(tenantId).stream()
-                .map(e -> { ExchangeProductVO vo = new ExchangeProductVO(); BeanUtils.copyProperties(e, vo); return vo; })
-                .collect(Collectors.toList()));
-    }
-
-    /**
-     * 积分兑换商品。
-     * <p>
-     * 使用积分兑换指定商品，兑换成功后生成兑换订单，扣除相应积分。
-     *
-     * @param tenantId          商户ID，必须大于0
-     * @param exchangeProductId 兑换商品ID，必须大于0
-     * @return 兑换结果，包含兑换订单号
-     */
-    @SaCheckLogin(type = "platform")
-    @PostMapping("/tenants/{tenantId}/points/exchange/{exchangeProductId}")
-    public Result<Map<String, String>> exchangeProduct(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
-                                                       @PathVariable @Min(value = 1, message = "ID必须大于0") Long exchangeProductId) {
-        String orderNo = pointsService.exchangeProduct(PlatformSessionHelper.getPlatformUserId(), exchangeProductId);
-        return Result.success(Map.of("orderNo", orderNo, "message", "兑换成功"));
-    }
 }

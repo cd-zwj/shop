@@ -15,7 +15,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MemberService;
 import com.payment.service.MessageIdempotentService;
-import com.payment.service.ProductInventoryService;
+import com.payment.service.StoreInventoryService;
 import com.payment.service.UserNotificationService;
 import com.payment.service.WalletRechargeService;
 import com.payment.service.MerchantSettlementService;
@@ -51,8 +51,8 @@ public class PaymentV1Consumer {
     private final SalesOrderMapper salesOrderMapper;
     /** 销售订单明细 Mapper */
     private final SalesOrderItemMapper salesOrderItemMapper;
-    /** 商品库存服务 */
-    private final ProductInventoryService productInventoryService;
+    /** 门店维度库存服务，用于到店自提订单。 */
+    private final StoreInventoryService storeInventoryService;
     /** 商户订单结算服务（含平台服务费抽成） */
     private final MerchantSettlementService settlementService;
     /** 会员积分账户服务 */
@@ -173,23 +173,29 @@ public class PaymentV1Consumer {
             return;
         }
         if (PayStatusEnum.SUCCESS.name().equals(salesOrder.getPayStatus())
-                && OrderStatusEnum.PAID.name().equals(salesOrder.getOrderStatus())) {
+                && !OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())) {
             return;
         }
 
         // 先扣库存，再落已支付状态，避免出现"订单已支付但库存完全没动"的长期不一致。
         List<SalesOrderItem> orderItems = salesOrderItemMapper.selectByOrderId(salesOrder.getId());
         for (SalesOrderItem orderItem : orderItems) {
-            productInventoryService.deductStock(
+            if (!"STORE_PICKUP".equals(salesOrder.getFulfillmentMode()) || salesOrder.getStoreId() == null) {
+                throw new IllegalStateException("实体商品订单缺少有效自提门店, orderNo=" + orderNo);
+            }
+            storeInventoryService.deductLocked(
                     salesOrder.getTenantId(),
+                    salesOrder.getStoreId(),
                     orderItem.getProductId(),
                     orderItem.getQuantity(),
-                    salesOrder.getOrderNo()
+                    "SALES_ORDER",
+                    salesOrder.getOrderNo(),
+                    salesOrder.getPlatformUserId()
             );
         }
 
         salesOrder.setPayStatus(PayStatusEnum.SUCCESS.name());
-        salesOrder.setOrderStatus(OrderStatusEnum.PAID.name());
+        salesOrder.setOrderStatus(OrderStatusEnum.PENDING_PREPARATION.name());
         salesOrderMapper.updateById(salesOrder);
 
         // 商户钱包部分在充值成功时已经进入商户财务余额，订单消费时不重复入账。
@@ -234,7 +240,7 @@ public class PaymentV1Consumer {
             log.warn("发送订单支付成功通知失败, orderNo={}", orderNo, e);
         }
 
-        // 投递交付事件,由 OrderDeliveryConsumer 按 item 的 productType 分发到对应策略。
+        // 投递到店自提凭证生成事件。
         // 入队失败必须抛出 —— 这是支付与交付的原子性保证:
         // 整个 processOrderPaid 处于事务中,Outbox 写失败会回滚订单状态,
         // 由 MQ 重投 + 幂等(根据 messageId)兜底再次进入此方法。

@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { merchantRefundService } from '../../services/modules/merchantRefund';
-import type { Refund } from '../../types/refund';
+import type { AfterSaleAction, Refund } from '../../types/refund';
 import { formatCurrency } from '../../utils/display';
 import { getErrorMessage } from '../../utils/errorMessage';
 import {
@@ -38,6 +38,8 @@ export default function MerchantRefunds() {
   const tenantId = merchantSession?.tenantId;
 
   const [refunds, setRefunds] = useState<Refund[]>([]);
+  const [actionLists, setActionLists] = useState<Record<number, AfterSaleAction[]>>({});
+  const [loadingActionId, setLoadingActionId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeTab, setActiveTab] = useState<RefundTabId>(() => normalizeRefundTab(searchParams.get('status')));
@@ -136,7 +138,7 @@ export default function MerchantRefunds() {
       case 'DELIVERING':
         return '交付中';
       case 'DELIVERED':
-        return '已发货/已交付';
+        return '已生成取货凭证';
       case 'CONFIRMED':
         return '已确认';
       case 'REVOKED':
@@ -156,6 +158,19 @@ export default function MerchantRefunds() {
   const handleExportCsv = () => {
     const exported = downloadMerchantRefundsCsv(refunds);
     showToast(exported ? '退款 CSV 已导出' : '暂无可导出的退款单', exported ? 'success' : 'info');
+  };
+
+  const loadActions = async (refundId: number) => {
+    if (!tenantId || actionLists[refundId]) return;
+    setLoadingActionId(refundId);
+    try {
+      const actions = await merchantRefundService.listActions(tenantId, refundId);
+      setActionLists((current) => ({ ...current, [refundId]: actions }));
+    } catch (err) {
+      showToast(getErrorMessage(err, '加载售后处理记录失败'), 'error');
+    } finally {
+      setLoadingActionId(null);
+    }
   };
 
   const auditingPresentation = auditingRefund ? getMerchantRefundPresentation(auditingRefund) : null;
@@ -304,6 +319,34 @@ export default function MerchantRefunds() {
                         <p className="text-xs text-slate-600 line-clamp-2 bg-slate-50 p-2 rounded-lg">{refund.description}</p>
                       </div>
                     )}
+                    {refund.evidenceUrls && refund.evidenceUrls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 border-t border-slate-50 pt-2 text-xs">
+                        <span className="text-slate-400">用户凭证</span>
+                        {refund.evidenceUrls.map((url, index) => (
+                          <a key={url} href={url} target="_blank" rel="noreferrer" className="font-semibold text-primary underline">
+                            凭证 {index + 1}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void loadActions(refund.id)}
+                      disabled={loadingActionId === refund.id}
+                      className="w-fit text-left text-xs font-bold text-primary disabled:text-slate-400"
+                    >
+                      {loadingActionId === refund.id ? '加载处理中...' : '查看处理记录'}
+                    </button>
+                    {actionLists[refund.id] && (
+                      <ol className="border-l border-slate-200 pl-3 text-xs text-slate-600">
+                        {actionLists[refund.id].map((action, index) => (
+                          <li key={`${action.action}-${action.createTime}-${index}`} className="mb-3 last:mb-0">
+                            <p className="font-bold text-slate-800">{formatAfterSaleAction(action.action)} · {formatOperatorRole(action.operatorRole)}</p>
+                            <p>{action.createTime || '--'}{action.remark ? `：${action.remark}` : ''}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </div>
                 </div>
 
@@ -441,4 +484,17 @@ export default function MerchantRefunds() {
       </AnimatePresence>
     </div>
   );
+}
+
+function formatAfterSaleAction(action: string) {
+  const labels: Record<string, string> = {
+    USER_APPLY: '提交申请', USER_CANCEL: '取消申请', MERCHANT_APPROVE: '商家同意',
+    MERCHANT_REJECT: '商家驳回', PLATFORM_APPROVE: '平台同意', PLATFORM_REJECT: '平台驳回',
+    REFUND_COMPLETED: '退款完成',
+  };
+  return labels[action] || action;
+}
+
+function formatOperatorRole(role: string) {
+  return ({ USER: '用户', MERCHANT: '商户', ADMIN: '平台', SYSTEM: '系统' } as Record<string, string>)[role] || role;
 }

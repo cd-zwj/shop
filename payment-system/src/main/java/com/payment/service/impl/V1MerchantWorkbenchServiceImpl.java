@@ -44,7 +44,7 @@ public class V1MerchantWorkbenchServiceImpl implements V1MerchantWorkbenchServic
         List<MerchantWorkbenchTodoItemVO> items = List.of(
                 item("payment", "待付款订单", "用户已下单但尚未完成支付，可关注是否需要催付或备货。",
                         countPendingPayments(tenantId), "/merchant/orders?tab=pending", "orange"),
-                item("fulfillment", "待履约订单", "用户已支付，需要商家发货、卡密交付或服务核销。",
+                item("fulfillment", "待备货订单", "用户已支付，需要商家开始备货并确认备货完成。",
                         safeCount(orderDeliveryRecordMapper.countDistinctOrdersByTenantAndStatuses(
                                 tenantId, List.of("PENDING", "DELIVERING"))),
                         "/merchant/orders?tab=shipping", "blue"),

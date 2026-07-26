@@ -71,7 +71,9 @@ export default function Home() {
 
         const productGroups = await Promise.all(
           tenants.slice(0, 2).map(async (tenant) => {
-            const list = await appCatalogService.listTenantProducts(tenant.id);
+            const stores = await appCatalogService.listTenantStores(tenant.id);
+            const storeId = stores[0]?.id;
+            const list = storeId ? await appCatalogService.listTenantProducts(tenant.id, storeId) : [];
             return list.map((p) => ({ ...p, tenantId: tenant.id }));
           }),
         );
@@ -192,7 +194,7 @@ export default function Home() {
               <motion.div
                 key={product ? product.id : index}
                 whileHover={{ y: -4 }}
-                onClick={() => product && navigate(`/product/${product.id}?tenantId=${product.tenantId}`)}
+                onClick={() => product && navigate(`/product/${product.id}?tenantId=${product.tenantId}&storeId=${product.storeId}`)}
                 className="flex cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm"
               >
                 <div className="relative h-40 bg-slate-100">
@@ -223,8 +225,11 @@ export default function Home() {
                       onClick={(e) => {
                         e.stopPropagation();
                         if (product) {
-                          addItem({ ...product, tenantId: product.tenantId });
-                          showToast('已加入购物车', 'success');
+                          const added = addItem({ ...product, tenantId: product.tenantId });
+                          showToast(
+                            added ? '已加入购物车' : '购物车已包含其他门店商品，请先结算或清空购物车',
+                            added ? 'success' : 'error',
+                          );
                         }
                       }}
                       className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white shadow-sm transition-opacity hover:opacity-90"

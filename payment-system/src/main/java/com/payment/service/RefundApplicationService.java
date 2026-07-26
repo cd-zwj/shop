@@ -3,6 +3,9 @@ package com.payment.service;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.dto.RefundCreateDTO;
 import com.payment.entity.RefundApplication;
+import com.payment.entity.AfterSaleAction;
+
+import java.util.List;
 
 /**
  * 售后退款申请服务接口。
@@ -90,4 +93,10 @@ public interface RefundApplicationService {
      * @param refundId 退款申请 ID
      */
     void completeRefund(Long tenantId, Long refundId);
+
+    /** 平台介入待审核售后并作出退款或驳回决定。 */
+    void intervene(Long tenantId, Long refundId, Long adminId, boolean approved, String remark);
+
+    /** 查询售后处理流水，供各方追溯。 */
+    List<AfterSaleAction> listActions(Long tenantId, Long refundId);
 }

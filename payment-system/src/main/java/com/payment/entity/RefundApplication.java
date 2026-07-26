@@ -62,6 +62,9 @@ public class RefundApplication implements Serializable {
     /** 用户填写的退款详细描述 */
     private String description;
 
+    /** 用户提交的售后图片或视频凭证地址 JSON */
+    private String evidenceUrlsJson;
+
     /** 商户审核时填写的拒绝原因（审核通过时为空） */
     private String rejectReason;
 

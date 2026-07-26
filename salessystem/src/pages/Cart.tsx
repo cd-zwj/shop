@@ -300,7 +300,9 @@ export default function Cart() {
 
     const validation = await validateCartItemsAgainstCatalog(
       tenantItems,
-      (productId) => appCatalogService.getProduct(productId),
+      (item) => item.storeId
+        ? appCatalogService.getProduct(item.productId, item.storeId)
+        : Promise.resolve(null),
     );
     if (validation.hasIssues) {
       replaceTenantItems(tenantId, validation.refreshedItems);

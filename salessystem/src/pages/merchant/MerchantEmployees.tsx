@@ -21,7 +21,7 @@ const ROLE_OPTIONS: Array<{ role: MerchantEmployeeRole; label: string; descripti
   { role: 'ADMIN', label: '管理员', description: '拥有全部商户权限，可协助管理后台。' },
   { role: 'MANAGER', label: '店长', description: '管理门店、商品、订单、售后、营销和规则。' },
   { role: 'OPERATOR', label: '运营', description: '管理商品、订单、售后和营销，不查看财务。' },
-  { role: 'CASHIER', label: '收银', description: '查看工作台和订单，适合门店收银处理。' },
+  { role: 'PICKUP_CLERK', label: '自提店员', description: '查看工作台和自提订单，负责备货与取货核验。' },
   { role: 'FINANCE', label: '财务', description: '查看财务与提现，不操作商品和营销。' },
 ];
 

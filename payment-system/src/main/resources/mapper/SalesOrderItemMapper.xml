@@ -5,13 +5,13 @@
     <insert id="insertBatch" parameterType="java.util.List">
         INSERT INTO sales_order_item (
             order_id, order_no, tenant_id, product_id, product_name,
-            price, quantity, subtotal, product_type, delivery_status
+            price, quantity, subtotal, delivery_status
         )
         VALUES
         <foreach collection="list" item="item" separator=",">
             (#{item.orderId}, #{item.orderNo}, #{item.tenantId}, #{item.productId},
              #{item.productName}, #{item.price}, #{item.quantity}, #{item.subtotal},
-             #{item.productType}, #{item.deliveryStatus})
+             #{item.deliveryStatus})
         </foreach>
     </insert>
 

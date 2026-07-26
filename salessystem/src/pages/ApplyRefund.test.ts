@@ -26,6 +26,7 @@ vi.mock('../services/modules/appRefund', () => ({
     applyRefund: vi.fn(),
     listRefunds: vi.fn(),
     cancelRefund: vi.fn(),
+    listActions: vi.fn(),
   },
 }));
 
@@ -191,5 +192,34 @@ describe('ApplyRefund', () => {
     expect(element.textContent).toContain('联系商户');
     expect(element.textContent).toContain('重新申请售后');
     expect(element.textContent).toContain('新建退款申请');
+  });
+
+  it('loads and displays the after-sale action timeline', async () => {
+    mockedOrderService.getOrder.mockResolvedValue({
+      order: { id: 1, tenantId: 9, platformUserId: 3, orderNo: 'SO001', orderStatus: 'PAID', payStatus: 'SUCCESS', totalAmount: 128, payableAmount: 128, createTime: '2026-07-07T10:00:00' },
+      items: [{ id: 10, orderId: 1, orderNo: 'SO001', tenantId: 9, productId: 20, productName: '测试商品', price: 128, quantity: 1, subtotal: 128 }],
+      paymentBillNo: null,
+    });
+    mockedRefundService.listRefunds.mockResolvedValue({
+      records: [{ id: 88, refundNo: 'RF001', orderNo: 'SO001', orderItemId: null, refundType: 'REFUND_ONLY', refundStatus: 'REJECTED', refundAmount: 128, deliveryStatus: null, refundableAmount: 128, quickRefundSuggested: false, refundSuggestion: null, reason: '商品质量问题', description: null, rejectReason: '材料不足', auditTime: null, completeTime: null, createTime: '2026-07-07T10:10:00' }],
+      total: 1, page: 1, size: 10, pages: 1,
+    });
+    mockedRefundService.listActions.mockResolvedValue([
+      { action: 'USER_APPLY', operatorRole: 'USER', remark: '商品有瑕疵', evidenceUrls: [], createTime: '2026-07-07 10:10:00' },
+      { action: 'MERCHANT_REJECT', operatorRole: 'MERCHANT', remark: '材料不足', evidenceUrls: [], createTime: '2026-07-07 11:10:00' },
+    ]);
+
+    const element = await renderApplyRefund();
+    const actionButton = Array.from(element.querySelectorAll('button')).find((button) => button.textContent?.includes('查看处理记录'));
+    expect(actionButton).toBeTruthy();
+
+    await act(async () => {
+      actionButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mockedRefundService.listActions).toHaveBeenCalledWith(9, 88);
+    expect(element.textContent).toContain('提交申请 · 用户');
+    expect(element.textContent).toContain('商家驳回 · 商户');
   });
 });

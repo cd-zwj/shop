@@ -20,13 +20,13 @@ const ResetPassword = lazy(() => import('../pages/ResetPassword'));
 const Profile = lazy(() => import('../pages/Profile'));
 const UserOrders = lazy(() => import('../pages/UserOrders'));
 const UserOrderDetail = lazy(() => import('../pages/UserOrderDetail'));
-const MyPurchases = lazy(() => import('../pages/MyPurchases'));
 const PaymentStatus = lazy(() => import('../pages/PaymentStatus'));
 const PublicMerchantDetail = lazy(() => import('../pages/PublicMerchantDetail'));
 const CouponCenter = lazy(() => import('../pages/CouponCenter'));
 const Points = lazy(() => import('../pages/Points'));
 const GrowthCenter = lazy(() => import('../pages/GrowthCenter'));
 const ApplyRefund = lazy(() => import('../pages/ApplyRefund'));
+const StoreReview = lazy(() => import('../pages/StoreReview'));
 const AddressList = lazy(() => import('../pages/AddressList'));
 const Notifications = lazy(() => import('../pages/Notifications'));
 const AccountSecurity = lazy(() => import('../pages/AccountSecurity'));
@@ -59,7 +59,7 @@ const MerchantProducts = lazy(() => import('../pages/merchant/MerchantProducts')
 const MerchantProductDetail = lazy(() => import('../pages/merchant/MerchantProductDetail'));
 const MerchantProductEdit = lazy(() => import('../pages/merchant/MerchantProductEdit'));
 const MerchantStores = lazy(() => import('../pages/merchant/MerchantStores'));
-const MerchantProductTaxonomy = lazy(() => import('../pages/merchant/MerchantProductTaxonomy'));
+const MerchantInventory = lazy(() => import('../pages/merchant/MerchantInventory'));
 const MerchantRules = lazy(() => import('../pages/merchant/MerchantRules'));
 const MerchantWithdraw = lazy(() => import('../pages/merchant/MerchantWithdraw'));
 const MerchantRefunds = lazy(() => import('../pages/merchant/MerchantRefunds'));
@@ -68,6 +68,7 @@ const MerchantCoupons = lazy(() => import('../pages/merchant/MerchantCoupons'));
 const MerchantActivities = lazy(() => import('../pages/merchant/MerchantActivities'));
 const MerchantMembers = lazy(() => import('../pages/merchant/MerchantMembers'));
 const MerchantEmployees = lazy(() => import('../pages/merchant/MerchantEmployees'));
+const MerchantReviews = lazy(() => import('../pages/merchant/MerchantReviews'));
 
 function PageLoader() {
   return (
@@ -107,8 +108,8 @@ export function AppRoutes() {
         <Route path="/history" element={<AuthGuard><ConsumptionHistory /></AuthGuard>} />
         <Route path="/orders" element={<AuthGuard><UserOrders /></AuthGuard>} />
         <Route path="/order/:id" element={<AuthGuard><UserOrderDetail /></AuthGuard>} />
-        <Route path="/my-purchases" element={<AuthGuard><MyPurchases /></AuthGuard>} />
         <Route path="/orders/:orderNo/refund" element={<AuthGuard><ApplyRefund /></AuthGuard>} />
+        <Route path="/orders/:orderNo/review" element={<AuthGuard><StoreReview /></AuthGuard>} />
         <Route path="/payment/status" element={<AuthGuard><PaymentStatus /></AuthGuard>} />
         <Route path="/merchant-store/:id" element={<AuthGuard><PublicMerchantDetail /></AuthGuard>} />
         <Route path="/ai" element={<AuthGuard><RoleGuard allowedRoles={['user']}><AIAssistant /></RoleGuard></AuthGuard>} />
@@ -143,8 +144,8 @@ export function AppRoutes() {
 
         <Route path="/merchant" element={merchantRoute(<MerchantDashboard />, 'dashboard:view')} />
         <Route path="/merchant/stores" element={merchantRoute(<MerchantStores />, 'store:manage')} />
+        <Route path="/merchant/inventory" element={merchantRoute(<MerchantInventory />, 'inventory:manage')} />
         <Route path="/merchant/products" element={merchantRoute(<MerchantProducts />, 'product:manage')} />
-        <Route path="/merchant/product-taxonomy" element={merchantRoute(<MerchantProductTaxonomy />, 'product:manage')} />
         <Route path="/merchant/product/:id" element={merchantRoute(<MerchantProductDetail />, 'product:manage')} />
         <Route path="/merchant/product/new" element={merchantRoute(<MerchantProductEdit />, 'product:manage')} />
         <Route path="/merchant/product/edit/:id" element={merchantRoute(<MerchantProductEdit />, 'product:manage')} />
@@ -155,6 +156,7 @@ export function AppRoutes() {
         <Route path="/merchant/marketing/activities" element={merchantRoute(<MerchantActivities />, 'marketing:manage')} />
         <Route path="/merchant/marketing/members" element={merchantRoute(<MerchantMembers />, 'marketing:manage')} />
         <Route path="/merchant/refunds" element={merchantRoute(<MerchantRefunds />, 'refund:manage')} />
+        <Route path="/merchant/reviews" element={merchantRoute(<MerchantReviews />, 'order:manage')} />
         <Route path="/merchant/tasks" element={merchantRoute(<MerchantTasks />, 'dashboard:view')} />
         <Route path="/merchant/rules" element={merchantRoute(<MerchantRules />, 'rule:manage')} />
         <Route path="/merchant/employees" element={merchantRoute(<MerchantEmployees />, 'employee:manage')} />

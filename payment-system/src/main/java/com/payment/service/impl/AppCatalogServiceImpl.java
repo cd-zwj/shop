@@ -2,11 +2,12 @@ package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.entity.Product;
+import com.payment.entity.Store;
 import com.payment.entity.Tenant;
-import com.payment.mapper.ProductMapper;
+import com.payment.mapper.StoreMapper;
+import com.payment.mapper.StoreProductMapper;
 import com.payment.mapper.TenantMapper;
 import com.payment.service.AppCatalogService;
-import com.payment.service.ProductSearchService;
 import com.payment.service.UserBehaviorLogService;
 import com.payment.util.TenantContextHolder;
 import lombok.RequiredArgsConstructor;
@@ -24,9 +25,9 @@ import java.util.List;
 public class AppCatalogServiceImpl implements AppCatalogService {
 
     private final TenantMapper tenantMapper;
-    private final ProductMapper productMapper;
-    private final ProductSearchService productSearchService;
     private final UserBehaviorLogService userBehaviorLogService;
+    private final StoreMapper storeMapper;
+    private final StoreProductMapper storeProductMapper;
 
     @Override
     public List<Tenant> listActiveTenants() {
@@ -46,23 +47,26 @@ public class AppCatalogServiceImpl implements AppCatalogService {
     }
 
     @Override
-    public List<Product> listTenantProducts(Long tenantId) {
-        return withTenantContext(tenantId, () -> productMapper.selectList(new LambdaQueryWrapper<Product>()
-                .eq(Product::getTenantId, tenantId)
-                .eq(Product::getDeleted, 0)
-                .eq(Product::getStatus, 1)
-                .orderByDesc(Product::getCreateTime)));
+    public List<Store> listActiveTenantStores(Long tenantId) {
+        return withTenantContext(tenantId, () -> storeMapper.selectList(new LambdaQueryWrapper<Store>()
+                .eq(Store::getTenantId, tenantId)
+                .eq(Store::getStatus, 1)
+                .eq(Store::getDeleted, 0)
+                .orderByDesc(Store::getCreateTime)));
     }
 
     @Override
-    public List<Product> searchTenantProducts(String keyword, Long tenantId) {
-        return withTenantContext(tenantId, () -> productSearchService.searchProducts(keyword, tenantId));
+    public List<Product> listTenantProducts(Long tenantId, Long storeId) {
+        validateActiveStore(tenantId, storeId);
+        return storeProductMapper.selectVisibleProductsByStore(tenantId, storeId);
     }
 
     @Override
-    public Product getProductAndRecordView(Long productId) {
-        // C 端详情仅返回上架且未删除的商品；下架/删除商品返回 null，避免按 ID 绕过列表过滤
-        Product product = productMapper.selectVisibleAppProductById(productId);
+    public Product getProductAndRecordView(Long productId, Long storeId) {
+        if (storeId == null || storeId <= 0) {
+            return null;
+        }
+        Product product = storeProductMapper.selectVisibleProductByStore(null, productId, storeId);
         // 记录商品浏览行为（埋点失败不影响主流程）
         try {
             if (product != null) {
@@ -74,6 +78,20 @@ public class AppCatalogServiceImpl implements AppCatalogService {
             log.warn("记录 VIEW 行为日志失败, productId={}", productId, e);
         }
         return product;
+    }
+
+    private void validateActiveStore(Long tenantId, Long storeId) {
+        if (storeId == null || storeId <= 0) {
+            throw new com.payment.common.BusinessException("请选择自提门店");
+        }
+        Store store = storeMapper.selectOne(new LambdaQueryWrapper<Store>()
+                .eq(Store::getId, storeId)
+                .eq(Store::getTenantId, tenantId)
+                .eq(Store::getStatus, 1)
+                .eq(Store::getDeleted, 0));
+        if (store == null) {
+            throw new com.payment.common.BusinessException("门店不存在或已停业");
+        }
     }
 
     private <T> T withTenantContext(Long tenantId, java.util.function.Supplier<T> supplier) {

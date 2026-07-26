@@ -49,7 +49,7 @@ export function getMerchantRefundPresentation(refund: MerchantRefundInput): Merc
       statusLabel: '待审核',
       statusDescription: suggestion || '用户已提交退款申请，请先核对订单、交付状态和可退余额。',
       nextAction: hasDeliveredContent(refund)
-        ? '建议：先确认卡密、虚拟内容、服务核销或物流状态，再决定同意或驳回。'
+        ? '建议：先确认备货、取货码核销和库存回补状态，再决定同意或驳回。'
         : '建议：核对可退金额和申请原因后处理，避免售后单长时间停留。',
       tone: 'warning',
       primaryActionLabel: '审核处理',

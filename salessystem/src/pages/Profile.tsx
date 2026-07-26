@@ -4,7 +4,6 @@ import {
   Clock,
   LogOut,
   MapPin,
-  Package,
   Shield,
   ShoppingBag,
   Wallet,
@@ -24,8 +23,7 @@ export default function Profile() {
     {
       title: '交易与资产',
       items: [
-        { icon: ShoppingBag, label: '我的订单', desc: '查看订单状态与物流', path: '/orders' },
-        { icon: Package, label: '我的已购', desc: '虚拟商品/卡密/服务交付明细', path: '/my-purchases' },
+        { icon: ShoppingBag, label: '我的订单', desc: '查看取货码、备货进度和售后', path: '/orders' },
         { icon: Wallet, label: '我的钱包', desc: '查看余额、积分与充值', path: '/wallet' },
         { icon: Clock, label: '消费明细', desc: '历史交易流水记录', path: '/history' },
       ],

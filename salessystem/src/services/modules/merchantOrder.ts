@@ -34,26 +34,29 @@ export const merchantOrderService = {
     return normalizeSalesOrderDetail(result);
   },
 
-  /**
-   * 实物商品发货 - 提交物流单号后将订单项的 deliveryStatus 置为 DELIVERED。
-   */
-  shipItem(tenantId: number, orderItemId: number, shippingNo: string, logisticsCompany?: string) {
+  verifyPickup(tenantId: number, storeId: number, pickupCode: string) {
     return request<unknown>({
-      url: `/v1/merchant/tenants/${tenantId}/orders/items/${orderItemId}/ship`,
+      url: `/v1/merchant/tenants/${tenantId}/orders/pickups/verify`,
       method: 'post',
-      data: { shippingNo, logisticsCompany },
+      data: { storeId, pickupCode },
       authRole: 'merchant',
     });
   },
 
-  /**
-   * 服务商品核销 - 提交用户出示的核销码后将交付状态置为 CONFIRMED。
-   */
-  verifyService(tenantId: number, verifyCode: string) {
-    return request<unknown>({
-      url: `/v1/merchant/tenants/${tenantId}/orders/services/verify`,
+  startPreparation(tenantId: number, orderNo: string, remark?: string) {
+    return request<void>({
+      url: `/v1/merchant/tenants/${tenantId}/orders/${orderNo}/fulfillment/start`,
       method: 'post',
-      data: { verifyCode },
+      data: { remark },
+      authRole: 'merchant',
+    });
+  },
+
+  completePreparation(tenantId: number, orderNo: string, remark?: string) {
+    return request<void>({
+      url: `/v1/merchant/tenants/${tenantId}/orders/${orderNo}/fulfillment/complete`,
+      method: 'post',
+      data: { remark },
       authRole: 'merchant',
     });
   },

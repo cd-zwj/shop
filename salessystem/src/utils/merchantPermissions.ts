@@ -1,6 +1,7 @@
 export type MerchantPermission =
   | 'dashboard:view'
   | 'store:manage'
+  | 'inventory:manage'
   | 'product:manage'
   | 'order:manage'
   | 'refund:manage'
@@ -18,6 +19,7 @@ export interface MerchantMenuPermissionItem {
 const ALL_PERMISSIONS: MerchantPermission[] = [
   'dashboard:view',
   'store:manage',
+  'inventory:manage',
   'product:manage',
   'order:manage',
   'refund:manage',
@@ -35,6 +37,7 @@ const ROLE_PERMISSIONS: Record<string, MerchantPermission[]> = {
   MANAGER: [
     'dashboard:view',
     'store:manage',
+    'inventory:manage',
     'product:manage',
     'order:manage',
     'refund:manage',
@@ -44,13 +47,14 @@ const ROLE_PERMISSIONS: Record<string, MerchantPermission[]> = {
   ],
   OPERATOR: [
     'dashboard:view',
+    'inventory:manage',
     'product:manage',
     'order:manage',
     'refund:manage',
     'marketing:manage',
     'ai:use',
   ],
-  CASHIER: [
+  PICKUP_CLERK: [
     'dashboard:view',
     'order:manage',
     'ai:use',

@@ -137,7 +137,7 @@ export default function MerchantStores() {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h1 className="text-3xl font-black text-slate-900">门店管理</h1>
-          <p className="mt-1 text-sm font-medium text-slate-500">维护线下服务、快递发货和核销相关门店。</p>
+          <p className="mt-1 text-sm font-medium text-slate-500">维护到店自提门店和取货服务信息。</p>
         </div>
         <button
           onClick={openCreate}

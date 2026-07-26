@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `points_log` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `tenant_id` BIGINT(20) NOT NULL COMMENT '租户ID',
   `user_id` BIGINT(20) NOT NULL COMMENT '用户ID',
-  `change_type` VARCHAR(20) NOT NULL COMMENT '变动类型：EARN-获得，USE-使用，EXPIRE-过期，EXCHANGE-兑换',
+  `change_type` VARCHAR(20) NOT NULL COMMENT '变动类型：EARN-获得，USE-使用，EXPIRE-过期',
   `change_points` INT NOT NULL COMMENT '变动积分',
   `points_before` INT NOT NULL COMMENT '变动前积分',
   `points_after` INT NOT NULL COMMENT '变动后积分',

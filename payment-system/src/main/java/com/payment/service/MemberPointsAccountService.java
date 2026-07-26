@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
 /**
  * 会员积分账户服务接口。
  *
- * <p>提供会员积分账户的精细化管理能力，与 {@link PointsService} 不同，
- * 本服务支持积分的预占/确认/释放三阶段事务模型，以及积分过期机制。
+ * <p>提供会员积分账户的精细化管理能力，
+ * 支持积分的预占/确认/释放三阶段事务模型，以及积分过期机制。
  * 适用于需要精确控制积分生命周期的场景（如订单积分预占）。</p>
  */
 public interface MemberPointsAccountService {

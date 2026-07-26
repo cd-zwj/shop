@@ -1,13 +1,13 @@
 export interface CartItem {
   productId: number;
   tenantId: number;
+  storeId?: number | null;
   name: string;
   price: number;
   quantity: number;
   imageUrl?: string | null;
   stock?: number | null;
   category?: string | null;
-  productType?: string | null;
   fulfillmentMode?: string | null;
 }
 

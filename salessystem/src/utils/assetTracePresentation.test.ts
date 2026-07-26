@@ -43,14 +43,14 @@ describe('assetTracePresentation', () => {
       points: -80,
       balance: 440,
       type: 'DEDUCT',
-      reason: '兑换商品',
+      reason: '门店活动积分调整',
       orderNo: null,
       createTime: '2026-07-06T11:00:00',
     };
 
     const presentation = getPointsTracePresentation(log);
 
-    expect(presentation.source).toBe('来源：兑换商品');
+    expect(presentation.source).toBe('来源：门店活动积分调整');
     expect(presentation.effect).toBe('-80 积分');
     expect(presentation.actionPath).toBeUndefined();
     expect(presentation.tone).toBe('negative');

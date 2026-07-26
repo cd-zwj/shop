@@ -11,9 +11,7 @@ sql/
 ├── 04_user_balance.sql        # 用户余额模块
 ├── 05_user_points.sql         # 用户积分模块
 ├── 06_recharge.sql            # 充值模块
-├── 07_exchange.sql            # 积分兑换模块
 ├── 08_merchant_finance.sql    # 商家财务模块
-├── 09_pos.sql                 # POS 收银模块
 ├── 10_analytics.sql           # 数据分析模块
 ├── 11_message_idempotent.sql  # 消息幂等模块
 ├── 12_rbac_permission.sql     # RBAC 权限模块
@@ -36,8 +34,7 @@ sql/
 ├── 29_merchant_balance_version.sql    # 商户余额乐观锁列
 ├── 30_critical_indexes.sql            # 关键查询索引
 ├── 31_platform_auth_provider.sql      # 第三方登录方式表与索引
-├── 32_product_delivery_framework.sql  # 商品类型化 + 统一交付记录表
-├── 33_card_key_pool.sql       # 卡密库存池 + 上传/锁定/退款作废所需表
+├── 32_product_delivery_framework.sql  # 自提凭证与统一交付记录表
 ├── 99_init_data.sql           # 初始化数据
 ├── 99_test_accounts.sql       # 测试账号
 ├── import_all.sql             # 完整导入脚本
@@ -69,9 +66,7 @@ mysql -u root -p < 03_order.sql
 mysql -u root -p < 04_user_balance.sql
 mysql -u root -p < 05_user_points.sql
 mysql -u root -p < 06_recharge.sql
-mysql -u root -p < 07_exchange.sql
 mysql -u root -p < 08_merchant_finance.sql
-mysql -u root -p < 09_pos.sql
 mysql -u root -p < 10_analytics.sql
 mysql -u root -p < 11_message_idempotent.sql
 mysql -u root -p < 12_rbac_permission.sql
@@ -117,7 +112,7 @@ mysql -u root -p < payment_db_multitenant.sql
 
 ### 02_product.sql
 - `product` - 商品表
-- `product_stock` - 商品库存表
+- 商品库存由 `store_product_stock` 按门店管理
 
 ### 03_order.sql
 - `payment_order` - 订单表
@@ -137,16 +132,9 @@ mysql -u root -p < payment_db_multitenant.sql
 - `recharge_rule` - 充值规则表
 - `recharge_order` - 充值订单表
 
-### 07_exchange.sql
-- `exchange_product` - 积分兑换商品表
-
 ### 08_merchant_finance.sql
 - `merchant_balance` - 商家余额表
 - `withdrawal` - 提现申请表
-
-### 09_pos.sql
-- `pos_session` - POS 会话表
-- `scan_record` - 扫码记录表
 
 ### 10_analytics.sql
 - `user_behavior_log` - 用户行为日志表
@@ -246,7 +234,6 @@ mysql -u root -p < payment_db_multitenant.sql
 - 默认管理员账号
 - 默认充值规则
 - 默认积分规则
-- 默认兑换商品
 - 默认商家余额
 
 ## 更新现有数据库
@@ -260,7 +247,7 @@ mysql -u root -p < payment_db_multitenant.sql
 3. **外键**：当前未使用外键约束，通过应用层保证数据一致性
 4. **备份**：导入前请备份现有数据库
 5. **模型说明**：`14_platform_wallet_v1.sql` 及后续 `15` 起的扩展表默认基于平台用户 / 双钱包 / 统一支付模型设计
-6. **渐进演进**：`18_store_membership.sql` 当前仅落地门店主数据与会员扩展，未引入新的商品分类与门店库存真相源
+6. **实体商品范围**：积分兑换商品、独立兑换库存和兑换订单不在本项目范围内；门店商品与库存以 `store_product`、`store_product_stock` 为唯一真相源
 
 ## 默认账号
 

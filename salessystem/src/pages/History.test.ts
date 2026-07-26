@@ -79,7 +79,7 @@ describe('ConsumptionHistory', () => {
           bizNo: 'SO202607080001',
           changeAmount: -128,
           balanceAfter: 872,
-          remark: '购买虚拟商品',
+          remark: '门店订单支付',
         })],
         total: 1,
         page: 1,
@@ -100,7 +100,7 @@ describe('ConsumptionHistory', () => {
     await flushAsyncWork();
 
     expect(element.textContent).toContain('SO202607080001');
-    expect(element.textContent).toContain('购买虚拟商品');
+    expect(element.textContent).toContain('门店订单支付');
     expect(element.textContent).not.toContain('流水服务不可用');
   });
 

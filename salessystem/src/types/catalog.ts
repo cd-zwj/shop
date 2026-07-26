@@ -1,5 +1,4 @@
-export type ProductType = 'PHYSICAL' | 'VIRTUAL' | 'CARD_KEY' | 'SERVICE' | 'SUBSCRIPTION';
-export type FulfillmentMode = 'ONLINE_VIRTUAL' | 'OFFLINE_SERVICE' | 'EXPRESS_DELIVERY';
+export type FulfillmentMode = 'STORE_PICKUP';
 
 export interface Tenant {
   id: number;
@@ -12,9 +11,19 @@ export interface Tenant {
   createTime?: string | null;
 }
 
+export interface AppStore {
+  id: number;
+  tenantId: number;
+  storeName: string;
+  contactPhone?: string | null;
+  address?: string | null;
+  businessHours?: string | null;
+}
+
 export interface Product {
   id: number;
   tenantId?: number | null;
+  storeId?: number | null;
   productCode?: string | null;
   name: string;
   price: number;
@@ -24,7 +33,6 @@ export interface Product {
   imageUrl?: string | null;
   stock?: number | null;
   fulfillmentMode?: FulfillmentMode | string | null;
-  productType?: ProductType | string | null;
   status?: number | string | null;
   inventoryLabel?: string | null;
   inventoryDescription?: string | null;

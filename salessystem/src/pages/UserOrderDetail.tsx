@@ -486,6 +486,14 @@ export default function UserOrderDetail() {
               >
                 <HelpCircle size={14} /> 申请售后
               </button>
+              {order?.orderStatus === 'COMPLETED' && (
+                <button
+                  onClick={() => order.orderNo && navigate(`/orders/${order.orderNo}/review`)}
+                  className="flex w-full items-center justify-center gap-2 py-3 text-[10px] font-black uppercase tracking-widest text-primary transition-all hover:text-primary/70"
+                >
+                  <MessageCircle size={14} /> 评价门店
+                </button>
+              )}
             </div>
           </div>
         </div>

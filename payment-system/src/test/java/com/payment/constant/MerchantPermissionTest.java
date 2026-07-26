@@ -8,9 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class MerchantPermissionTest {
 
     @Test
-    void cashierShouldManageOrdersButNotRefunds() {
-        assertTrue(MerchantPermission.allows("CASHIER", MerchantPermission.ORDER_MANAGE));
-        assertFalse(MerchantPermission.allows("CASHIER", MerchantPermission.REFUND_MANAGE));
-        assertFalse(MerchantPermission.allows("CASHIER", MerchantPermission.FINANCE_VIEW));
+    void pickupClerkShouldManageOrdersButNotRefunds() {
+        assertTrue(MerchantPermission.allows("PICKUP_CLERK", MerchantPermission.ORDER_MANAGE));
+        assertFalse(MerchantPermission.allows("PICKUP_CLERK", MerchantPermission.REFUND_MANAGE));
+        assertFalse(MerchantPermission.allows("PICKUP_CLERK", MerchantPermission.FINANCE_VIEW));
     }
 }

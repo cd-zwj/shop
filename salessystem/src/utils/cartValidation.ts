@@ -17,7 +17,7 @@ export interface CartValidationResult {
 
 export async function validateCartItemsAgainstCatalog(
   items: CartItem[],
-  loadProduct: (productId: number) => Promise<Product | null | undefined>,
+  loadProduct: (item: CartItem) => Promise<Product | null | undefined>,
 ): Promise<CartValidationResult> {
   const refreshedItems: CartItem[] = [];
   const issues: CartValidationIssue[] = [];
@@ -25,7 +25,7 @@ export async function validateCartItemsAgainstCatalog(
   for (const item of items) {
     let product: Product | null | undefined;
     try {
-      product = await loadProduct(item.productId);
+      product = await loadProduct(item);
     } catch {
       product = null;
     }
@@ -69,7 +69,7 @@ export async function validateCartItemsAgainstCatalog(
       issues.push({
         productId: item.productId,
         severity: 'warning',
-        message: `${product.name} 交付方式已变化，请重新确认是否需要收货地址或虚拟交付说明`,
+        message: `${product.name} 的门店自提信息已变化，请重新确认`,
       });
     }
 
@@ -91,7 +91,7 @@ export async function validateCartItemsAgainstCatalog(
       imageUrl: product.imageUrl,
       stock: product.stock,
       category: product.category,
-      productType: product.productType,
+      storeId: product.storeId,
       fulfillmentMode: product.fulfillmentMode,
     });
   }
@@ -113,9 +113,8 @@ function isActiveProduct(product: Product) {
 }
 
 function hasFulfillmentChanged(item: CartItem, product: Product) {
-  const nextProductType = product.productType ?? null;
   const nextFulfillmentMode = product.fulfillmentMode ?? null;
 
-  return (item.productType ?? null) !== nextProductType
-    || (item.fulfillmentMode ?? null) !== nextFulfillmentMode;
+  return (item.fulfillmentMode ?? null) !== nextFulfillmentMode
+    || (item.storeId ?? null) !== (product.storeId ?? null);
 }

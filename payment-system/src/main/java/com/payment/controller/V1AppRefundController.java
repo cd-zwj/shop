@@ -7,13 +7,17 @@ import com.payment.common.PageResult;
 import com.payment.common.Result;
 import com.payment.dto.RefundCreateDTO;
 import com.payment.entity.RefundApplication;
+import com.payment.entity.AfterSaleAction;
 import com.payment.service.RefundApplicationService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.RefundApplicationVO;
+import com.payment.vo.AfterSaleActionVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * C端用户退款申请控制器。
@@ -92,6 +96,16 @@ public class V1AppRefundController {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
         RefundApplication app = refundApplicationService.getRefundDetail(platformUserId, tenantId, refundId);
         return Result.success(RefundApplicationVO.from(app));
+    }
+
+    @SaCheckLogin(type = "platform")
+    @GetMapping("/{refundId}/actions")
+    public Result<List<AfterSaleActionVO>> listActions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+                                                        @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId) {
+        Long platformUserId = PlatformSessionHelper.getPlatformUserId();
+        refundApplicationService.getRefundDetail(platformUserId, tenantId, refundId);
+        return Result.success(refundApplicationService.listActions(tenantId, refundId).stream()
+                .map(AfterSaleActionVO::from).toList());
     }
 
     /**

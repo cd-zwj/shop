@@ -12,6 +12,7 @@ import java.util.Set;
 public enum MerchantPermission {
     DASHBOARD_VIEW("dashboard:view"),
     STORE_MANAGE("store:manage"),
+    INVENTORY_MANAGE("inventory:manage"),
     PRODUCT_MANAGE("product:manage"),
     ORDER_MANAGE("order:manage"),
     REFUND_MANAGE("refund:manage"),
@@ -31,6 +32,7 @@ public enum MerchantPermission {
         ROLE_PERMISSIONS.put(MerchantRole.MANAGER, EnumSet.of(
                 DASHBOARD_VIEW,
                 STORE_MANAGE,
+                INVENTORY_MANAGE,
                 PRODUCT_MANAGE,
                 ORDER_MANAGE,
                 REFUND_MANAGE,
@@ -40,13 +42,14 @@ public enum MerchantPermission {
         ));
         ROLE_PERMISSIONS.put(MerchantRole.OPERATOR, EnumSet.of(
                 DASHBOARD_VIEW,
+                INVENTORY_MANAGE,
                 PRODUCT_MANAGE,
                 ORDER_MANAGE,
                 REFUND_MANAGE,
                 MARKETING_MANAGE,
                 AI_USE
         ));
-        ROLE_PERMISSIONS.put(MerchantRole.CASHIER, EnumSet.of(
+        ROLE_PERMISSIONS.put(MerchantRole.PICKUP_CLERK, EnumSet.of(
                 DASHBOARD_VIEW,
                 ORDER_MANAGE,
                 AI_USE
@@ -83,7 +86,7 @@ public enum MerchantPermission {
         ADMIN,
         MANAGER,
         OPERATOR,
-        CASHIER,
+        PICKUP_CLERK,
         FINANCE;
 
         static MerchantRole from(String rawRole) {

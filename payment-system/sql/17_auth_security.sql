@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS `login_session` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
   `session_no` VARCHAR(64) NOT NULL COMMENT '会话编号',
   `platform_user_id` BIGINT(20) NOT NULL COMMENT '平台用户ID',
-  `terminal_type` VARCHAR(20) NOT NULL COMMENT '终端类型：APP、H5、MINI_PROGRAM、PC、POS',
+  `terminal_type` VARCHAR(20) NOT NULL COMMENT '终端类型：APP、H5、MINI_PROGRAM、PC',
   `access_token` VARCHAR(255) NOT NULL COMMENT '访问令牌',
   `refresh_token` VARCHAR(255) DEFAULT NULL COMMENT '刷新令牌',
   `session_status` VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT '会话状态：ACTIVE-有效，EXPIRED-过期，LOGOUT-已退出，REVOKED-已吊销',

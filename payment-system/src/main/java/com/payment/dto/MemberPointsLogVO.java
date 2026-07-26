@@ -19,7 +19,7 @@ public class MemberPointsLogVO implements Serializable {
     private Long tenantId;
     /** 用户 ID */
     private Long platformUserId;
-    /** 业务类型（如 ORDER_EARN-订单获得、EXCHANGE-积分兑换、REFUND_RETURN-退款归还） */
+    /** 业务类型（如 ORDER_EARN-订单获得、REFUND_RETURN-退款归还） */
     private String bizType;
     /** 关联业务单号 */
     private String bizNo;

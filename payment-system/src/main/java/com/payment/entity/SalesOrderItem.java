@@ -50,11 +50,6 @@ public class SalesOrderItem implements Serializable {
     private BigDecimal subtotal;
 
     /**
-     * 冗余商品类型，避免商品后续改类型时影响历史订单的交付路由。
-     */
-    private String productType;
-
-    /**
      * 交付状态：PENDING / DELIVERING / DELIVERED / CONFIRMED / FAILED / REVOKED
      */
     private String deliveryStatus;

@@ -1,5 +1,5 @@
 import { request } from '../request';
-import type { Refund } from '../../types/refund';
+import type { AfterSaleAction, Refund } from '../../types/refund';
 import type { PageResult } from '../../types/api';
 
 export const merchantRefundService = {
@@ -17,6 +17,14 @@ export const merchantRefundService = {
       url: `/v1/merchant/tenants/${tenantId}/refunds/${refundId}/audit`,
       method: 'put',
       data: { approved, rejectReason },
+      authRole: 'merchant',
+    });
+  },
+
+  listActions(tenantId: number, refundId: number) {
+    return request<AfterSaleAction[]>({
+      url: `/v1/merchant/tenants/${tenantId}/refunds/${refundId}/actions`,
+      method: 'get',
       authRole: 'merchant',
     });
   },
