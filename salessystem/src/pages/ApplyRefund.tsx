@@ -31,6 +31,8 @@ export default function ApplyRefund() {
 
   // Form states
   const [refundType, setRefundType] = useState<'REFUND_ONLY' | 'RETURN_REFUND'>('REFUND_ONLY');
+  // 退货退款必须落到具体订单项（后端按订单项回补门店库存）
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [refundAmount, setRefundAmount] = useState<number>(0);
   const [reason, setReason] = useState('不想要了');
   const [description, setDescription] = useState('');
@@ -73,13 +75,24 @@ export default function ApplyRefund() {
     e.preventDefault();
     if (!orderDetail) return;
 
-    const maxAmount = orderDetail.order.payableAmount ?? orderDetail.order.totalAmount;
+    const selectedItem = refundType === 'RETURN_REFUND'
+      ? orderDetail.items.find((item) => item.id === selectedItemId)
+      : undefined;
+    if (refundType === 'RETURN_REFUND' && !selectedItem) {
+      showToast('退货退款需选择要退回的商品', 'error');
+      return;
+    }
+
+    // 退货退款按所选订单项的小计封顶；仅退款按订单实付金额封顶（与后端可退余额校验一致）
+    const maxAmount = selectedItem
+      ? selectedItem.subtotal
+      : (orderDetail.order.payableAmount ?? orderDetail.order.totalAmount);
     if (refundAmount <= 0) {
       showToast('退款金额必须大于 0', 'error');
       return;
     }
     if (refundAmount > maxAmount) {
-      showToast(`退款金额不能超过订单实付金额 ¥${maxAmount}`, 'error');
+      showToast(`退款金额不能超过${selectedItem ? '所选商品小计' : '订单实付金额'} ¥${maxAmount}`, 'error');
       return;
     }
 
@@ -87,6 +100,7 @@ export default function ApplyRefund() {
     try {
       await appRefundService.applyRefund(orderDetail.order.tenantId, {
         orderNo: orderDetail.order.orderNo,
+        orderItemId: selectedItem ? selectedItem.id : undefined,
         refundType,
         refundAmount,
         reason,
@@ -345,7 +359,23 @@ export default function ApplyRefund() {
                       <input
                         type="radio"
                         checked={refundType === item.type}
-                        onChange={() => setRefundType(item.type)}
+                        onChange={() => {
+                          setRefundType(item.type);
+                          if (item.type === 'RETURN_REFUND') {
+                            // 单商品订单自动选中；多商品由用户选择
+                            const items = orderDetail?.items ?? [];
+                            const autoItem = items.length === 1 ? items[0] : null;
+                            setSelectedItemId(autoItem ? autoItem.id : null);
+                            if (autoItem) {
+                              setRefundAmount(autoItem.subtotal);
+                            }
+                          } else {
+                            setSelectedItemId(null);
+                            if (orderDetail) {
+                              setRefundAmount(orderDetail.order.payableAmount ?? orderDetail.order.totalAmount);
+                            }
+                          }
+                        }}
                         className="sr-only"
                       />
                       <span className="text-sm font-bold text-slate-900">{item.label}</span>
@@ -354,6 +384,37 @@ export default function ApplyRefund() {
                   ))}
                 </div>
               </div>
+
+              {/* 退货退款：选择要退回的商品（后端按订单项回补门店库存） */}
+              {refundType === 'RETURN_REFUND' && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-sm font-bold text-slate-700">选择退回商品</span>
+                  <div className="flex flex-col gap-2">
+                    {(orderDetail?.items ?? []).map((item) => (
+                      <label
+                        key={item.id}
+                        className={`flex cursor-pointer items-center justify-between rounded-2xl border-2 p-4 transition-all ${
+                          selectedItemId === item.id ? 'border-primary bg-white ring-4 ring-primary/5' : 'border-slate-100 bg-slate-50/50 hover:border-slate-200'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          checked={selectedItemId === item.id}
+                          onChange={() => {
+                            setSelectedItemId(item.id);
+                            setRefundAmount(item.subtotal);
+                          }}
+                          className="sr-only"
+                        />
+                        <span className="text-sm font-bold text-slate-900">{item.productName}</span>
+                        <span className="text-xs text-slate-500">
+                          x{item.quantity} · 小计 {formatCurrency(item.subtotal)}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 <label htmlFor="evidenceUrls" className="text-sm font-bold text-slate-700">

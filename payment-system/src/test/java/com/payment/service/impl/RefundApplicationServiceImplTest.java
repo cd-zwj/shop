@@ -133,6 +133,24 @@ class RefundApplicationServiceImplTest {
     }
 
     @Test
+    void testCreateRefund_退货退款缺订单项被拦截() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        RefundApplicationServiceImpl service = service(refundMapper, salesOrderMapper, mock(SalesOrderItemMapper.class));
+
+        when(salesOrderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(paidOrder());
+
+        // 退货退款必须关联订单项，否则退款完成后无法回补门店库存
+        RefundCreateDTO dto = refundDTO();
+        dto.setRefundType("RETURN_REFUND");
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createRefund(USER_ID, TENANT_ID, dto));
+        assertEquals("退货退款需选择具体商品", exception.getMessage());
+        verify(refundMapper, never()).insert(any(RefundApplication.class));
+    }
+
+    @Test
     void testCreateRefund_超过可退余额被拦截() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
         SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);

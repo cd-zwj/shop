@@ -97,9 +97,13 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public RefundApplication createRefund(Long platformUserId, Long tenantId, RefundCreateDTO dto) {
+        // FOR UPDATE 锁订单行：同一订单的退款创建在事务内串行化，
+        // 防止“整单退款”与“单项退款”并发提交穿透活跃退款互斥检查
+        // （两者分别命中不同的生成列唯一键，互不冲突，先查后插挡不住）。
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
                 .eq(SalesOrder::getOrderNo, dto.getOrderNo())
-                .eq(SalesOrder::getTenantId, tenantId));
+                .eq(SalesOrder::getTenantId, tenantId)
+                .last(" FOR UPDATE"));
         if (salesOrder == null) {
             throw new BusinessException("订单不存在");
         }
@@ -110,6 +114,13 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
             throw new BusinessException("当前订单状态不允许退款");
         }
 
+        // 校验退款类型合法；退货退款必须落到具体订单项，
+        // 否则退款完成后无法按订单项回补门店库存（账实不符）。
+        validateRefundType(dto.getRefundType());
+        if ("RETURN_REFUND".equals(dto.getRefundType()) && dto.getOrderItemId() == null) {
+            throw new BusinessException("退货退款需选择具体商品");
+        }
+
         SalesOrderItem refundItem = validateRefundItem(dto.getOrderItemId(), salesOrder);
         ensureNoActiveRefund(salesOrder.getOrderNo(), dto.getOrderItemId(), tenantId);
 
@@ -117,9 +128,6 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if (dto.getRefundAmount().compareTo(refundableAmount) > 0) {
             throw new BusinessException("退款金额不能超过订单可退余额");
         }
-
-        // 校验退款类型合法
-        validateRefundType(dto.getRefundType());
 
         // 先构建实体，通过 INSERT 唯一约束防止并发重复退款
         RefundApplication app = new RefundApplication();
