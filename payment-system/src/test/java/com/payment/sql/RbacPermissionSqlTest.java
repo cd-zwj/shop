@@ -5,21 +5,27 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RbacPermissionSqlTest {
 
     @Test
-    void rbacSeedShouldContainAdminMarketingPermissionsAndRoleGrant() throws IOException {
+    void rbacSeedShouldContainAdminMarketingPermissionsWithoutDuplicateRoleGrant() throws IOException {
         String sql = Files.readString(Path.of("sql", "12_rbac_permission.sql"));
 
         assertTrue(sql.contains("'admin:marketing:list'"));
         assertTrue(sql.contains("'admin:marketing:create'"));
         assertTrue(sql.contains("'admin:marketing:update'"));
-        assertTrue(sql.contains("SELECT 3, id FROM sys_permission WHERE permission_code IN"));
-        assertTrue(sql.contains("'admin:marketing:list', 'admin:marketing:create', 'admin:marketing:update'"));
+        assertTrue(sql.contains("SELECT 3, id FROM sys_permission;"));
+        String normalizedSql = sql.replaceAll("\\s+", " ");
+        assertFalse(normalizedSql.contains(
+                        "SELECT 3, id FROM sys_permission WHERE permission_code IN "
+                                + "('admin:marketing:list', 'admin:marketing:create', 'admin:marketing:update')"),
+                "管理员全量授权已覆盖营销权限，不应再次插入同一角色权限");
     }
 
     @Test
@@ -52,14 +58,16 @@ class RbacPermissionSqlTest {
     }
 
     @Test
-    void importAllShouldReferenceEveryNumberedSqlScript() throws IOException {
+    void importAllShouldReferenceEveryLegacyOwnedNumberedSqlScript() throws IOException {
         String importAll = Files.readString(Path.of("sql", "import_all.sql"));
+        Set<String> flywayOwnedScripts = Set.of("38_asset_activity_query_indexes.sql");
         try (Stream<Path> paths = Files.list(Path.of("sql"))) {
             paths
                     .map(Path::getFileName)
                     .map(Path::toString)
                     .filter(name -> name.matches("\\d{2}_.+\\.sql"))
                     .filter(name -> !name.endsWith("_test_accounts.sql"))
+                    .filter(name -> !flywayOwnedScripts.contains(name))
                     .forEach(name -> assertTrue(importAll.contains("SOURCE " + name + ";"), name + " should be sourced"));
         }
     }

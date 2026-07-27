@@ -140,8 +140,8 @@ spring:
 # Flyway 数据库迁移
 spring.flyway:
   enabled: ${FLYWAY_ENABLED:true}
-  baseline-on-migrate: true
-  baseline-version: 0
+  baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+  baseline-version: 12
   locations: classpath:db/migration
 
 # MyBatis Plus配置

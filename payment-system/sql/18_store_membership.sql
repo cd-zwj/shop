@@ -106,6 +106,29 @@ CREATE TABLE IF NOT EXISTS `member_growth_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='会员成长值日志表';
 
 -- 兼容已有数据库：给 member_level 补降级与有效期字段
-ALTER TABLE `member_level`
-  ADD COLUMN IF NOT EXISTS `downgrade_growth` INT NOT NULL DEFAULT '0' COMMENT '降级阈值，成长值低于该值时降级',
-  ADD COLUMN IF NOT EXISTS `level_validity_days` INT DEFAULT NULL COMMENT '等级有效期天数，NULL表示长期有效';
+SET @schema_name = DATABASE();
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `member_level` ADD COLUMN `downgrade_growth` INT NOT NULL DEFAULT ''0'' COMMENT ''降级阈值，成长值低于该值时降级''',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = @schema_name
+    AND table_name = 'member_level'
+    AND column_name = 'downgrade_growth'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `member_level` ADD COLUMN `level_validity_days` INT DEFAULT NULL COMMENT ''等级有效期天数，NULL表示长期有效''',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = @schema_name
+    AND table_name = 'member_level'
+    AND column_name = 'level_validity_days'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

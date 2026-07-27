@@ -23,9 +23,6 @@ CREATE TABLE IF NOT EXISTS order_delivery_record (
     product_name VARCHAR(200) NULL COMMENT '商品名称快照',
     status VARCHAR(32) NOT NULL COMMENT '自提凭证状态：DELIVERED/CONFIRMED/REVOKED/FAILED',
     payload TEXT NOT NULL COMMENT 'JSON 自提凭证：pickupCode、storeId',
-    pickup_code_hash VARCHAR(64) NULL COMMENT '取货码 SHA-256 哈希（hex），核销校验与唯一性依据',
-    store_id BIGINT NULL COMMENT '自提门店 ID',
-    verified_by BIGINT NULL COMMENT '核销人（平台用户 ID）',
     fail_reason VARCHAR(500) NULL COMMENT '失败原因',
     retry_count INT NOT NULL DEFAULT 0 COMMENT '重试次数',
     delivered_time DATETIME NULL COMMENT '取货凭证生成时间',
@@ -37,7 +34,6 @@ CREATE TABLE IF NOT EXISTS order_delivery_record (
     INDEX idx_tenant_user (tenant_id, platform_user_id),
     INDEX idx_order (order_id),
     UNIQUE KEY uk_tenant_item (tenant_id, order_item_id),
-    UNIQUE KEY uk_tenant_pickup_hash (tenant_id, pickup_code_hash),
     INDEX idx_tenant_status (tenant_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   COMMENT='到店自提凭证记录';

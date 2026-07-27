@@ -150,7 +150,6 @@ CREATE TABLE IF NOT EXISTS `sales_order` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_order_no_v1` (`order_no`),
   KEY `idx_sales_tenant_user` (`tenant_id`, `platform_user_id`),
-  KEY `idx_sales_order_expire_scan` (`order_status`, `pay_status`, `expire_time`, `id`),
   KEY `idx_sales_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='消费订单表';
 
@@ -341,11 +340,32 @@ CREATE TABLE IF NOT EXISTS `dead_letter_task` (
 -- ========================================
 -- 兼容已有数据库：给 tenant_member 补 member_level 列
 -- ========================================
-ALTER TABLE `tenant_member`
-  ADD COLUMN IF NOT EXISTS `member_level` INT DEFAULT 1 COMMENT '会员等级（关联 member_level.id）';
+SET @schema_name = DATABASE();
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `tenant_member` ADD COLUMN `member_level` INT DEFAULT 1 COMMENT ''会员等级（关联 member_level.id）''',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = @schema_name
+    AND table_name = 'tenant_member'
+    AND column_name = 'member_level'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 -- ========================================
 -- 兼容已有数据库：给 member_points_log 补积分过期时间
 -- ========================================
-ALTER TABLE `member_points_log`
-  ADD COLUMN IF NOT EXISTS `expire_time` DATETIME DEFAULT NULL COMMENT '积分过期时间';
+SET @sql = (
+  SELECT IF(COUNT(*) = 0,
+    'ALTER TABLE `member_points_log` ADD COLUMN `expire_time` DATETIME DEFAULT NULL COMMENT ''积分过期时间''',
+    'SELECT 1')
+  FROM information_schema.columns
+  WHERE table_schema = @schema_name
+    AND table_name = 'member_points_log'
+    AND column_name = 'expire_time'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;

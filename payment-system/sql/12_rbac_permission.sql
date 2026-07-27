@@ -176,11 +176,6 @@ SELECT 2, id FROM sys_permission WHERE permission_code IN (
 INSERT INTO sys_role_permission (role_id, permission_id)
 SELECT 3, id FROM sys_permission;
 
--- 管理员营销模块权限（幂等，重复授权不影响）
-INSERT INTO sys_role_permission (role_id, permission_id)
-SELECT 3, id FROM sys_permission WHERE permission_code IN
-    ('admin:marketing:list', 'admin:marketing:create', 'admin:marketing:update');
-
 -- =============================================
 -- 更新现有用户的角色 (根据 userType)
 -- userType: 1=普通用户, 2=管理员, 3=商家

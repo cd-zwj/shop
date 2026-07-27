@@ -1,4 +1,72 @@
--- RAG document module schema.
+-- Ensure local and upgraded databases contain columns/tables required by
+-- virtual product delivery and the RAG document module.
+
+SET @schema_name = DATABASE();
+
+SET @sql = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE product ADD COLUMN virtual_type_id BIGINT NULL COMMENT ''虚拟商品类型ID'' AFTER store_id',
+        'SELECT 1')
+    FROM information_schema.columns
+    WHERE table_schema = @schema_name
+      AND table_name = 'product'
+      AND column_name = 'virtual_type_id'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE product ADD COLUMN virtual_category_id BIGINT NULL COMMENT ''虚拟商品分类ID'' AFTER virtual_type_id',
+        'SELECT 1')
+    FROM information_schema.columns
+    WHERE table_schema = @schema_name
+      AND table_name = 'product'
+      AND column_name = 'virtual_category_id'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE product ADD COLUMN fulfillment_mode VARCHAR(32) NULL COMMENT ''履约形态: ONLINE_VIRTUAL/OFFLINE_SERVICE/EXPRESS_DELIVERY'' AFTER virtual_category_id',
+        'SELECT 1')
+    FROM information_schema.columns
+    WHERE table_schema = @schema_name
+      AND table_name = 'product'
+      AND column_name = 'fulfillment_mode'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE product ADD INDEX idx_product_virtual_type (tenant_id, virtual_type_id)',
+        'SELECT 1')
+    FROM information_schema.statistics
+    WHERE table_schema = @schema_name
+      AND table_name = 'product'
+      AND index_name = 'idx_product_virtual_type'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE product ADD INDEX idx_product_fulfillment_mode (tenant_id, fulfillment_mode)',
+        'SELECT 1')
+    FROM information_schema.statistics
+    WHERE table_schema = @schema_name
+      AND table_name = 'product'
+      AND index_name = 'idx_product_fulfillment_mode'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS rag_unit (
     id VARCHAR(36) PRIMARY KEY COMMENT '主键ID',

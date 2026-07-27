@@ -16,8 +16,22 @@ CREATE TABLE IF NOT EXISTS `platform_auth_provider` (
   UNIQUE KEY `uk_provider_code` (`provider_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台第三方登录方式表';
 
-ALTER TABLE `platform_user_auth`
-    ADD COLUMN IF NOT EXISTS `provider_id` BIGINT(20) DEFAULT NULL COMMENT '第三方登录方式ID' AFTER `platform_user_id`;
+SET @schema_name = DATABASE();
+SET @provider_id_exists = (
+    SELECT COUNT(1)
+    FROM information_schema.columns
+    WHERE table_schema = @schema_name
+      AND table_name = 'platform_user_auth'
+      AND column_name = 'provider_id'
+);
+SET @provider_id_sql = IF(
+    @provider_id_exists = 0,
+    'ALTER TABLE `platform_user_auth` ADD COLUMN `provider_id` BIGINT(20) DEFAULT NULL COMMENT ''第三方登录方式ID'' AFTER `platform_user_id`',
+    'SELECT 1'
+);
+PREPARE provider_column_stmt FROM @provider_id_sql;
+EXECUTE provider_column_stmt;
+DEALLOCATE PREPARE provider_column_stmt;
 
 SET @provider_key_index_exists = (
     SELECT COUNT(1)

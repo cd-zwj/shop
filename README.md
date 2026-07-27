@@ -30,10 +30,17 @@
 ```bash
 cd payment-system
 
-# 初始化数据库
-mysql -u root -p < sql/import_all.sql
+# 初始化数据库（SOURCE 路径相对 sql 目录解析）
+cd sql
+mysql -u root -p < import_all.sql
+cd ..
 
-# 启动（默认 dev profile，Flyway 会自动执行 V1-V24 增量迁移）
+# 仅限刚执行 import_all.sql 的全新库：显式允许在 V12 建立基线
+$env:SPRING_FLYWAY_BASELINE_ON_MIGRATE = "true"
+mvn spring-boot:run
+Remove-Item Env:SPRING_FLYWAY_BASELINE_ON_MIGRATE
+
+# 后续启动直接执行，Flyway 默认禁止对未知非空库自动建基线
 mvn spring-boot:run
 
 # API 文档（需开启 Swagger）
@@ -62,7 +69,7 @@ docker-compose up -d
 
 本地 Docker 默认关闭 Elasticsearch，商品搜索会降级到 MySQL 模糊查询。AI/Milvus、OAuth、微信支付、线上支付回调和真实短信服务需要额外第三方配置，本地开发可以不启用。
 
-`sql/import_all.sql` 负责基础表和初始数据；后端启动时 Flyway 会按版本执行 `payment-system/src/main/resources/db/migration` 中的增量迁移，其中包括实体商品、门店库存、履约、评价和售后表结构。不要在生产环境手工跳过 Flyway。
+`sql/import_all.sql` 负责 V12 基础快照和初始数据；首次启动显式建立 V12 基线后，Flyway 会执行 `payment-system/src/main/resources/db/migration` 中的 V13+ 增量迁移，其中包括 RAG、会员券规则、平台费、实体商品、门店库存、履约、评价、售后和支付回调审计表结构。不要在生产环境手工跳过 Flyway，也不要修改已应用的迁移文件。
 
 ## 本地模式能力边界
 
