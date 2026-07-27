@@ -4,8 +4,11 @@ import com.payment.util.JsonUtils;
 import com.payment.common.BusinessException;
 import com.payment.common.Result;
 import com.payment.dto.PaymentCallbackDTO;
+import com.payment.enums.PaymentCallbackFailureReasonEnum;
 import com.payment.service.PaymentBillV1Service;
+import com.payment.service.PaymentCallbackAuditService;
 import com.payment.service.PaymentSignatureVerifier;
+import com.payment.util.PaymentCallbackPayloadUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -27,38 +30,32 @@ public class V1OpenPaymentController {
 
     private final PaymentBillV1Service paymentBillV1Service;
     private final PaymentSignatureVerifier signatureVerifier;
+    private final PaymentCallbackAuditService callbackAuditService;
 
     @PostMapping("/callbacks/{channelCode}")
     public Result<Void> handleCallback(@PathVariable String channelCode,
                                        @RequestBody PaymentCallbackDTO dto,
                                        @RequestHeader Map<String, String> headers) {
+        verifyPayloadSize(channelCode, dto);
         verifySignature(channelCode, dto, headers);
-        log.info("支付回调验签通过, channel={}, billNo={}", channelCode, dto.getBillNo());
+        log.info("支付回调验签通过, channel={}", channelCode);
         paymentBillV1Service.handleCallback(channelCode, dto);
         return Result.success();
     }
 
     @PostMapping("/callbacks/alipay-page")
     public String handleAlipayPageCallback(@RequestParam Map<String, String> params) {
-        // 支付宝页面回调验签
-        if (!signatureVerifier.verifyAlipayCallback(params)) {
-            log.warn("支付宝回调验签失败, params={}", params);
-            throw new BusinessException("回调验签失败");
-        }
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo(params.get("out_trade_no"));
-        // notify_id 为空时 fallback 到 trade_no + out_trade_no 组合键
         String notifyId = params.get("notify_id");
-        if (notifyId == null || notifyId.isEmpty()) {
-            notifyId = params.get("trade_no") + ":" + params.get("out_trade_no");
-            log.warn("支付宝回调缺少 notify_id, 使用 fallback: {}", notifyId);
-        }
         dto.setCallbackRequestId(notifyId);
         dto.setThirdPartyBillNo(params.get("trade_no"));
         String tradeStatus = params.get("trade_status");
         dto.setSuccess("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus));
         dto.setTerminalFailure("TRADE_CLOSED".equals(tradeStatus));
         dto.setRawBody(JsonUtils.toJson(params));
+        verifyPayloadSize("ALIPAY_PAGE", dto);
+        verifyAlipaySignature(params, dto);
         paymentBillV1Service.handleCallback("ALIPAY_PAGE", dto);
         return "success";
     }
@@ -107,19 +104,70 @@ public class V1OpenPaymentController {
         dto.setRawBody(JsonUtils.toJson(params));
 
         // 第三方渠道回调验签
-        if (!signatureVerifier.verify("EXT_PROVIDER", dto, params)) {
-            log.warn("第三方渠道回调验签失败, billNo={}", dto.getBillNo());
-            throw new BusinessException("回调验签失败");
-        }
+        verifyPayloadSize("EXT_PROVIDER", dto);
+        verifySignature("EXT_PROVIDER", dto, params);
         paymentBillV1Service.handleCallback("EXT_PROVIDER", dto);
         return "success";
     }
 
     private void verifySignature(String channelCode, PaymentCallbackDTO dto, Map<String, String> headers) {
-        boolean valid = signatureVerifier.verify(channelCode, dto, headers);
-        if (!valid) {
-            log.warn("支付回调验签失败, channel={}, billNo={}", channelCode, dto.getBillNo());
+        boolean valid;
+        try {
+            valid = signatureVerifier.verify(channelCode, dto, headers);
+        } catch (RuntimeException e) {
+            recordRejectedSafely(channelCode, dto,
+                    PaymentCallbackFailureReasonEnum.SIGNATURE_VERIFICATION_ERROR);
+            log.warn("支付回调验签异常, channel={}, payloadSha256={}",
+                    channelCode, PaymentCallbackPayloadUtil.sha256(dto == null ? null : dto.getRawBody()));
             throw new BusinessException("回调验签失败");
+        }
+        if (!valid) {
+            rejectCallback(channelCode, dto, PaymentCallbackFailureReasonEnum.SIGNATURE_INVALID);
+        }
+    }
+
+    private void verifyPayloadSize(String channelCode, PaymentCallbackDTO dto) {
+        if (PaymentCallbackPayloadUtil.isWithinLimit(dto == null ? null : dto.getRawBody())) {
+            return;
+        }
+        recordRejectedSafely(channelCode, dto, PaymentCallbackFailureReasonEnum.PAYLOAD_INVALID);
+        throw new BusinessException("支付回调报文过大");
+    }
+
+    private void verifyAlipaySignature(Map<String, String> params, PaymentCallbackDTO dto) {
+        boolean valid;
+        try {
+            valid = signatureVerifier.verifyAlipayCallback(params);
+        } catch (RuntimeException e) {
+            recordRejectedSafely("ALIPAY_PAGE", dto,
+                    PaymentCallbackFailureReasonEnum.SIGNATURE_VERIFICATION_ERROR);
+            log.warn("支付宝回调验签异常, payloadSha256={}",
+                    PaymentCallbackPayloadUtil.sha256(dto.getRawBody()));
+            throw new BusinessException("回调验签失败");
+        }
+        if (!valid) {
+            rejectCallback("ALIPAY_PAGE", dto, PaymentCallbackFailureReasonEnum.SIGNATURE_INVALID);
+        }
+    }
+
+    private void rejectCallback(String channelCode,
+                                PaymentCallbackDTO dto,
+                                PaymentCallbackFailureReasonEnum failureReason) {
+        recordRejectedSafely(channelCode, dto, failureReason);
+        log.warn("支付回调被拒绝, channel={}, reason={}, payloadSha256={}",
+                channelCode, failureReason.name(),
+                PaymentCallbackPayloadUtil.sha256(dto == null ? null : dto.getRawBody()));
+        throw new BusinessException("回调验签失败");
+    }
+
+    private void recordRejectedSafely(String channelCode,
+                                      PaymentCallbackDTO dto,
+                                      PaymentCallbackFailureReasonEnum failureReason) {
+        try {
+            callbackAuditService.recordRejected(channelCode, dto, failureReason);
+        } catch (RuntimeException auditException) {
+            log.error("支付回调拒绝审计写入失败, channel={}, reason={}",
+                    channelCode, failureReason.name(), auditException);
         }
     }
 

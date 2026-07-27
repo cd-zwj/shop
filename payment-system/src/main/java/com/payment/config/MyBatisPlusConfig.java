@@ -53,6 +53,7 @@ public class MyBatisPlusConfig {
             "unified_wallet_log",
             "payment_bill",
             "payment_callback_record",
+            "payment_callback_failure_audit",
             "refund_order",
             "refund_record",
             "refund_callback_record",

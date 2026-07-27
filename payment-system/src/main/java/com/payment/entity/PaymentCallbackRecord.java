@@ -33,7 +33,7 @@ public class PaymentCallbackRecord implements Serializable {
     /** 回调请求唯一标识，用于幂等校验，防止同一回调重复处理 */
     private String callbackRequestId;
 
-    /** 回调原始报文 JSON，完整保存第三方推送的请求体，便于问题排查 */
+    /** 已验签回调报文的摘要与字节数，不保存原始敏感报文 */
     private String callbackBody;
 
     /**

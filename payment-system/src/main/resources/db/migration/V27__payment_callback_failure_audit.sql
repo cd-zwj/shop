@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS payment_callback_failure_audit (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    event_id VARCHAR(64) NOT NULL COMMENT '服务端生成的审计事件 ID',
+    channel_code VARCHAR(32) NOT NULL COMMENT '归一化支付渠道',
+    failure_reason VARCHAR(64) NOT NULL COMMENT '固定枚举拒绝原因',
+    verify_status VARCHAR(32) NOT NULL COMMENT '签名验证状态',
+    candidate_bill_no VARCHAR(64) NULL COMMENT '未信任的候选支付单号',
+    provider_request_id VARCHAR(128) NULL COMMENT '未信任的渠道请求 ID',
+    payload_sha256 CHAR(64) NOT NULL COMMENT '原始报文 SHA-256，不保存报文原文',
+    payload_size INT NOT NULL COMMENT '原始报文字节数',
+    occurrence_count BIGINT NOT NULL DEFAULT 1 COMMENT '窗口内同类拒绝次数',
+    window_start DATETIME NOT NULL COMMENT '分钟聚合窗口',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+    last_time DATETIME NOT NULL COMMENT '最近一次接收时间',
+    expire_time DATETIME NOT NULL COMMENT '过期清理时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_callback_failure_event (event_id),
+    UNIQUE KEY uk_callback_failure_window (channel_code, failure_reason, window_start),
+    KEY idx_callback_failure_expire (expire_time),
+    KEY idx_callback_failure_digest (channel_code, payload_sha256)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调拒绝安全审计表';

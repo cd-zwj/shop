@@ -18,6 +18,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
 import com.payment.service.OrderPaymentFailureService;
+import com.payment.service.PaymentCallbackAuditService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
@@ -72,7 +73,8 @@ class PaymentBillV1ServiceImplTest {
                 List.of(provider),
                 refundService,
                 orderPaymentFailureService,
-                mock(RechargeOrderV1Mapper.class)
+                mock(RechargeOrderV1Mapper.class),
+                mock(PaymentCallbackAuditService.class)
         );
 
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
@@ -128,7 +130,8 @@ class PaymentBillV1ServiceImplTest {
                 List.of(provider),
                 refundService,
                 orderPaymentFailureService,
-                rechargeOrderV1Mapper
+                rechargeOrderV1Mapper,
+                mock(PaymentCallbackAuditService.class)
         );
 
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
@@ -177,7 +180,8 @@ class PaymentBillV1ServiceImplTest {
                 paymentBillMapper, callbackRecordMapper, salesOrderMapper,
                 new CompensationTaskFactoryImpl(compensationTaskMapper),
                 new OutboxPublisherImpl(messageOutboxMapper), List.of(provider), refundService,
-                orderPaymentFailureService, rechargeOrderV1Mapper);
+                orderPaymentFailureService, rechargeOrderV1Mapper,
+                mock(PaymentCallbackAuditService.class));
 
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo("PB225");
@@ -221,7 +225,8 @@ class PaymentBillV1ServiceImplTest {
                 paymentBillMapper, callbackRecordMapper, salesOrderMapper,
                 new CompensationTaskFactoryImpl(compensationTaskMapper),
                 new OutboxPublisherImpl(messageOutboxMapper), List.of(provider), refundService,
-                orderPaymentFailureService, mock(RechargeOrderV1Mapper.class));
+                orderPaymentFailureService, mock(RechargeOrderV1Mapper.class),
+                mock(PaymentCallbackAuditService.class));
 
         PaymentCallbackDTO dto = new PaymentCallbackDTO();
         dto.setBillNo("PB250");
@@ -283,7 +288,8 @@ class PaymentBillV1ServiceImplTest {
                 List.of(provider),
                 refundService,
                 orderPaymentFailureService,
-                mock(RechargeOrderV1Mapper.class)
+                mock(RechargeOrderV1Mapper.class),
+                mock(PaymentCallbackAuditService.class)
         );
 
         PaymentCallbackDTO pendingDto = new PaymentCallbackDTO();

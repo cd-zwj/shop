@@ -22,6 +22,7 @@ import com.payment.enums.PaymentChannelCodeEnum;
 import com.payment.enums.PaymentLateCallbackActionEnum;
 import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.PaymentBizTypeEnum;
+import com.payment.enums.PaymentCallbackFailureReasonEnum;
 import com.payment.mapper.PaymentBillMapper;
 import com.payment.mapper.PaymentCallbackRecordMapper;
 import com.payment.mapper.RechargeOrderV1Mapper;
@@ -30,10 +31,12 @@ import com.payment.service.CompensationTaskFactory;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.OrderPaymentFailureService;
 import com.payment.service.PaymentBillV1Service;
+import com.payment.service.PaymentCallbackAuditService;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
 import com.payment.service.outbox.OutboxMessageCommand;
 import com.payment.util.BizNoGenerator;
+import com.payment.util.PaymentCallbackPayloadUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -74,6 +77,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     private final RefundService refundService;
     private final OrderPaymentFailureService orderPaymentFailureService;
     private final RechargeOrderV1Mapper rechargeOrderV1Mapper;
+    private final PaymentCallbackAuditService callbackAuditService;
 
     private static final String CHANNEL_PAYMENT_FAILED_REMARK = "支付渠道返回失败";
 
@@ -143,40 +147,80 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void handleCallback(String channelCode, PaymentCallbackDTO callbackDTO) {
-        PaymentBill paymentBill = getByBillNo(callbackDTO.getBillNo());
-        if (paymentBill == null) {
-            throw new BusinessException("支付单不存在");
+        if (!PaymentCallbackPayloadUtil.isWithinLimit(callbackDTO == null ? null : callbackDTO.getRawBody())) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.PAYLOAD_INVALID);
+            throw new BusinessException("支付回调报文过大");
         }
-        if (!channelCode.equals(paymentBill.getChannelCode())) {
-            throw new BusinessException("支付回调渠道与支付单不一致");
-        }
-
         PaymentProvider provider = getProvider(channelCode);
-        PaymentCallbackRecord existingRecord = callbackRecordMapper.selectOne(new LambdaQueryWrapper<PaymentCallbackRecord>()
-                .eq(PaymentCallbackRecord::getChannelCode, channelCode)
-                .eq(PaymentCallbackRecord::getCallbackRequestId, callbackDTO.getCallbackRequestId()));
-        if (existingRecord != null) {
-            return;
+        boolean verified;
+        try {
+            verified = provider.verifyCallback(callbackDTO);
+        } catch (RuntimeException e) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.SIGNATURE_VERIFICATION_ERROR);
+            throw new BusinessException("支付回调验签失败");
         }
-
-        boolean verified = provider.verifyCallback(callbackDTO);
-
-        PaymentCallbackRecord callbackRecord = new PaymentCallbackRecord();
-        callbackRecord.setBillNo(paymentBill.getBillNo());
-        callbackRecord.setChannelCode(channelCode);
-        callbackRecord.setCallbackRequestId(callbackDTO.getCallbackRequestId());
-        callbackRecord.setCallbackBody(callbackDTO.getRawBody());
-        callbackRecord.setVerifyStatus(verified ? MessageProcessStatusEnum.SUCCESS.name() : MessageProcessStatusEnum.FAILED.name());
-        callbackRecord.setProcessStatus(MessageProcessStatusEnum.PENDING.name());
-        callbackRecordMapper.insert(callbackRecord);
-
         if (!verified) {
-            callbackRecord.setProcessStatus(MessageProcessStatusEnum.FAILED.name());
-            callbackRecordMapper.updateById(callbackRecord);
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.SIGNATURE_INVALID);
             throw new BusinessException("支付回调验签失败");
         }
 
-        VerifiedCallback verifiedCallback = resolveVerifiedCallback(callbackDTO);
+        VerifiedCallback verifiedCallback;
+        try {
+            verifiedCallback = resolveVerifiedCallback(channelCode, callbackDTO);
+        } catch (BusinessException e) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.SIGNED_PAYLOAD_MISMATCH);
+            throw e;
+        }
+
+        PaymentBill paymentBill = getByBillNo(verifiedCallback.billNo());
+        if (paymentBill == null) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.SIGNED_BILL_NOT_FOUND);
+            throw new BusinessException("支付单不存在");
+        }
+        if (!channelCode.equals(paymentBill.getChannelCode())) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.SIGNED_PAYLOAD_MISMATCH);
+            throw new BusinessException("支付回调渠道与支付单不一致");
+        }
+
+        PaymentCallbackRecord existingRecord = callbackRecordMapper.selectOne(new LambdaQueryWrapper<PaymentCallbackRecord>()
+                .eq(PaymentCallbackRecord::getChannelCode, channelCode)
+                .eq(PaymentCallbackRecord::getCallbackRequestId, verifiedCallback.callbackRequestId()));
+        if (existingRecord == null && isLegacyCallbackRequestId(verifiedCallback.signedRequestId())) {
+            existingRecord = callbackRecordMapper.selectOne(new LambdaQueryWrapper<PaymentCallbackRecord>()
+                    .eq(PaymentCallbackRecord::getChannelCode, channelCode)
+                    .eq(PaymentCallbackRecord::getCallbackRequestId, verifiedCallback.signedRequestId()));
+        }
+        if (existingRecord != null && !paymentBill.getBillNo().equals(existingRecord.getBillNo())) {
+            recordRejectedSafely(channelCode, callbackDTO,
+                    PaymentCallbackFailureReasonEnum.IDEMPOTENCY_CONFLICT);
+            throw new BusinessException("支付回调幂等键归属冲突");
+        }
+        if (existingRecord != null
+                && MessageProcessStatusEnum.SUCCESS.name().equals(existingRecord.getProcessStatus())) {
+            return;
+        }
+
+        PaymentCallbackRecord callbackRecord = new PaymentCallbackRecord();
+        if (existingRecord != null) {
+            callbackRecord.setId(existingRecord.getId());
+        }
+        callbackRecord.setBillNo(paymentBill.getBillNo());
+        callbackRecord.setChannelCode(channelCode);
+        callbackRecord.setCallbackRequestId(verifiedCallback.callbackRequestId());
+        callbackRecord.setCallbackBody(PaymentCallbackPayloadUtil.auditMetadata(callbackDTO.getRawBody()));
+        callbackRecord.setVerifyStatus(MessageProcessStatusEnum.SUCCESS.name());
+        callbackRecord.setProcessStatus(MessageProcessStatusEnum.PENDING.name());
+        if (existingRecord == null) {
+            callbackRecordMapper.insert(callbackRecord);
+        } else {
+            callbackRecordMapper.updateById(callbackRecord);
+        }
 
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             callbackRecord.setProcessStatus(MessageProcessStatusEnum.SUCCESS.name());
@@ -193,7 +237,7 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         callbackRecordMapper.updateById(callbackRecord);
     }
 
-    private VerifiedCallback resolveVerifiedCallback(PaymentCallbackDTO callbackDTO) {
+    private VerifiedCallback resolveVerifiedCallback(String channelCode, PaymentCallbackDTO callbackDTO) {
         try {
             com.fasterxml.jackson.databind.JsonNode payload = JsonUtils.fromJsonTree(callbackDTO.getRawBody());
             String signedBillNo = firstNonBlank(
@@ -206,7 +250,14 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             String signedThirdPartyBillNo = firstNonBlank(
                     payload.path("trade_no").asText(null),
                     payload.path("thirdPartyBillNo").asText(null));
-            if (!callbackDTO.getBillNo().equals(signedBillNo)) {
+            String signedRequestId = firstNonBlank(
+                    payload.path("notify_id").asText(null),
+                    payload.path("notifyId").asText(null),
+                    payload.path("callbackRequestId").asText(null));
+            if (!isValidBillNo(signedBillNo)) {
+                throw new BusinessException("已验签报文中的支付账单号格式非法");
+            }
+            if (!signedBillNo.equals(callbackDTO.getBillNo())) {
                 throw new BusinessException("支付账单号与已验签报文不一致");
             }
 
@@ -223,7 +274,14 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
                     && !callbackDTO.getThirdPartyBillNo().equals(signedThirdPartyBillNo)) {
                 throw new BusinessException("渠道交易号与已验签报文不一致");
             }
-            return new VerifiedCallback(signedBillNo, signedThirdPartyBillNo, outcome);
+            if (callbackDTO.getCallbackRequestId() != null && signedRequestId != null
+                    && !callbackDTO.getCallbackRequestId().equals(signedRequestId)) {
+                throw new BusinessException("回调请求号与已验签报文不一致");
+            }
+            String callbackRequestId = PaymentCallbackPayloadUtil.idempotencyKey(
+                    channelCode, signedBillNo, signedRequestId, callbackDTO.getRawBody());
+            return new VerifiedCallback(
+                    signedBillNo, signedThirdPartyBillNo, signedRequestId, callbackRequestId, outcome);
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
@@ -261,7 +319,30 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
 
     private record VerifiedCallback(String billNo,
                                     String thirdPartyBillNo,
+                                    String signedRequestId,
+                                    String callbackRequestId,
                                     CallbackOutcome outcome) {
+    }
+
+    private boolean isLegacyCallbackRequestId(String requestId) {
+        return requestId != null && !requestId.isBlank() && requestId.length() <= 128;
+    }
+
+    private boolean isValidBillNo(String billNo) {
+        return billNo != null
+                && billNo.length() <= 64
+                && billNo.matches("[A-Za-z0-9:_-]+");
+    }
+
+    private void recordRejectedSafely(String channelCode,
+                                      PaymentCallbackDTO callbackDTO,
+                                      PaymentCallbackFailureReasonEnum failureReason) {
+        try {
+            callbackAuditService.recordRejected(channelCode, callbackDTO, failureReason);
+        } catch (RuntimeException auditException) {
+            log.error("支付回调拒绝审计写入失败, channel={}, reason={}",
+                    channelCode, failureReason.name(), auditException);
+        }
     }
 
     /**

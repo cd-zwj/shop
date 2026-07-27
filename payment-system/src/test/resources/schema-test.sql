@@ -141,6 +141,26 @@ CREATE TABLE IF NOT EXISTS product_change_log (
   create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS payment_callback_failure_audit (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  event_id VARCHAR(64) NOT NULL UNIQUE,
+  channel_code VARCHAR(32) NOT NULL,
+  failure_reason VARCHAR(64) NOT NULL,
+  verify_status VARCHAR(32) NOT NULL,
+  candidate_bill_no VARCHAR(64) DEFAULT NULL,
+  provider_request_id VARCHAR(128) DEFAULT NULL,
+  payload_sha256 CHAR(64) NOT NULL,
+  payload_size INT NOT NULL,
+  occurrence_count BIGINT NOT NULL DEFAULT 1,
+  window_start TIMESTAMP NOT NULL,
+  create_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_time TIMESTAMP NOT NULL,
+  expire_time TIMESTAMP NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_callback_failure_window
+  ON payment_callback_failure_audit(channel_code, failure_reason, window_start);
+
 -- 测试种子数据
 
 MERGE INTO platform_user (id, user_no, username, phone, email, password_hash, status, deleted)

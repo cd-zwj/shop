@@ -230,7 +230,7 @@ CREATE TABLE IF NOT EXISTS `payment_callback_record` (
   `bill_no` VARCHAR(64) NOT NULL COMMENT '支付单号',
   `channel_code` VARCHAR(32) NOT NULL COMMENT '渠道编码',
   `callback_request_id` VARCHAR(128) NOT NULL COMMENT '回调请求ID',
-  `callback_body` TEXT COMMENT '回调报文',
+  `callback_body` TEXT COMMENT '已验签回调报文摘要与字节数',
   `verify_status` VARCHAR(32) NOT NULL COMMENT '验签状态',
   `process_status` VARCHAR(32) NOT NULL COMMENT '处理状态',
   `callback_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '回调时间',
@@ -238,6 +238,28 @@ CREATE TABLE IF NOT EXISTS `payment_callback_record` (
   UNIQUE KEY `uk_channel_request` (`channel_code`, `callback_request_id`),
   KEY `idx_callback_bill_no` (`bill_no`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调记录表';
+
+CREATE TABLE IF NOT EXISTS `payment_callback_failure_audit` (
+  `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `event_id` VARCHAR(64) NOT NULL COMMENT '服务端生成的审计事件ID',
+  `channel_code` VARCHAR(32) NOT NULL COMMENT '归一化支付渠道',
+  `failure_reason` VARCHAR(64) NOT NULL COMMENT '固定枚举拒绝原因',
+  `verify_status` VARCHAR(32) NOT NULL COMMENT '签名验证状态',
+  `candidate_bill_no` VARCHAR(64) DEFAULT NULL COMMENT '未信任的候选支付单号',
+  `provider_request_id` VARCHAR(128) DEFAULT NULL COMMENT '未信任的渠道请求ID',
+  `payload_sha256` CHAR(64) NOT NULL COMMENT '原始报文SHA-256，不保存报文原文',
+  `payload_size` INT NOT NULL COMMENT '原始报文字节数',
+  `occurrence_count` BIGINT NOT NULL DEFAULT 1 COMMENT '窗口内同类拒绝次数',
+  `window_start` DATETIME NOT NULL COMMENT '分钟聚合窗口',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '接收时间',
+  `last_time` DATETIME NOT NULL COMMENT '最近一次接收时间',
+  `expire_time` DATETIME NOT NULL COMMENT '过期清理时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_callback_failure_event` (`event_id`),
+  UNIQUE KEY `uk_callback_failure_window` (`channel_code`, `failure_reason`, `window_start`),
+  KEY `idx_callback_failure_expire` (`expire_time`),
+  KEY `idx_callback_failure_digest` (`channel_code`, `payload_sha256`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付回调拒绝安全审计表';
 
 CREATE TABLE IF NOT EXISTS `member_points_account` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
