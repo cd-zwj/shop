@@ -12,6 +12,7 @@ import com.payment.dto.PaymentCallbackDTO;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.PaymentBill;
 import com.payment.entity.PaymentCallbackRecord;
+import com.payment.entity.RechargeOrderV1;
 import com.payment.entity.SalesOrder;
 import com.payment.enums.CallbackStatusEnum;
 import com.payment.enums.MessageProcessStatusEnum;
@@ -23,9 +24,11 @@ import com.payment.enums.PaymentStatusReasonEnum;
 import com.payment.enums.PaymentBizTypeEnum;
 import com.payment.mapper.PaymentBillMapper;
 import com.payment.mapper.PaymentCallbackRecordMapper;
+import com.payment.mapper.RechargeOrderV1Mapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.CompensationTaskFactory;
 import com.payment.service.OutboxPublisher;
+import com.payment.service.OrderPaymentFailureService;
 import com.payment.service.PaymentBillV1Service;
 import com.payment.service.PaymentProvider;
 import com.payment.service.RefundService;
@@ -69,6 +72,10 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
     private final OutboxPublisher outboxPublisher;
     private final List<PaymentProvider> paymentProviders;
     private final RefundService refundService;
+    private final OrderPaymentFailureService orderPaymentFailureService;
+    private final RechargeOrderV1Mapper rechargeOrderV1Mapper;
+
+    private static final String CHANNEL_PAYMENT_FAILED_REMARK = "支付渠道返回失败";
 
     /**
      * 创建支付账单。
@@ -140,6 +147,9 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
         if (paymentBill == null) {
             throw new BusinessException("支付单不存在");
         }
+        if (!channelCode.equals(paymentBill.getChannelCode())) {
+            throw new BusinessException("支付回调渠道与支付单不一致");
+        }
 
         PaymentProvider provider = getProvider(channelCode);
         PaymentCallbackRecord existingRecord = callbackRecordMapper.selectOne(new LambdaQueryWrapper<PaymentCallbackRecord>()
@@ -166,15 +176,147 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             throw new BusinessException("支付回调验签失败");
         }
 
+        VerifiedCallback verifiedCallback = resolveVerifiedCallback(callbackDTO);
+
         if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
             callbackRecord.setProcessStatus(MessageProcessStatusEnum.SUCCESS.name());
             callbackRecordMapper.updateById(callbackRecord);
             return;
         }
 
-        handlePaidResult(paymentBill, callbackDTO.getThirdPartyBillNo(), CallbackStatusEnum.CALLBACK_SUCCESS.name());
+        if (CallbackOutcome.SUCCESS.equals(verifiedCallback.outcome())) {
+            handlePaidResult(paymentBill, verifiedCallback.thirdPartyBillNo(), CallbackStatusEnum.CALLBACK_SUCCESS.name());
+        } else if (CallbackOutcome.TERMINAL_FAILURE.equals(verifiedCallback.outcome())) {
+            handleFailedResult(paymentBill);
+        }
         callbackRecord.setProcessStatus(MessageProcessStatusEnum.SUCCESS.name());
         callbackRecordMapper.updateById(callbackRecord);
+    }
+
+    private VerifiedCallback resolveVerifiedCallback(PaymentCallbackDTO callbackDTO) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode payload = JsonUtils.fromJsonTree(callbackDTO.getRawBody());
+            String signedBillNo = firstNonBlank(
+                    payload.path("out_trade_no").asText(null),
+                    payload.path("billNo").asText(null));
+            String signedStatus = firstNonBlank(
+                    payload.path("trade_status").asText(null),
+                    payload.path("tradeStatus").asText(null),
+                    payload.path("status").asText(null));
+            String signedThirdPartyBillNo = firstNonBlank(
+                    payload.path("trade_no").asText(null),
+                    payload.path("thirdPartyBillNo").asText(null));
+            if (!callbackDTO.getBillNo().equals(signedBillNo)) {
+                throw new BusinessException("支付账单号与已验签报文不一致");
+            }
+
+            CallbackOutcome outcome = resolveCallbackOutcome(payload, signedStatus);
+            if (callbackDTO.getSuccess() != null
+                    && callbackDTO.getSuccess() != CallbackOutcome.SUCCESS.equals(outcome)) {
+                throw new BusinessException("支付成功结果与已验签报文不一致");
+            }
+            if (callbackDTO.getTerminalFailure() != null
+                    && callbackDTO.getTerminalFailure() != CallbackOutcome.TERMINAL_FAILURE.equals(outcome)) {
+                throw new BusinessException("支付失败结果与已验签报文不一致");
+            }
+            if (callbackDTO.getThirdPartyBillNo() != null && signedThirdPartyBillNo != null
+                    && !callbackDTO.getThirdPartyBillNo().equals(signedThirdPartyBillNo)) {
+                throw new BusinessException("渠道交易号与已验签报文不一致");
+            }
+            return new VerifiedCallback(signedBillNo, signedThirdPartyBillNo, outcome);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException("无法解析已验签的支付结果");
+        }
+    }
+
+    private CallbackOutcome resolveCallbackOutcome(com.fasterxml.jackson.databind.JsonNode payload,
+                                                    String signedStatus) {
+        String normalizedStatus = signedStatus == null ? "" : signedStatus.trim().toUpperCase();
+        if ("TRADE_SUCCESS".equals(normalizedStatus)
+                || "TRADE_FINISHED".equals(normalizedStatus)
+                || "SUCCESS".equals(normalizedStatus)) {
+            return CallbackOutcome.SUCCESS;
+        }
+        if ("TRADE_CLOSED".equals(normalizedStatus)
+                || "CLOSED".equals(normalizedStatus)
+                || "FAILED".equals(normalizedStatus)) {
+            return CallbackOutcome.TERMINAL_FAILURE;
+        }
+        if (payload.path("terminalFailure").asBoolean(false)) {
+            return CallbackOutcome.TERMINAL_FAILURE;
+        }
+        if (payload.path("success").asBoolean(false)) {
+            return CallbackOutcome.SUCCESS;
+        }
+        return CallbackOutcome.PENDING;
+    }
+
+    private enum CallbackOutcome {
+        SUCCESS,
+        TERMINAL_FAILURE,
+        PENDING
+    }
+
+    private record VerifiedCallback(String billNo,
+                                    String thirdPartyBillNo,
+                                    CallbackOutcome outcome) {
+    }
+
+    /**
+     * 失败裁决沿用成功链路的锁顺序：先锁订单，再更新订单、支付单并释放资源。
+     */
+    private void handleFailedResult(PaymentBill paymentBill) {
+        PaymentStatusReasonEnum reason = PaymentStatusReasonEnum.SALES_ORDER_PAYMENT_FAILED_REFUND_REQUIRED;
+        if (PaymentBizTypeEnum.SALES_ORDER.name().equals(paymentBill.getBizType())) {
+            SalesOrder order = salesOrderMapper.selectByOrderNoForUpdate(paymentBill.getBizNo());
+            if (order == null) {
+                throw new BusinessException("支付单关联订单不存在: " + paymentBill.getBizNo());
+            }
+            if (!java.util.Objects.equals(paymentBill.getTenantId(), order.getTenantId())
+                    || !java.util.Objects.equals(paymentBill.getPlatformUserId(), order.getPlatformUserId())) {
+                throw new BusinessException("支付单与订单归属不一致");
+            }
+            PaymentBill latestBill = getByBillNo(paymentBill.getBillNo());
+            if (latestBill != null) {
+                paymentBill = latestBill;
+            }
+            if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())
+                    || PayStatusEnum.SUCCESS.name().equals(order.getPayStatus())) {
+                return;
+            }
+            if (!orderPaymentFailureService.failAndRelease(paymentBill.getBizNo(), CHANNEL_PAYMENT_FAILED_REMARK)) {
+                return;
+            }
+        } else if (PaymentBizTypeEnum.RECHARGE.name().equals(paymentBill.getBizType())) {
+            RechargeOrderV1 rechargeOrder = rechargeOrderV1Mapper.selectByRechargeNoForUpdate(paymentBill.getBizNo());
+            if (rechargeOrder == null) {
+                throw new BusinessException("支付单关联充值单不存在: " + paymentBill.getBizNo());
+            }
+            PaymentBill latestBill = getByBillNo(paymentBill.getBillNo());
+            if (latestBill != null) {
+                paymentBill = latestBill;
+            }
+            if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())
+                    || PayStatusEnum.SUCCESS.name().equals(rechargeOrder.getBizStatus())) {
+                return;
+            }
+            if (rechargeOrderV1Mapper.failIfPending(paymentBill.getBizNo()) != 1) {
+                throw new BusinessException("充值失败状态并发更新，请重试: " + paymentBill.getBizNo());
+            }
+            reason = PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED;
+        } else {
+            throw new BusinessException("当前业务类型不支持支付失败处理: " + paymentBill.getBizType());
+        }
+
+        String extensionJson = buildClosedStatusReasonJson(paymentBill, reason);
+        int updated = paymentBillMapper.markFailedIfPending(
+                paymentBill.getBillNo(), CallbackStatusEnum.CALLBACK_SUCCESS.name(),
+                CHANNEL_PAYMENT_FAILED_REMARK, extensionJson);
+        if (updated != 1) {
+            throw new BusinessException("支付失败状态并发更新，请重试: " + paymentBill.getBillNo());
+        }
     }
 
     /**
@@ -358,7 +500,8 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
                 return;
             }
-            if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())) {
+            if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())
+                    || PayStatusEnum.FAILED.name().equals(paymentBill.getPayStatus())) {
                 PaymentStatusReasonEnum reason = resolveStatusReason(paymentBill);
                 if (reason == null) {
                     reason = PaymentStatusReasonEnum.MANUAL_REVIEW_REQUIRED;
@@ -399,8 +542,23 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             throw new BusinessException("当前订单状态不允许确认支付: " + order.getOrderStatus());
         }
 
+        if (PaymentBizTypeEnum.RECHARGE.name().equals(paymentBill.getBizType())) {
+            RechargeOrderV1 rechargeOrder = rechargeOrderV1Mapper.selectByRechargeNoForUpdate(paymentBill.getBizNo());
+            if (rechargeOrder == null) {
+                throw new BusinessException("支付单关联充值单不存在: " + paymentBill.getBizNo());
+            }
+            PaymentBill latestBill = getByBillNo(paymentBill.getBillNo());
+            if (latestBill != null) {
+                paymentBill = latestBill;
+            }
+            if (PayStatusEnum.SUCCESS.name().equals(paymentBill.getPayStatus())) {
+                return;
+            }
+        }
+
         PaymentStatusReasonEnum statusReason = resolveStatusReason(paymentBill);
-        if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())) {
+        if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())
+                || PayStatusEnum.FAILED.name().equals(paymentBill.getPayStatus())) {
             handleClosedBillLateSuccess(paymentBill, thirdPartyBillNo, callbackStatus, statusReason);
             return;
         }
@@ -485,7 +643,8 @@ public class PaymentBillV1ServiceImpl implements PaymentBillV1Service {
             clearStatusReason(paymentBill);
         }
         int updated;
-        if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())) {
+        if (PayStatusEnum.CLOSED.name().equals(paymentBill.getPayStatus())
+                || PayStatusEnum.FAILED.name().equals(paymentBill.getPayStatus())) {
             // 迟到支付：只记录渠道成功事实，不走正常业务成功更新条件。
             updated = paymentBillMapper.markLatePaidIfClosed(
                     paymentBill.getBillNo(), callbackStatus, thirdPartyBillNo, statusRemark);

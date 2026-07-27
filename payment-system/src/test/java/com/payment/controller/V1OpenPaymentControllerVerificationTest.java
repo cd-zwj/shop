@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,6 +23,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -105,5 +107,24 @@ class V1OpenPaymentControllerVerificationTest {
                 .andExpect(jsonPath("$.message").value("操作成功"));
 
         then(paymentBillV1Service).should().handleCallback(eq("ALIPAY_PAGE"), any(PaymentCallbackDTO.class));
+    }
+
+    @Test
+    @DisplayName("支付宝关闭交易应归一化为明确失败终态")
+    void alipayTradeClosedShouldBeMappedToTerminalFailure() {
+        when(signatureVerifier.verifyAlipayCallback(any())).thenReturn(true);
+        V1OpenPaymentController controller = new V1OpenPaymentController(paymentBillV1Service, signatureVerifier);
+
+        controller.handleAlipayPageCallback(Map.of(
+                "out_trade_no", "PB-004",
+                "trade_no", "ALI-004",
+                "notify_id", "notify-004",
+                "trade_status", "TRADE_CLOSED"
+        ));
+
+        ArgumentCaptor<PaymentCallbackDTO> captor = ArgumentCaptor.forClass(PaymentCallbackDTO.class);
+        then(paymentBillV1Service).should().handleCallback(eq("ALIPAY_PAGE"), captor.capture());
+        assertThat(captor.getValue().getSuccess()).isFalse();
+        assertThat(captor.getValue().getTerminalFailure()).isTrue();
     }
 }

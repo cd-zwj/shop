@@ -5,12 +5,15 @@ import com.payment.entity.UnifiedWalletAccount;
 import com.payment.entity.UnifiedWalletLog;
 import com.payment.mapper.UnifiedWalletAccountMapper;
 import com.payment.mapper.UnifiedWalletLogMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -55,6 +58,23 @@ class UnifiedWalletServiceImplTest {
                 () -> service.debit(1L, new BigDecimal("80.00"), "TEST", "BIZ-2", "debit"));
         verify(accountMapper, times(1)).update(isNull(), any());
         verify(accountMapper, never()).updateById(any(UnifiedWalletAccount.class));
+    }
+
+    @Test
+    void refundCreditShouldNotIncreaseTotalRecharge() {
+        UnifiedWalletAccountMapper accountMapper = mock(UnifiedWalletAccountMapper.class);
+        UnifiedWalletLogMapper logMapper = mock(UnifiedWalletLogMapper.class);
+        UnifiedWalletServiceImpl service = new UnifiedWalletServiceImpl(accountMapper, logMapper);
+        when(accountMapper.selectOne(any())).thenReturn(buildUnifiedAccount(1L, "100.00"));
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
+
+        service.credit(1L, new BigDecimal("10.00"),
+                "ORDER_PAYMENT_FAILED_REFUND", "SO-1", "支付失败回退");
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<LambdaUpdateWrapper> captor = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(accountMapper).update(isNull(), captor.capture());
+        assertFalse(captor.getValue().getSqlSet().contains("total_recharge"));
     }
 
     private UnifiedWalletAccount buildUnifiedAccount(Long platformUserId, String balance) {

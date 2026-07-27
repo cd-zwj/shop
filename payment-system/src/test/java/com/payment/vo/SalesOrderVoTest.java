@@ -48,7 +48,7 @@ class SalesOrderVoTest {
 
         assertThat(vo.getStatusLabel()).isEqualTo("支付失败");
         assertThat(vo.getFailureReason()).contains("支付渠道");
-        assertThat(vo.getAvailableActions()).contains("PAY", "CONTACT_MERCHANT", "REPURCHASE");
+        assertThat(vo.getAvailableActions()).containsExactly("CONTACT_MERCHANT", "REPURCHASE");
     }
 
     @Test
@@ -61,6 +61,8 @@ class SalesOrderVoTest {
         order.setShippingCity("杭州市");
         order.setShippingDistrict("西湖区");
         order.setShippingDetail("文三路 1 号");
+        order.setStoreId(66L);
+        order.setFulfillmentMode("STORE_PICKUP");
         com.payment.dto.SalesOrderDetailVO detail = new com.payment.dto.SalesOrderDetailVO();
         detail.setOrder(order);
         detail.setPaymentBillNo("PB202607050001");
@@ -82,6 +84,8 @@ class SalesOrderVoTest {
         assertThat(vo.getShippingPhone()).isEqualTo("13800000000");
         assertThat(vo.getShippingCity()).isEqualTo("杭州市");
         assertThat(vo.getShippingDetail()).isEqualTo("文三路 1 号");
+        assertThat(vo.getStoreId()).isEqualTo(66L);
+        assertThat(vo.getFulfillmentMode()).isEqualTo("STORE_PICKUP");
     }
 
     @Test
@@ -98,7 +102,7 @@ class SalesOrderVoTest {
 
         assertThat(vo.getStatusLabel()).isEqualTo("支付失败");
         assertThat(vo.getFailureReason()).isEqualTo("渠道返回：用户取消支付");
-        assertThat(vo.getNextStep()).contains("重新发起支付");
+        assertThat(vo.getNextStep()).contains("重新购买");
     }
 
     @Test

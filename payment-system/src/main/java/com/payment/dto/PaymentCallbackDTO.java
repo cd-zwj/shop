@@ -22,6 +22,9 @@ public class PaymentCallbackDTO {
     /** 支付是否成功 */
     private Boolean success;
 
+    /** 渠道是否明确返回不可重试的支付失败终态 */
+    private Boolean terminalFailure;
+
     /** 第三方回调原始报文（JSON 字符串） */
     private String rawBody;
 }

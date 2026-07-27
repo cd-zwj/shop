@@ -130,6 +130,7 @@ export default function UserOrderDetail() {
     order?.orderStatus !== 'CANCELLED' &&
     order?.orderStatus !== 'CLOSED' &&
     order?.payStatus !== 'SUCCESS' &&
+    order?.payStatus !== 'FAILED' &&
     order?.payStatus !== 'CLOSED';
 
   const progress = getOrderProgressPresentation(order, lifecycleWithContext);
@@ -433,16 +434,20 @@ export default function UserOrderDetail() {
                   <span className="text-2xl font-black text-primary-container">{formatCurrency(order?.payableAmount ?? order?.externalPayAmount)}</span>
                 </div>
               </div>
-              <button
-                onClick={handleContinuePay}
-                disabled={!order?.orderNo || isCancelling || !canContinuePay}
-                className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isCancelling ? '处理中...' : canContinuePay ? '继续支付 / 查看支付状态' : lifecycleWithContext.label}
-              </button>
-              <p className="relative z-10 mt-3 text-xs font-medium leading-relaxed text-slate-300">
-                继续支付时会先尝试复用仍有效的支付单，若支付单已关闭、失败或过期，则自动新建。
-              </p>
+              {canContinuePay && (
+                <>
+                  <button
+                    onClick={handleContinuePay}
+                    disabled={!order?.orderNo || isCancelling}
+                    className="relative z-10 mt-8 w-full rounded-2xl bg-white py-4 text-sm font-black text-slate-900 transition-all hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCancelling ? '处理中...' : '继续支付 / 查看支付状态'}
+                  </button>
+                  <p className="relative z-10 mt-3 text-xs font-medium leading-relaxed text-slate-300">
+                    继续支付时会先尝试复用仍有效的支付单；关闭或过期时，系统会自动新建支付单。
+                  </p>
+                </>
+              )}
               {canRepurchase && (
                 <button
                   onClick={handleRepurchase}

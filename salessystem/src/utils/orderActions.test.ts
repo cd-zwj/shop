@@ -1,13 +1,49 @@
 import { describe, expect, it } from 'vitest';
-import { getPaymentFailureActions } from './orderActions';
+import { buildRepurchaseCartItems, getPaymentFailureActions } from './orderActions';
 
 describe('orderActions', () => {
-  it('offers direct retry when an order payment fails', () => {
+  it('ends a failed order and directs the user to repurchase', () => {
     expect(getPaymentFailureActions('failed', 'SO202607060001')).toEqual({
-      primaryLabel: '重新支付',
+      primaryLabel: '查看订单详情',
       showRepurchase: true,
-      showRetryPayment: true,
+      showRetryPayment: false,
     });
+  });
+
+  it('keeps store scope and fen prices when rebuilding pickup cart items', () => {
+    const items = buildRepurchaseCartItems({
+      order: {
+        id: 1,
+        orderNo: 'SO-1',
+        tenantId: 9,
+        platformUserId: 3,
+        orderStatus: 'CLOSED',
+        payStatus: 'FAILED',
+        totalAmount: 2880,
+        storeId: 66,
+        fulfillmentMode: 'STORE_PICKUP',
+      },
+      items: [{
+        id: 2,
+        orderId: 1,
+        orderNo: 'SO-1',
+        tenantId: 9,
+        productId: 88,
+        productName: '实体商品',
+        price: 2880,
+        quantity: 2,
+        subtotal: 5760,
+      }],
+    });
+
+    expect(items).toEqual([expect.objectContaining({
+      productId: 88,
+      tenantId: 9,
+      storeId: 66,
+      fulfillmentMode: 'STORE_PICKUP',
+      price: 2880,
+      quantity: 2,
+    })]);
   });
 
   it('offers direct retry when an order payment bill is closed or expired', () => {

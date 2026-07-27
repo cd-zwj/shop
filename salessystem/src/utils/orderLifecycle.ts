@@ -150,12 +150,11 @@ export function getOrderLifecyclePresentation(
     return {
       label: '支付失败',
       description: `失败原因：${failureReason}`,
-      nextStep: '可返回订单详情重新发起支付；如已扣款，请联系商户并保留支付单号。',
+      nextStep: '重新购买会创建新订单；如已扣款，请联系商户并保留支付单号。',
       failureReason,
       tab: 'closed',
       tone: 'red',
       nextActions: [
-        { key: 'pay', label: '重新支付' },
         { key: 'contact', label: '联系商户' },
         { key: 'repurchase', label: '重新购买' },
       ],

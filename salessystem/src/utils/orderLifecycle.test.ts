@@ -87,6 +87,8 @@ describe('orderLifecycle', () => {
     expect(getOrderLifecyclePresentation({ orderStatus: 'PAID', payStatus: 'SUCCESS' }).nextActions.map((item) => item.key)).toContain('refund');
     expect(getOrderLifecyclePresentation({ orderStatus: 'CANCELLED', payStatus: 'CLOSED' }).nextActions.map((item) => item.key)).toContain('repurchase');
     expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }).label).toBe('支付失败');
+    expect(getOrderLifecyclePresentation({ orderStatus: 'CLOSED', payStatus: 'FAILED' }).nextActions.map((item) => item.key))
+      .toEqual(['contact', 'repurchase']);
     expect(getOrderLifecyclePresentation({ orderStatus: 'CREATED', payStatus: 'FAILED' }, {
       paymentBillStatusRemark: '渠道返回：余额不足',
     }).failureReason).toContain('余额不足');

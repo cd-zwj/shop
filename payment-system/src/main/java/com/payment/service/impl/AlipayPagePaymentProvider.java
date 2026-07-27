@@ -119,11 +119,11 @@ public class AlipayPagePaymentProvider implements PaymentProvider {
     /**
      * 验证支付宝异步回调的合法性。
      * <p>
-     * 使用 RSA2 公钥验证回调参数签名，并检查交易状态是否为
-     * {@code TRADE_SUCCESS} 或 {@code TRADE_FINISHED}。
+     * 使用 RSA2 公钥验证回调参数签名。交易结果由支付账单服务单独判断，
+     * 因而有效的 {@code TRADE_CLOSED} 等非成功通知也必须通过这里。
      *
      * @param callbackDTO 回调数据，包含原始请求体和账单号
-     * @return 签名有效且交易成功时返回 {@code true}
+     * @return 签名有效时返回 {@code true}
      */
     @Override
     public boolean verifyCallback(PaymentCallbackDTO callbackDTO) {
@@ -152,8 +152,7 @@ public class AlipayPagePaymentProvider implements PaymentProvider {
                 return false;
             }
 
-            String tradeStatus = params.get("trade_status");
-            return "TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus);
+            return true;
         } catch (Exception e) {
             log.error("Failed to verify alipay callback, billNo={}", callbackDTO.getBillNo(), e);
             return false;

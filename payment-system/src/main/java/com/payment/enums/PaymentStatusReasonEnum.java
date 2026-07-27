@@ -29,6 +29,13 @@ public enum PaymentStatusReasonEnum {
             false,
             PaymentLateCallbackActionEnum.TRIGGER_REFUND
     ),
+    /** 销售订单明确支付失败且资源已释放；若后续收到成功结果必须退款 */
+    SALES_ORDER_PAYMENT_FAILED_REFUND_REQUIRED(
+            "SALES_ORDER_PAYMENT_FAILED_REFUND_REQUIRED",
+            "Sales order payment failed and reserved assets were released; late success should refund.",
+            false,
+            PaymentLateCallbackActionEnum.TRIGGER_REFUND
+    ),
     /** 充值订单超时可恢复：充值订单本地超时，延迟回调可恢复业务状态 */
     RECHARGE_TIMEOUT_RECOVERABLE(
             "RECHARGE_TIMEOUT_RECOVERABLE",

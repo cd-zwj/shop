@@ -122,7 +122,7 @@ describe('PaymentStatus', () => {
     expect(element.textContent).not.toContain('支付状态查询失败');
   });
 
-  it('shows retry and merchant contact actions when order payment fails', async () => {
+  it('shows repurchase and merchant contact actions when order payment fails', async () => {
     mockedPaymentBillService.getPaymentBill.mockResolvedValue({
       id: 1,
       billNo: 'PB001',
@@ -158,7 +158,8 @@ describe('PaymentStatus', () => {
     const element = await renderPaymentStatus();
 
     expect(element.textContent).toContain('失败原因：渠道返回：余额不足');
-    expect(element.textContent).toContain('重新支付');
+    expect(element.textContent).not.toContain('重新支付');
+    expect(element.textContent).toContain('重新购买同款商品');
     expect(Array.from(element.querySelectorAll('button'))
       .some((button) => button.textContent?.includes('联系商户'))).toBe(true);
   });

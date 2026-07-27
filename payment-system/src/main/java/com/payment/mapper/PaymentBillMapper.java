@@ -35,8 +35,22 @@ public interface PaymentBillMapper extends BaseMapper<PaymentBill> {
                           @Param("statusRemark") String statusRemark,
                           @Param("extensionJson") String extensionJson);
 
+    /** 渠道明确失败时，仅将仍在支付中的账单置为失败。 */
+    @Update("""
+            UPDATE payment_bill
+            SET pay_status = 'FAILED', callback_status = #{callbackStatus},
+                status_remark = #{statusRemark}, extension_json = #{extensionJson},
+                update_time = NOW()
+            WHERE bill_no = #{billNo}
+              AND pay_status IN ('WAIT_PAY', 'PAYING')
+            """)
+    int markFailedIfPending(@Param("billNo") String billNo,
+                            @Param("callbackStatus") String callbackStatus,
+                            @Param("statusRemark") String statusRemark,
+                            @Param("extensionJson") String extensionJson);
+
     /**
-     * 已关闭账单收到渠道迟到成功时，仅记录真实资金事实 CLOSED -> SUCCESS；
+     * 已关闭或明确失败账单收到渠道迟到成功时，仅记录真实资金事实 -> SUCCESS；
      * 此更新绝不发布订单支付事件，后续由退款/人工审核策略处理。
      */
     @Update("""
@@ -44,7 +58,7 @@ public interface PaymentBillMapper extends BaseMapper<PaymentBill> {
             SET pay_status = 'SUCCESS', callback_status = #{callbackStatus},
                 third_party_bill_no = #{thirdPartyBillNo}, status_remark = #{statusRemark},
                 update_time = NOW()
-            WHERE bill_no = #{billNo} AND pay_status = 'CLOSED'
+            WHERE bill_no = #{billNo} AND pay_status IN ('CLOSED', 'FAILED')
             """)
     int markLatePaidIfClosed(@Param("billNo") String billNo,
                              @Param("callbackStatus") String callbackStatus,

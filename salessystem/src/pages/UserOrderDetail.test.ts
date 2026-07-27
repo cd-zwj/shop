@@ -108,7 +108,8 @@ describe('UserOrderDetail', () => {
     expect(mockedOrderService.getOrder).toHaveBeenCalledTimes(2);
     expect(element.textContent).toContain('支付失败');
     expect(element.textContent).toContain('渠道返回：余额不足');
-    expect(element.textContent).toContain('继续支付 / 查看支付状态');
+    expect(element.textContent).not.toContain('继续支付 / 查看支付状态');
+    expect(element.textContent).toContain('重新购买同款商品');
     expect(element.textContent).not.toContain('订单详情加载失败');
   });
 });

@@ -516,14 +516,24 @@ public class AppOrderServiceImpl implements AppOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void cancelOrder(Long platformUserId, String orderNo) {
-        SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
+        SalesOrder salesOrder = salesOrderMapper.selectByOrderNoForUpdate(orderNo);
+        if (salesOrder == null
+                || !platformUserId.equals(salesOrder.getPlatformUserId())
+                || Integer.valueOf(1).equals(salesOrder.getDeleted())) {
+            throw new BusinessException("订单不存在");
+        }
         if (OrderStatusEnum.CANCELLED.name().equals(salesOrder.getOrderStatus())) {
             return;
         }
         // 仅允许取消未支付订单：已支付订单（含待备货/备货中/已完成，以及历史 PAID）
         // 库存已扣、商户可能已入账，取消必须走售后退款流程。
-        if (!OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())) {
+        if (!OrderStatusEnum.CREATED.name().equals(salesOrder.getOrderStatus())
+                || !PayStatusEnum.WAIT_PAY.name().equals(salesOrder.getPayStatus())) {
             throw new BusinessException("已支付订单不允许取消，请走售后退款流程");
+        }
+
+        if (salesOrderMapper.cancelUnpaid(salesOrder.getId()) != 1) {
+            throw new BusinessException("订单状态已变化，请刷新后重试");
         }
 
         if (salesOrder.getUnifiedWalletDeductAmount().compareTo(BigDecimal.ZERO) > 0) {
@@ -534,10 +544,6 @@ public class AppOrderServiceImpl implements AppOrderService {
         }
         releaseDiscountAssets(salesOrder, "订单取消");
         releaseStoreInventory(salesOrder);
-
-        salesOrder.setOrderStatus(OrderStatusEnum.CANCELLED.name());
-        salesOrder.setPayStatus(PayStatusEnum.CLOSED.name());
-        salesOrderMapper.updateById(salesOrder);
 
         closeUnpaidBills(orderNo, PaymentStatusReasonEnum.SALES_ORDER_CANCELLED_REFUND_REQUIRED);
     }

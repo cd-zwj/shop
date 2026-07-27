@@ -104,10 +104,12 @@ public class UnifiedWalletServiceImpl implements UnifiedWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.add(amount);
 
-            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
-                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount))
-                    .setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount))
-                    .setSql("update_time = NOW()"));
+            LambdaUpdateWrapper<UnifiedWalletAccount> update = baseAccountUpdate(account)
+                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount));
+            if ("UNIFIED_RECHARGE".equals(bizType)) {
+                update.setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount));
+            }
+            int updatedRows = accountMapper.update(null, update.setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(platformUserId, amount, bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;

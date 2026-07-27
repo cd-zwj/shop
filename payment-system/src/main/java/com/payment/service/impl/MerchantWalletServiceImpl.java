@@ -115,10 +115,12 @@ public class MerchantWalletServiceImpl implements MerchantWalletService {
             BigDecimal balanceBefore = account.getAvailableAmount();
             BigDecimal balanceAfter = balanceBefore.add(amount);
 
-            int updatedRows = accountMapper.update(null, baseAccountUpdate(account)
-                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount))
-                    .setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount))
-                    .setSql("update_time = NOW()"));
+            LambdaUpdateWrapper<MerchantWalletAccount> update = baseAccountUpdate(account)
+                    .setSql("available_amount = COALESCE(available_amount, 0) + " + moneyLiteral(amount));
+            if ("MERCHANT_RECHARGE".equals(bizType)) {
+                update.setSql("total_recharge = COALESCE(total_recharge, 0) + " + moneyLiteral(amount));
+            }
+            int updatedRows = accountMapper.update(null, update.setSql("update_time = NOW()"));
             if (updatedRows == 1) {
                 insertLog(tenantId, platformUserId, amount, bizType, bizNo, remark, balanceBefore, balanceAfter);
                 return;

@@ -36,6 +36,24 @@ public interface SalesOrderMapper extends BaseMapper<SalesOrder> {
             """)
     int claimPayment(@Param("id") Long id);
 
+    /** 明确支付失败后关闭订单；只有待支付订单可取得处理权。 */
+    @Update("""
+            UPDATE sales_order
+            SET order_status = 'CLOSED', pay_status = 'FAILED', update_time = NOW()
+            WHERE id = #{id} AND deleted = 0
+              AND order_status = 'CREATED' AND pay_status = 'WAIT_PAY'
+            """)
+    int failPayment(@Param("id") Long id);
+
+    /** 用户取消待支付订单时取得唯一资源释放权。 */
+    @Update("""
+            UPDATE sales_order
+            SET order_status = 'CANCELLED', pay_status = 'CLOSED', update_time = NOW()
+            WHERE id = #{id} AND deleted = 0
+              AND order_status = 'CREATED' AND pay_status = 'WAIT_PAY'
+            """)
+    int cancelUnpaid(@Param("id") Long id);
+
     /** 支付后处理完成后，将受控中间态推进到待备货。 */
     @Update("""
             UPDATE sales_order

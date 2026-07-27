@@ -5,12 +5,15 @@ import com.payment.entity.MerchantWalletAccount;
 import com.payment.entity.MerchantWalletLog;
 import com.payment.mapper.MerchantWalletAccountMapper;
 import com.payment.mapper.MerchantWalletLogMapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -55,6 +58,23 @@ class MerchantWalletServiceImplTest {
                 () -> service.debit(1L, 2L, new BigDecimal("20.00"), "TEST", "BIZ-4", "debit"));
         verify(accountMapper, times(1)).update(isNull(), any());
         verify(accountMapper, never()).updateById(any(MerchantWalletAccount.class));
+    }
+
+    @Test
+    void refundCreditShouldNotIncreaseTotalRecharge() {
+        MerchantWalletAccountMapper accountMapper = mock(MerchantWalletAccountMapper.class);
+        MerchantWalletLogMapper logMapper = mock(MerchantWalletLogMapper.class);
+        MerchantWalletServiceImpl service = new MerchantWalletServiceImpl(accountMapper, logMapper);
+        when(accountMapper.selectOne(any())).thenReturn(buildMerchantAccount(1L, 2L, "50.00"));
+        when(accountMapper.update(isNull(), any())).thenReturn(1);
+
+        service.credit(1L, 2L, new BigDecimal("20.00"),
+                "ORDER_PAYMENT_FAILED_REFUND", "SO-2", "支付失败回退");
+
+        @SuppressWarnings("rawtypes")
+        ArgumentCaptor<LambdaUpdateWrapper> captor = ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(accountMapper).update(isNull(), captor.capture());
+        assertFalse(captor.getValue().getSqlSet().contains("total_recharge"));
     }
 
     private MerchantWalletAccount buildMerchantAccount(Long tenantId, Long platformUserId, String balance) {

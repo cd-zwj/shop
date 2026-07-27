@@ -35,6 +35,8 @@ public class SalesOrderDetailVO {
     private Long payableAmount;
     private String subject;
     private String source;
+    private Long storeId;
+    private String fulfillmentMode;
     private Long shippingAddressId;
     private String shippingReceiverName;
     private String shippingPhone;
@@ -100,6 +102,8 @@ public class SalesOrderDetailVO {
                 .payableAmount(VoConverterUtil.toFen(order.getPayableAmount()))
                 .subject(order.getSubject())
                 .source(order.getSource())
+                .storeId(order.getStoreId())
+                .fulfillmentMode(order.getFulfillmentMode())
                 .shippingAddressId(order.getShippingAddressId())
                 .shippingReceiverName(order.getShippingReceiverName())
                 .shippingPhone(order.getShippingPhone())

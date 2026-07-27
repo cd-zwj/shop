@@ -55,8 +55,9 @@ public class V1OpenPaymentController {
         }
         dto.setCallbackRequestId(notifyId);
         dto.setThirdPartyBillNo(params.get("trade_no"));
-        dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status"))
-                || "TRADE_FINISHED".equals(params.get("trade_status")));
+        String tradeStatus = params.get("trade_status");
+        dto.setSuccess("TRADE_SUCCESS".equals(tradeStatus) || "TRADE_FINISHED".equals(tradeStatus));
+        dto.setTerminalFailure("TRADE_CLOSED".equals(tradeStatus));
         dto.setRawBody(JsonUtils.toJson(params));
         paymentBillV1Service.handleCallback("ALIPAY_PAGE", dto);
         return "success";
@@ -100,7 +101,9 @@ public class V1OpenPaymentController {
         dto.setBillNo(params.get("out_trade_no"));
         dto.setCallbackRequestId(params.get("trade_no"));
         dto.setThirdPartyBillNo(params.get("trade_no"));
-        dto.setSuccess("TRADE_SUCCESS".equals(params.get("trade_status")));
+        String tradeStatus = params.get("trade_status");
+        dto.setSuccess("TRADE_SUCCESS".equals(tradeStatus));
+        dto.setTerminalFailure("TRADE_CLOSED".equals(tradeStatus));
         dto.setRawBody(JsonUtils.toJson(params));
 
         // 第三方渠道回调验签

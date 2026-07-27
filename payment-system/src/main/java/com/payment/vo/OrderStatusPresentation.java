@@ -30,9 +30,9 @@ public final class OrderStatusPresentation {
             return new StatusPresentation(
                     "支付失败",
                     "失败原因：" + reason,
-                    "下一步：返回订单详情重新发起支付；如已扣款，请联系商户并保留支付单号。",
+                    "下一步：重新购买会创建新订单；如已扣款，请联系商户并保留支付单号。",
                     reason,
-                    List.of("PAY", "CONTACT_MERCHANT", "REPURCHASE"));
+                    List.of("CONTACT_MERCHANT", "REPURCHASE"));
         }
 
         if ("EXPIRED".equals(paymentBillStatus) || "CLOSED".equals(paymentBillStatus)) {
