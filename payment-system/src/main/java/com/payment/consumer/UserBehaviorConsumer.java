@@ -45,7 +45,10 @@ public class UserBehaviorConsumer {
         String behaviorLogId = requireNonBlank(payload, "behaviorLogId", body);
         String messageId = RabbitMQConfig.USER_BEHAVIOR_QUEUE + ":" + behaviorLogId;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE, body,
+                UserBehaviorConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("用户行为消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -56,13 +59,13 @@ public class UserBehaviorConsumer {
                     messageId,
                     RabbitMQConfig.USER_BEHAVIOR_QUEUE,
                     body,
-                    UserBehaviorConsumer.class.getSimpleName());
+                    UserBehaviorConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.USER_BEHAVIOR_QUEUE,
                     body,
-                    UserBehaviorConsumer.class.getSimpleName(),
+                    UserBehaviorConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

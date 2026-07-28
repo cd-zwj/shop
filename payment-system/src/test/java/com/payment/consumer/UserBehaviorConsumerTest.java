@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -26,27 +28,29 @@ class UserBehaviorConsumerTest {
                 () -> consumer.handleBehavior(body));
 
         assert ex.getMessage().contains("behaviorLogId");
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleBehaviorShouldSkipProcessedMessage() {
         String body = "{\"behaviorLogId\":9,\"platformUserId\":100,\"behaviorType\":\"VIEW\"}";
         String messageId = RabbitMQConfig.USER_BEHAVIOR_QUEUE + ":9";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE, body,
+                UserBehaviorConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handleBehavior(body);
 
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleBehaviorShouldRecordSuccess() {
         String body = "{\"behaviorLogId\":9,\"platformUserId\":100,\"behaviorType\":\"VIEW\"}";
         String messageId = RabbitMQConfig.USER_BEHAVIOR_QUEUE + ":9";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE, body,
+                UserBehaviorConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         consumer.handleBehavior(body);
 
@@ -54,7 +58,8 @@ class UserBehaviorConsumerTest {
                 messageId,
                 RabbitMQConfig.USER_BEHAVIOR_QUEUE,
                 body,
-                UserBehaviorConsumer.class.getSimpleName());
+                UserBehaviorConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -67,8 +72,9 @@ class UserBehaviorConsumerTest {
                 throw new IllegalStateException("profile failed");
             }
         };
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_BEHAVIOR_QUEUE, body,
+                UserBehaviorConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         assertThrows(IllegalStateException.class, () -> failingConsumer.handleBehavior(body));
 
@@ -77,6 +83,7 @@ class UserBehaviorConsumerTest {
                 RabbitMQConfig.USER_BEHAVIOR_QUEUE,
                 body,
                 UserBehaviorConsumer.class.getSimpleName(),
+                "claim-token",
                 "profile failed");
     }
 }

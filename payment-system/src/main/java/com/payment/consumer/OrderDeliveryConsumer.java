@@ -67,7 +67,10 @@ public class OrderDeliveryConsumer {
 
         String messageId = RabbitMQConfig.V1_ORDER_DELIVERY_QUEUE + ":" + orderNo;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_ORDER_DELIVERY_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.V1_ORDER_DELIVERY_QUEUE, body,
+                OrderDeliveryConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("订单交付消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -78,13 +81,13 @@ public class OrderDeliveryConsumer {
                     messageId,
                     RabbitMQConfig.V1_ORDER_DELIVERY_QUEUE,
                     body,
-                    OrderDeliveryConsumer.class.getSimpleName());
+                    OrderDeliveryConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.V1_ORDER_DELIVERY_QUEUE,
                     body,
-                    OrderDeliveryConsumer.class.getSimpleName(),
+                    OrderDeliveryConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

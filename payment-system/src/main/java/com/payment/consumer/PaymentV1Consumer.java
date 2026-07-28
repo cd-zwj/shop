@@ -83,7 +83,10 @@ public class PaymentV1Consumer {
         });
         String rechargeNo = String.valueOf(payload.get("bizNo"));
         String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":" + rechargeNo;
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE, body,
+                PaymentV1Consumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("充值成功消息已处理，跳过 messageId={}", messageId);
             return;
         }
@@ -94,13 +97,13 @@ public class PaymentV1Consumer {
                     messageId,
                     RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
                     body,
-                    PaymentV1Consumer.class.getSimpleName());
+                    PaymentV1Consumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
                     body,
-                    PaymentV1Consumer.class.getSimpleName(),
+                    PaymentV1Consumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }
@@ -123,7 +126,10 @@ public class PaymentV1Consumer {
         });
         String orderNo = String.valueOf(payload.get("bizNo"));
         String messageId = RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":" + orderNo;
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_ORDER_PAID_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.V1_ORDER_PAID_QUEUE, body,
+                PaymentV1Consumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("订单支付成功消息已处理，跳过 messageId={}", messageId);
             return;
         }
@@ -134,13 +140,13 @@ public class PaymentV1Consumer {
                     messageId,
                     RabbitMQConfig.V1_ORDER_PAID_QUEUE,
                     body,
-                    PaymentV1Consumer.class.getSimpleName());
+                    PaymentV1Consumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.V1_ORDER_PAID_QUEUE,
                     body,
-                    PaymentV1Consumer.class.getSimpleName(),
+                    PaymentV1Consumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -27,7 +29,7 @@ class PointsEventConsumerTest {
                 () -> consumer.handlePointsEvent(body));
 
         assert ex.getMessage().contains("bizNo");
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -35,12 +37,13 @@ class PointsEventConsumerTest {
         String body = "{\"eventType\":\"POINTS_GRANTED\",\"bizType\":\"ORDER_REWARD\",\"bizNo\":\"SO1002\","
                 + "\"tenantId\":9,\"platformUserId\":100,\"changePoints\":100}";
         String messageId = RabbitMQConfig.POINTS_EVENT_QUEUE + ":POINTS_GRANTED:ORDER_REWARD:SO1002";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.POINTS_EVENT_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.POINTS_EVENT_QUEUE, body,
+                PointsEventConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handlePointsEvent(body);
 
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -48,8 +51,9 @@ class PointsEventConsumerTest {
         String body = "{\"eventType\":\"POINTS_GRANTED\",\"bizType\":\"ORDER_REWARD\",\"bizNo\":\"SO1002\","
                 + "\"tenantId\":9,\"platformUserId\":100,\"changePoints\":100}";
         String messageId = RabbitMQConfig.POINTS_EVENT_QUEUE + ":POINTS_GRANTED:ORDER_REWARD:SO1002";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.POINTS_EVENT_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.POINTS_EVENT_QUEUE, body,
+                PointsEventConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         consumer.handlePointsEvent(body);
 
@@ -57,7 +61,8 @@ class PointsEventConsumerTest {
                 messageId,
                 RabbitMQConfig.POINTS_EVENT_QUEUE,
                 body,
-                PointsEventConsumer.class.getSimpleName());
+                PointsEventConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -71,8 +76,9 @@ class PointsEventConsumerTest {
                 throw new IllegalStateException("points downstream failed");
             }
         };
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.POINTS_EVENT_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.POINTS_EVENT_QUEUE, body,
+                PointsEventConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         assertThrows(IllegalStateException.class, () -> failingConsumer.handlePointsEvent(body));
 
@@ -81,6 +87,7 @@ class PointsEventConsumerTest {
                 RabbitMQConfig.POINTS_EVENT_QUEUE,
                 body,
                 PointsEventConsumer.class.getSimpleName(),
+                "claim-token",
                 "points downstream failed");
     }
 }

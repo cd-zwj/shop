@@ -9,6 +9,8 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Map;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -33,7 +35,7 @@ class AiAnalysisConsumerTest {
 
         assert ex.getMessage().contains("resultId");
         verify(dataAnalysisService, never()).executeAnalysis(any(), any());
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -41,13 +43,14 @@ class AiAnalysisConsumerTest {
         String body = "{\"resultId\":88,\"analysisType\":\"PAYMENT_TREND\",\"userId\":100,"
                 + "\"params\":{\"timeRange\":\"LAST_7_DAYS\"}}";
         String messageId = RabbitMQConfig.AI_ANALYSIS_QUEUE + ":88";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE, body,
+                AiAnalysisConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handleAiAnalysis(body);
 
         verify(dataAnalysisService, never()).executeAnalysis(any(), any());
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -55,8 +58,9 @@ class AiAnalysisConsumerTest {
         String body = "{\"resultId\":88,\"analysisType\":\"PAYMENT_TREND\",\"userId\":100,"
                 + "\"params\":{\"timeRange\":\"LAST_7_DAYS\"}}";
         String messageId = RabbitMQConfig.AI_ANALYSIS_QUEUE + ":88";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE, body,
+                AiAnalysisConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         consumer.handleAiAnalysis(body);
 
@@ -69,15 +73,17 @@ class AiAnalysisConsumerTest {
                 messageId,
                 RabbitMQConfig.AI_ANALYSIS_QUEUE,
                 body,
-                AiAnalysisConsumer.class.getSimpleName());
+                AiAnalysisConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
     void handleAiAnalysisShouldRecordFailureAndRethrow() {
         String body = "{\"resultId\":88,\"analysisType\":\"PAYMENT_TREND\",\"params\":{\"timeRange\":\"LAST_7_DAYS\"}}";
         String messageId = RabbitMQConfig.AI_ANALYSIS_QUEUE + ":88";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE, body,
+                AiAnalysisConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
         doThrow(new IllegalStateException("ai failed")).when(dataAnalysisService).executeAnalysis(any(), any());
 
         assertThrows(IllegalStateException.class, () -> consumer.handleAiAnalysis(body));
@@ -87,6 +93,7 @@ class AiAnalysisConsumerTest {
                 RabbitMQConfig.AI_ANALYSIS_QUEUE,
                 body,
                 AiAnalysisConsumer.class.getSimpleName(),
+                "claim-token",
                 "ai failed");
     }
 

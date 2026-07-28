@@ -1,6 +1,5 @@
 package com.payment.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.payment.common.BusinessException;
 import com.payment.entity.StoreInventoryChangeLog;
 import com.payment.entity.StoreProductStock;
@@ -8,7 +7,6 @@ import com.payment.mapper.StoreInventoryChangeLogMapper;
 import com.payment.mapper.StoreProductStockMapper;
 import com.payment.service.StoreInventoryService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,10 +45,10 @@ public class StoreInventoryServiceImpl implements StoreInventoryService {
     @Transactional(rollbackFor = Exception.class)
     public void lock(Long tenantId, Long storeId, Long productId, int quantity, String bizType, String bizNo) {
         validateQuantityAndBiz(tenantId, storeId, productId, quantity, bizType, bizNo);
-        if (alreadyRecorded(tenantId, storeId, productId, "LOCK", bizType, bizNo)) {
+        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
+        if (findRecordForUpdate(tenantId, storeId, productId, "LOCK", bizType, bizNo) != null) {
             return;
         }
-        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
         mutate(stock, 0, quantity, "LOCK", bizType, bizNo, null, "订单库存锁定");
     }
 
@@ -58,10 +56,10 @@ public class StoreInventoryServiceImpl implements StoreInventoryService {
     @Transactional(rollbackFor = Exception.class)
     public void release(Long tenantId, Long storeId, Long productId, int quantity, String bizType, String bizNo) {
         validateQuantityAndBiz(tenantId, storeId, productId, quantity, bizType, bizNo);
-        if (alreadyRecorded(tenantId, storeId, productId, "RELEASE", bizType, bizNo)) {
+        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
+        if (findRecordForUpdate(tenantId, storeId, productId, "RELEASE", bizType, bizNo) != null) {
             return;
         }
-        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
         mutate(stock, 0, -quantity, "RELEASE", bizType, bizNo, null, "订单库存释放");
     }
 
@@ -70,15 +68,16 @@ public class StoreInventoryServiceImpl implements StoreInventoryService {
     public void deductLocked(Long tenantId, Long storeId, Long productId, int quantity,
                              String bizType, String bizNo, Long operatorId) {
         validateQuantityAndBiz(tenantId, storeId, productId, quantity, bizType, bizNo);
-        if (alreadyRecorded(tenantId, storeId, productId, "DEDUCT_LOCKED", bizType, bizNo)) {
+        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
+        if (findRecordForUpdate(tenantId, storeId, productId, "DEDUCT_LOCKED", bizType, bizNo) != null) {
             return;
         }
-        StoreInventoryChangeLog lockRecord = findRecord(tenantId, storeId, productId, "LOCK", bizType, bizNo);
+        StoreInventoryChangeLog lockRecord = findRecordForUpdate(
+                tenantId, storeId, productId, "LOCK", bizType, bizNo);
         if (lockRecord == null
                 || amountOrZero(lockRecord.getLockedAfter()) - amountOrZero(lockRecord.getLockedBefore()) < quantity) {
             throw new BusinessException("订单未锁定足够的门店库存");
         }
-        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
         mutate(stock, -quantity, -quantity, "DEDUCT_LOCKED", bizType, bizNo, operatorId, "已锁定订单销售扣减");
     }
 
@@ -87,35 +86,18 @@ public class StoreInventoryServiceImpl implements StoreInventoryService {
     public void restock(Long tenantId, Long storeId, Long productId, int quantity,
                         String bizType, String bizNo, Long operatorId, String remark) {
         validateQuantityAndBiz(tenantId, storeId, productId, quantity, bizType, bizNo);
-        if (alreadyRecorded(tenantId, storeId, productId, "RESTOCK", bizType, bizNo)) {
+        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
+        if (findRecordForUpdate(tenantId, storeId, productId, "RESTOCK", bizType, bizNo) != null) {
             return;
         }
-        StoreProductStock stock = getOrCreateForUpdate(tenantId, storeId, productId);
         mutate(stock, quantity, 0, "RESTOCK", bizType, bizNo, operatorId,
                 remark == null || remark.isBlank() ? "退货入库" : remark);
     }
 
     private StoreProductStock getOrCreateForUpdate(Long tenantId, Long storeId, Long productId) {
         validateIdentity(tenantId, storeId, productId);
+        storeProductStockMapper.ensureExists(tenantId, storeId, productId);
         StoreProductStock stock = storeProductStockMapper.selectForUpdate(tenantId, storeId, productId);
-        if (stock != null) {
-            return stock;
-        }
-
-        StoreProductStock created = new StoreProductStock();
-        created.setTenantId(tenantId);
-        created.setStoreId(storeId);
-        created.setProductId(productId);
-        created.setQuantity(0);
-        created.setLockedQuantity(0);
-        created.setVersion(0);
-        try {
-            storeProductStockMapper.insert(created);
-        } catch (DuplicateKeyException ignored) {
-            // 另一事务已完成初始化，下面重新加锁读取即可。
-        }
-
-        stock = storeProductStockMapper.selectForUpdate(tenantId, storeId, productId);
         if (stock == null) {
             throw new BusinessException("门店库存初始化失败，请稍后重试");
         }
@@ -168,25 +150,10 @@ public class StoreInventoryServiceImpl implements StoreInventoryService {
         return stock;
     }
 
-    private boolean alreadyRecorded(Long tenantId, Long storeId, Long productId,
-                                    String changeType, String bizType, String bizNo) {
-        return inventoryChangeLogMapper.selectCount(recordQuery(tenantId, storeId, productId, changeType, bizType, bizNo)) > 0;
-    }
-
-    private StoreInventoryChangeLog findRecord(Long tenantId, Long storeId, Long productId,
-                                                String changeType, String bizType, String bizNo) {
-        return inventoryChangeLogMapper.selectOne(recordQuery(tenantId, storeId, productId, changeType, bizType, bizNo));
-    }
-
-    private LambdaQueryWrapper<StoreInventoryChangeLog> recordQuery(Long tenantId, Long storeId, Long productId,
-                                                                      String changeType, String bizType, String bizNo) {
-        return new LambdaQueryWrapper<StoreInventoryChangeLog>()
-                .eq(StoreInventoryChangeLog::getTenantId, tenantId)
-                .eq(StoreInventoryChangeLog::getStoreId, storeId)
-                .eq(StoreInventoryChangeLog::getProductId, productId)
-                .eq(StoreInventoryChangeLog::getChangeType, changeType)
-                .eq(StoreInventoryChangeLog::getBizType, bizType)
-                .eq(StoreInventoryChangeLog::getBizNo, bizNo);
+    private StoreInventoryChangeLog findRecordForUpdate(Long tenantId, Long storeId, Long productId,
+                                                         String changeType, String bizType, String bizNo) {
+        return inventoryChangeLogMapper.selectBizRecordForUpdate(
+                tenantId, storeId, productId, changeType, bizType, bizNo);
     }
 
     private void validateQuantityAndBiz(Long tenantId, Long storeId, Long productId, int quantity,

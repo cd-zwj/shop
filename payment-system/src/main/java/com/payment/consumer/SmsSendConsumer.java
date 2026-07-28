@@ -52,7 +52,10 @@ public class SmsSendConsumer {
         String code = requireNonBlank(payload, "code", body);
         String messageId = RabbitMQConfig.SMS_SEND_QUEUE + ":" + scene + ":" + phone + ":" + code;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.SMS_SEND_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.SMS_SEND_QUEUE, body,
+                SmsSendConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("短信发送消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -63,13 +66,13 @@ public class SmsSendConsumer {
                     messageId,
                     RabbitMQConfig.SMS_SEND_QUEUE,
                     body,
-                    SmsSendConsumer.class.getSimpleName());
+                    SmsSendConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.SMS_SEND_QUEUE,
                     body,
-                    SmsSendConsumer.class.getSimpleName(),
+                    SmsSendConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

@@ -51,7 +51,10 @@ public class PointsEventConsumer {
         String bizNo = requireNonBlank(payload, "bizNo", body);
         String messageId = RabbitMQConfig.POINTS_EVENT_QUEUE + ":" + eventType + ":" + bizType + ":" + bizNo;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.POINTS_EVENT_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.POINTS_EVENT_QUEUE, body,
+                PointsEventConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("积分事件消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -62,13 +65,13 @@ public class PointsEventConsumer {
                     messageId,
                     RabbitMQConfig.POINTS_EVENT_QUEUE,
                     body,
-                    PointsEventConsumer.class.getSimpleName());
+                    PointsEventConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.POINTS_EVENT_QUEUE,
                     body,
-                    PointsEventConsumer.class.getSimpleName(),
+                    PointsEventConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

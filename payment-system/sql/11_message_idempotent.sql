@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS message_idempotent (
     queue_name VARCHAR(100) NOT NULL COMMENT '队列名称',
     message_body TEXT COMMENT '消息内容',
     consumer_name VARCHAR(100) COMMENT '消费者名称',
-    status TINYINT DEFAULT 1 COMMENT '处理状态：1-处理成功，2-处理失败',
+    status TINYINT DEFAULT 1 COMMENT '处理状态：0-处理中，1-处理成功，2-处理失败',
     retry_count INT DEFAULT 0 COMMENT '重试次数',
     error_message TEXT COMMENT '错误信息',
     created_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

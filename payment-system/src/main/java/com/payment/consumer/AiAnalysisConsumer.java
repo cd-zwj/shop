@@ -56,7 +56,10 @@ public class AiAnalysisConsumer {
         Long resultId = Long.valueOf(resultIdText);
         String messageId = RabbitMQConfig.AI_ANALYSIS_QUEUE + ":" + resultId;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.AI_ANALYSIS_QUEUE, body,
+                AiAnalysisConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("AI 分析消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -67,13 +70,13 @@ public class AiAnalysisConsumer {
                     messageId,
                     RabbitMQConfig.AI_ANALYSIS_QUEUE,
                     body,
-                    AiAnalysisConsumer.class.getSimpleName());
+                    AiAnalysisConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.AI_ANALYSIS_QUEUE,
                     body,
-                    AiAnalysisConsumer.class.getSimpleName(),
+                    AiAnalysisConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

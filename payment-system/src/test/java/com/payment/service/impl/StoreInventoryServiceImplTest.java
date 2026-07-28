@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -26,11 +27,13 @@ class StoreInventoryServiceImplTest {
         StoreInventoryServiceImpl service = new StoreInventoryServiceImpl(stockMapper, logMapper);
         StoreProductStock stock = stock(10, 3);
 
-        when(logMapper.selectCount(any())).thenReturn(0L);
         StoreInventoryChangeLog lockRecord = new StoreInventoryChangeLog();
         lockRecord.setLockedBefore(0);
         lockRecord.setLockedAfter(3);
-        when(logMapper.selectOne(any())).thenReturn(lockRecord);
+        when(logMapper.selectBizRecordForUpdate(9L, 7L, 1L,
+                "DEDUCT_LOCKED", "SALES_ORDER", "SO001")).thenReturn(null);
+        when(logMapper.selectBizRecordForUpdate(9L, 7L, 1L,
+                "LOCK", "SALES_ORDER", "SO001")).thenReturn(lockRecord);
         when(stockMapper.selectForUpdate(9L, 7L, 1L)).thenReturn(stock);
         when(stockMapper.updateById(any(StoreProductStock.class))).thenReturn(1);
 
@@ -46,7 +49,6 @@ class StoreInventoryServiceImplTest {
         StoreInventoryChangeLogMapper logMapper = mock(StoreInventoryChangeLogMapper.class);
         StoreInventoryServiceImpl service = new StoreInventoryServiceImpl(stockMapper, logMapper);
 
-        when(logMapper.selectCount(any())).thenReturn(0L);
         when(stockMapper.selectForUpdate(9L, 7L, 1L)).thenReturn(stock(10, 8));
 
         assertThrows(BusinessException.class,
@@ -60,11 +62,18 @@ class StoreInventoryServiceImplTest {
         StoreInventoryChangeLogMapper logMapper = mock(StoreInventoryChangeLogMapper.class);
         StoreInventoryServiceImpl service = new StoreInventoryServiceImpl(stockMapper, logMapper);
 
-        when(logMapper.selectCount(any())).thenReturn(1L);
+        StoreProductStock stock = stock(10, 3);
+        when(stockMapper.selectForUpdate(9L, 7L, 1L)).thenReturn(stock);
+        when(logMapper.selectBizRecordForUpdate(
+                9L, 7L, 1L, "LOCK", "SALES_ORDER", "SO003"))
+                .thenReturn(new StoreInventoryChangeLog());
 
         service.lock(9L, 7L, 1L, 3, "SALES_ORDER", "SO003");
 
-        verify(stockMapper, never()).selectForUpdate(anyLong(), anyLong(), anyLong());
+        var ordered = inOrder(stockMapper, logMapper);
+        ordered.verify(stockMapper).selectForUpdate(9L, 7L, 1L);
+        ordered.verify(logMapper).selectBizRecordForUpdate(
+                9L, 7L, 1L, "LOCK", "SALES_ORDER", "SO003");
         verify(stockMapper, never()).updateById(any(StoreProductStock.class));
     }
 

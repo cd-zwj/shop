@@ -20,6 +20,8 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.util.List;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -34,13 +36,14 @@ class PaymentV1ConsumerTest {
         ConsumerFixture fixture = new ConsumerFixture();
         String body = "{\"bizNo\":\"RC001\"}";
         String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
-        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
-                .thenReturn(true);
+        when(fixture.messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE, body,
+                PaymentV1Consumer.class.getSimpleName())).thenReturn(completed());
 
         fixture.consumer.handleRechargeSuccess(body);
 
         verify(fixture.walletRechargeService, never()).handleRechargeSuccess(any());
-        verify(fixture.messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(fixture.messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -48,9 +51,6 @@ class PaymentV1ConsumerTest {
         ConsumerFixture fixture = new ConsumerFixture();
         String body = "{\"bizNo\":\"RC001\"}";
         String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
-        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
-                .thenReturn(false);
-
         fixture.consumer.handleRechargeSuccess(body);
 
         verify(fixture.walletRechargeService).handleRechargeSuccess("RC001");
@@ -58,7 +58,8 @@ class PaymentV1ConsumerTest {
                 messageId,
                 RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
                 body,
-                PaymentV1Consumer.class.getSimpleName());
+                PaymentV1Consumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -66,8 +67,6 @@ class PaymentV1ConsumerTest {
         ConsumerFixture fixture = new ConsumerFixture();
         String body = "{\"bizNo\":\"RC001\"}";
         String messageId = RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE + ":RC001";
-        when(fixture.messageIdempotentService.isProcessed(messageId, RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE))
-                .thenReturn(false);
         org.mockito.Mockito.doThrow(new RuntimeException("recharge failed"))
                 .when(fixture.walletRechargeService).handleRechargeSuccess("RC001");
 
@@ -78,6 +77,7 @@ class PaymentV1ConsumerTest {
                 RabbitMQConfig.V1_RECHARGE_SUCCESS_QUEUE,
                 body,
                 PaymentV1Consumer.class.getSimpleName(),
+                "claim-token",
                 "recharge failed");
     }
 
@@ -120,9 +120,6 @@ class PaymentV1ConsumerTest {
         salesOrder.setStoreId(88L);
         SalesOrderItem item = orderItemFixture();
 
-        when(fixture.messageIdempotentService.isProcessed(
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PICKUP",
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
         when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
@@ -141,9 +138,6 @@ class PaymentV1ConsumerTest {
         salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
         SalesOrderItem item = orderItemFixture();
 
-        when(fixture.messageIdempotentService.isProcessed(
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_PAYABLE",
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
         when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
@@ -162,9 +156,6 @@ class PaymentV1ConsumerTest {
         salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
         SalesOrderItem item = orderItemFixture();
 
-        when(fixture.messageIdempotentService.isProcessed(
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_ZERO",
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
         when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
@@ -184,9 +175,6 @@ class PaymentV1ConsumerTest {
         salesOrder.setMerchantWalletDeductAmount(new BigDecimal("20.00"));
         SalesOrderItem item = orderItemFixture();
 
-        when(fixture.messageIdempotentService.isProcessed(
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE + ":SO_LEGACY",
-                RabbitMQConfig.V1_ORDER_PAID_QUEUE)).thenReturn(false);
         when(fixture.salesOrderMapper.selectByOrderNoForUpdate(any())).thenReturn(salesOrder);
         when(fixture.salesOrderItemMapper.selectByOrderId(1L)).thenReturn(List.of(item));
 
@@ -231,6 +219,8 @@ class PaymentV1ConsumerTest {
         private final PaymentV1Consumer consumer;
 
         private ConsumerFixture() {
+            when(messageIdempotentService.tryClaim(any(), any(), any(), any()))
+                    .thenReturn(acquired("claim-token"));
             when(salesOrderMapper.completePaymentProcessing(any())).thenReturn(1);
             consumer = new PaymentV1Consumer(
                     walletRechargeService,

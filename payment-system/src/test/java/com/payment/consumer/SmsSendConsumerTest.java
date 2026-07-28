@@ -5,6 +5,8 @@ import com.payment.service.MessageIdempotentService;
 import com.payment.service.sms.SmsSender;
 import org.junit.jupiter.api.Test;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -29,28 +31,30 @@ class SmsSendConsumerTest {
 
         assert ex.getMessage().contains("phone");
         verify(smsSender, never()).send(anyString(), anyString());
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleSmsSendShouldSkipProcessedMessage() {
         String body = "{\"scene\":\"LOGIN_CODE\",\"phone\":\"13800000000\",\"code\":\"123456\"}";
         String messageId = RabbitMQConfig.SMS_SEND_QUEUE + ":LOGIN_CODE:13800000000:123456";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.SMS_SEND_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.SMS_SEND_QUEUE, body,
+                SmsSendConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handleSmsSend(body);
 
         verify(smsSender, never()).send(anyString(), anyString());
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleSmsSendShouldCallSenderAndRecordSuccess() {
         String body = "{\"scene\":\"LOGIN_CODE\",\"phone\":\"13800000000\",\"code\":\"123456\"}";
         String messageId = RabbitMQConfig.SMS_SEND_QUEUE + ":LOGIN_CODE:13800000000:123456";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.SMS_SEND_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.SMS_SEND_QUEUE, body,
+                SmsSendConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         consumer.handleSmsSend(body);
 
@@ -59,15 +63,17 @@ class SmsSendConsumerTest {
                 messageId,
                 RabbitMQConfig.SMS_SEND_QUEUE,
                 body,
-                SmsSendConsumer.class.getSimpleName());
+                SmsSendConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
     void handleSmsSendShouldRecordFailureAndRethrowWhenSenderFails() {
         String body = "{\"scene\":\"LOGIN_CODE\",\"phone\":\"13800000000\",\"code\":\"123456\"}";
         String messageId = RabbitMQConfig.SMS_SEND_QUEUE + ":LOGIN_CODE:13800000000:123456";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.SMS_SEND_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.SMS_SEND_QUEUE, body,
+                SmsSendConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
         doThrow(new IllegalStateException("provider failed")).when(smsSender).send("13800000000", "123456");
 
         assertThrows(IllegalStateException.class, () -> consumer.handleSmsSend(body));
@@ -77,6 +83,7 @@ class SmsSendConsumerTest {
                 RabbitMQConfig.SMS_SEND_QUEUE,
                 body,
                 SmsSendConsumer.class.getSimpleName(),
+                "claim-token",
                 "provider failed");
     }
 }

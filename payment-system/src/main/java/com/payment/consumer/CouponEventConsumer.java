@@ -50,7 +50,10 @@ public class CouponEventConsumer {
         String bizNo = requireNonBlank(payload, "bizNo", body);
         String messageId = RabbitMQConfig.COUPON_EVENT_QUEUE + ":" + eventType + ":" + userCouponId + ":" + bizNo;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.COUPON_EVENT_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.COUPON_EVENT_QUEUE, body,
+                CouponEventConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("优惠券事件消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -61,13 +64,13 @@ public class CouponEventConsumer {
                     messageId,
                     RabbitMQConfig.COUPON_EVENT_QUEUE,
                     body,
-                    CouponEventConsumer.class.getSimpleName());
+                    CouponEventConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.COUPON_EVENT_QUEUE,
                     body,
-                    CouponEventConsumer.class.getSimpleName(),
+                    CouponEventConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

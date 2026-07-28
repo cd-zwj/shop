@@ -9,6 +9,13 @@ package com.payment.service;
 public interface MessageIdempotentService {
 
     /**
+     * 在执行业务前原子抢占消息处理权。
+     *
+     * @return 抢占结果；处理中与已完成必须由消费者采用不同确认策略
+     */
+    MessageClaim tryClaim(String messageId, String queueName, String messageBody, String consumerName);
+
+    /**
      * 检查消息是否已处理。
      *
      * @param messageId 消息 ID（全局唯一标识）
@@ -27,7 +34,8 @@ public interface MessageIdempotentService {
      * @param messageBody  消息内容（用于审计和排查）
      * @param consumerName 消费者名称
      */
-    void recordSuccess(String messageId, String queueName, String messageBody, String consumerName);
+    void recordSuccess(String messageId, String queueName, String messageBody,
+                       String consumerName, String claimToken);
 
     /**
      * 记录消息处理失败。
@@ -38,5 +46,6 @@ public interface MessageIdempotentService {
      * @param consumerName 消费者名称
      * @param errorMessage 错误信息
      */
-    void recordFailure(String messageId, String queueName, String messageBody, String consumerName, String errorMessage);
+    void recordFailure(String messageId, String queueName, String messageBody,
+                       String consumerName, String claimToken, String errorMessage);
 }

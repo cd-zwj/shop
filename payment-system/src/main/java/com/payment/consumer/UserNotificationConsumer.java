@@ -45,7 +45,10 @@ public class UserNotificationConsumer {
         String notificationId = requireNonBlank(payload, "notificationId", body);
         String messageId = RabbitMQConfig.USER_NOTIFICATION_QUEUE + ":" + notificationId;
 
-        if (messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE)) {
+        String claimToken = MessageClaimGuard.acquire(messageIdempotentService,
+                messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE, body,
+                UserNotificationConsumer.class.getSimpleName());
+        if (claimToken == null) {
             log.info("用户通知消息已处理,跳过 messageId={}", messageId);
             return;
         }
@@ -56,13 +59,13 @@ public class UserNotificationConsumer {
                     messageId,
                     RabbitMQConfig.USER_NOTIFICATION_QUEUE,
                     body,
-                    UserNotificationConsumer.class.getSimpleName());
+                    UserNotificationConsumer.class.getSimpleName(), claimToken);
         } catch (Exception e) {
             messageIdempotentService.recordFailure(
                     messageId,
                     RabbitMQConfig.USER_NOTIFICATION_QUEUE,
                     body,
-                    UserNotificationConsumer.class.getSimpleName(),
+                    UserNotificationConsumer.class.getSimpleName(), claimToken,
                     e.getMessage());
             throw e;
         }

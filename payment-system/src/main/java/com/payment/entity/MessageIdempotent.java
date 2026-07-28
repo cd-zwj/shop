@@ -38,7 +38,7 @@ public class MessageIdempotent {
     private String consumerName;
 
     /**
-     * 处理状态：1-处理成功，2-处理失败
+     * 处理状态：0-处理中，1-处理成功，2-处理失败
      */
     private Integer status;
 

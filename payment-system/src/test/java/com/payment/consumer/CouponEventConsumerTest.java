@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -18,6 +20,11 @@ class CouponEventConsumerTest {
     private final MessageIdempotentService messageIdempotentService = mock(MessageIdempotentService.class);
     private final CouponEventConsumer consumer = new CouponEventConsumer(messageIdempotentService);
 
+    CouponEventConsumerTest() {
+        when(messageIdempotentService.tryClaim(any(), any(), any(), any()))
+                .thenReturn(acquired("claim-token"));
+    }
+
     @Test
     void handleCouponEventShouldRejectMissingUserCouponId() {
         String body = "{\"bizType\":\"COUPON_EVENT\",\"eventType\":\"EXPIRED\",\"bizNo\":\"COUPON_EXPIRE_SCAN\"}";
@@ -26,7 +33,7 @@ class CouponEventConsumerTest {
                 () -> consumer.handleCouponEvent(body));
 
         assert ex.getMessage().contains("userCouponId");
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -34,16 +41,14 @@ class CouponEventConsumerTest {
         String body = "{\"bizType\":\"COUPON_EVENT\",\"eventType\":\"EXPIRED\",\"bizNo\":\"COUPON_EXPIRE_SCAN\","
                 + "\"userCouponId\":501,\"couponStatus\":\"EXPIRED\"}";
         String messageId = RabbitMQConfig.COUPON_EVENT_QUEUE + ":EXPIRED:501:COUPON_EXPIRE_SCAN";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.COUPON_EVENT_QUEUE))
-                .thenReturn(false);
-
         consumer.handleCouponEvent(body);
 
         verify(messageIdempotentService).recordSuccess(
                 messageId,
                 RabbitMQConfig.COUPON_EVENT_QUEUE,
                 body,
-                CouponEventConsumer.class.getSimpleName());
+                CouponEventConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -60,12 +65,14 @@ class CouponEventConsumerTest {
                 RabbitMQConfig.COUPON_EVENT_QUEUE + ":EXPIRED:501:COUPON_EXPIRE_SCAN",
                 RabbitMQConfig.COUPON_EVENT_QUEUE,
                 first,
-                CouponEventConsumer.class.getSimpleName());
+                CouponEventConsumer.class.getSimpleName(),
+                "claim-token");
         verify(messageIdempotentService).recordSuccess(
                 RabbitMQConfig.COUPON_EVENT_QUEUE + ":EXPIRED:502:COUPON_EXPIRE_SCAN",
                 RabbitMQConfig.COUPON_EVENT_QUEUE,
                 second,
-                CouponEventConsumer.class.getSimpleName());
+                CouponEventConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -73,12 +80,13 @@ class CouponEventConsumerTest {
         String body = "{\"bizType\":\"COUPON_EVENT\",\"eventType\":\"USED\",\"bizNo\":\"SO1001\","
                 + "\"userCouponId\":501,\"couponStatus\":\"USED\"}";
         String messageId = RabbitMQConfig.COUPON_EVENT_QUEUE + ":USED:501:SO1001";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.COUPON_EVENT_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.COUPON_EVENT_QUEUE, body,
+                CouponEventConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handleCouponEvent(body);
 
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -92,9 +100,6 @@ class CouponEventConsumerTest {
                 throw new IllegalStateException("sync failed");
             }
         };
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.COUPON_EVENT_QUEUE))
-                .thenReturn(false);
-
         assertThrows(IllegalStateException.class, () -> failingConsumer.handleCouponEvent(body));
 
         verify(messageIdempotentService).recordFailure(
@@ -102,6 +107,7 @@ class CouponEventConsumerTest {
                 RabbitMQConfig.COUPON_EVENT_QUEUE,
                 body,
                 CouponEventConsumer.class.getSimpleName(),
+                "claim-token",
                 "sync failed");
     }
 }

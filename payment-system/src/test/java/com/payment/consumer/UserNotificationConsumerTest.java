@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static com.payment.service.MessageClaim.acquired;
+import static com.payment.service.MessageClaim.completed;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -26,27 +28,29 @@ class UserNotificationConsumerTest {
                 () -> consumer.handleNotification(body));
 
         assert ex.getMessage().contains("notificationId");
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleNotificationShouldSkipProcessedMessage() {
         String body = "{\"notificationId\":7,\"platformUserId\":100,\"category\":\"ORDER\"}";
         String messageId = RabbitMQConfig.USER_NOTIFICATION_QUEUE + ":7";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE))
-                .thenReturn(true);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE, body,
+                UserNotificationConsumer.class.getSimpleName())).thenReturn(completed());
 
         consumer.handleNotification(body);
 
-        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any());
+        verify(messageIdempotentService, never()).recordSuccess(any(), any(), any(), any(), any());
     }
 
     @Test
     void handleNotificationShouldRecordSuccess() {
         String body = "{\"notificationId\":7,\"platformUserId\":100,\"category\":\"ORDER\"}";
         String messageId = RabbitMQConfig.USER_NOTIFICATION_QUEUE + ":7";
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE, body,
+                UserNotificationConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         consumer.handleNotification(body);
 
@@ -54,7 +58,8 @@ class UserNotificationConsumerTest {
                 messageId,
                 RabbitMQConfig.USER_NOTIFICATION_QUEUE,
                 body,
-                UserNotificationConsumer.class.getSimpleName());
+                UserNotificationConsumer.class.getSimpleName(),
+                "claim-token");
     }
 
     @Test
@@ -67,8 +72,9 @@ class UserNotificationConsumerTest {
                 throw new IllegalStateException("push failed");
             }
         };
-        when(messageIdempotentService.isProcessed(messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE))
-                .thenReturn(false);
+        when(messageIdempotentService.tryClaim(
+                messageId, RabbitMQConfig.USER_NOTIFICATION_QUEUE, body,
+                UserNotificationConsumer.class.getSimpleName())).thenReturn(acquired("claim-token"));
 
         assertThrows(IllegalStateException.class, () -> failingConsumer.handleNotification(body));
 
@@ -77,6 +83,7 @@ class UserNotificationConsumerTest {
                 RabbitMQConfig.USER_NOTIFICATION_QUEUE,
                 body,
                 UserNotificationConsumer.class.getSimpleName(),
+                "claim-token",
                 "push failed");
     }
 }
