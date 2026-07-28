@@ -4,11 +4,9 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
-import com.payment.constant.MerchantPermission;
 import com.payment.dto.StoreReviewReplyDTO;
 import com.payment.entity.StoreReview;
 import com.payment.service.StoreReviewService;
-import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.StoreReviewVO;
 import jakarta.validation.Valid;
@@ -23,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class V1MerchantStoreReviewController {
     private final StoreReviewService storeReviewService;
-    private final V1MerchantSupportService merchantSupportService;
 
     @SaCheckLogin(type = "merchant")
     @GetMapping
@@ -33,8 +30,8 @@ public class V1MerchantStoreReviewController {
                                                    @RequestParam(defaultValue = "1") @Min(1) Integer pageNum,
                                                    @RequestParam(defaultValue = "10") @Min(1) Integer pageSize) {
         Long operatorId = PlatformSessionHelper.getPlatformUserId();
-        merchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
-        Page<StoreReview> page = storeReviewService.listTenantReviews(tenantId, storeId, rating, pageNum, pageSize);
+        Page<StoreReview> page = storeReviewService.listTenantReviews(
+                tenantId, operatorId, storeId, rating, pageNum, pageSize);
         return Result.success(PageResult.from(page, StoreReviewVO::from));
     }
 
@@ -44,7 +41,6 @@ public class V1MerchantStoreReviewController {
                               @PathVariable @Min(value = 1, message = "ID必须大于0") Long reviewId,
                               @Valid @RequestBody StoreReviewReplyDTO dto) {
         Long operatorId = PlatformSessionHelper.getPlatformUserId();
-        merchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
         storeReviewService.reply(tenantId, reviewId, operatorId, dto.getContent());
         return Result.success();
     }

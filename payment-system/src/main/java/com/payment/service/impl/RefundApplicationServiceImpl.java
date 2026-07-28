@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.RefundCreateDTO;
 import com.payment.entity.OrderDeliveryRecord;
 import com.payment.entity.RefundApplication;
@@ -17,6 +18,7 @@ import com.payment.mapper.AfterSaleActionMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.RefundApplicationService;
+import com.payment.service.MerchantStoreScope;
 import com.payment.service.RefundService;
 import com.payment.service.StoreInventoryService;
 import com.payment.service.UserNotificationService;
@@ -81,6 +83,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     private final RefundService refundService;
     private final StoreInventoryService storeInventoryService;
     private final AfterSaleActionMapper afterSaleActionMapper;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     /**
      * 创建退款申请。
@@ -258,6 +261,18 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return result;
     }
 
+    @Override
+    public Page<RefundApplication> listMerchantRefunds(Long tenantId, Long operatorId, String status,
+                                                       int page, int size) {
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.REFUND_MANAGE);
+        Page<RefundApplication> result = refundApplicationMapper.selectMerchantPage(
+                new Page<>(page, size), tenantId, status,
+                scope.allStores() ? null : scope.storeIds());
+        enrichRefundApplications(result.getRecords());
+        return result;
+    }
+
     /**
      * 审核退款申请。
      * <p>
@@ -283,6 +298,50 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         }
         processDecision(app, adminId, approved, rejectReason, "MERCHANT",
                 approved ? "MERCHANT_APPROVE" : "MERCHANT_REJECT");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void auditMerchantRefund(Long tenantId, Long refundId, Long operatorId,
+                                    boolean approved, String rejectReason) {
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.REFUND_MANAGE);
+        RefundApplication app = refundApplicationMapper.selectById(refundId);
+        if (app == null || !tenantId.equals(app.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        requireRefundStoreAccess(scope, app);
+        if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())) {
+            throw new BusinessException("只有待审核状态的退款申请才能审核");
+        }
+        processDecision(app, operatorId, approved, rejectReason, "MERCHANT",
+                approved ? "MERCHANT_APPROVE" : "MERCHANT_REJECT");
+    }
+
+    @Override
+    public List<AfterSaleAction> listMerchantActions(Long tenantId, Long refundId, Long operatorId) {
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.REFUND_MANAGE);
+        RefundApplication app = refundApplicationMapper.selectById(refundId);
+        if (app == null || !tenantId.equals(app.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        requireRefundStoreAccess(scope, app);
+        return listActions(tenantId, refundId);
+    }
+
+    private void requireRefundStoreAccess(MerchantStoreScope scope, RefundApplication app) {
+        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getTenantId, app.getTenantId())
+                .eq(SalesOrder::getOrderNo, app.getOrderNo())
+                .eq(SalesOrder::getDeleted, 0));
+        if (order == null || order.getStoreId() == null) {
+            if (!scope.allStores()) {
+                throw new BusinessException("退款申请不存在或无权访问");
+            }
+            return;
+        }
+        merchantStoreScopeService.requireStoreAccess(scope, order.getStoreId());
     }
 
     private void processDecision(RefundApplication app, Long operatorId, boolean approved, String rejectionReason,

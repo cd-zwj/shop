@@ -69,7 +69,9 @@ public interface SalesOrderMapper extends BaseMapper<SalesOrder> {
                                           @Param("payStatus") String payStatus,
                                           @Param("keyword") String keyword,
                                           @Param("fulfillmentStatus") String fulfillmentStatus,
-                                          @Param("deliveryStatuses") List<String> deliveryStatuses);
+                                          @Param("deliveryStatuses") List<String> deliveryStatuses,
+                                          @Param("storeId") Long storeId,
+                                          @Param("storeIds") List<Long> storeIds);
 
     @Select("""
             SELECT COUNT(1)

@@ -1,10 +1,12 @@
 package com.payment.service.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.entity.OrderFulfillmentAction;
 import com.payment.entity.SalesOrder;
 import com.payment.mapper.OrderFulfillmentActionMapper;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.service.MerchantStoreScope;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -33,8 +35,11 @@ class OrderFulfillmentServiceImplTest {
     void startPreparationShouldTransitionPaidPickupOrderAndWriteAuditAction() {
         SalesOrderMapper orderMapper = mock(SalesOrderMapper.class);
         OrderFulfillmentActionMapper actionMapper = mock(OrderFulfillmentActionMapper.class);
-        OrderFulfillmentServiceImpl service = new OrderFulfillmentServiceImpl(orderMapper, actionMapper);
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        OrderFulfillmentServiceImpl service = new OrderFulfillmentServiceImpl(orderMapper, actionMapper, scopeService);
         SalesOrder order = order("PENDING_PREPARATION");
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(7L));
+        when(scopeService.resolve(9L, 100L, MerchantPermission.ORDER_MANAGE)).thenReturn(scope);
         when(orderMapper.selectOne(any())).thenReturn(order);
         when(orderMapper.update(isNull(), any())).thenReturn(1);
 
@@ -52,10 +57,31 @@ class OrderFulfillmentServiceImplTest {
     void completePreparationShouldRejectOrderThatHasNotStartedPreparation() {
         SalesOrderMapper orderMapper = mock(SalesOrderMapper.class);
         OrderFulfillmentActionMapper actionMapper = mock(OrderFulfillmentActionMapper.class);
-        OrderFulfillmentServiceImpl service = new OrderFulfillmentServiceImpl(orderMapper, actionMapper);
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        OrderFulfillmentServiceImpl service = new OrderFulfillmentServiceImpl(orderMapper, actionMapper, scopeService);
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(7L));
+        when(scopeService.resolve(9L, 100L, MerchantPermission.ORDER_MANAGE)).thenReturn(scope);
         when(orderMapper.selectOne(any())).thenReturn(order("PENDING_PREPARATION"));
 
         assertThrows(BusinessException.class, () -> service.completePreparation(9L, "SO001", 100L, null));
+
+        verify(orderMapper, never()).update(isNull(), any());
+        verify(actionMapper, never()).insert(any(OrderFulfillmentAction.class));
+    }
+
+    @Test
+    void startPreparationShouldRejectOrderOutsideAssignedScopeBeforeUpdate() {
+        SalesOrderMapper orderMapper = mock(SalesOrderMapper.class);
+        OrderFulfillmentActionMapper actionMapper = mock(OrderFulfillmentActionMapper.class);
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        OrderFulfillmentServiceImpl service = new OrderFulfillmentServiceImpl(orderMapper, actionMapper, scopeService);
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(8L));
+        when(scopeService.resolve(9L, 100L, MerchantPermission.ORDER_MANAGE)).thenReturn(scope);
+        when(orderMapper.selectOne(any())).thenReturn(order("PENDING_PREPARATION"));
+        org.mockito.Mockito.doThrow(new BusinessException("当前员工无权访问该门店"))
+                .when(scopeService).requireStoreAccess(scope, 7L);
+
+        assertThrows(BusinessException.class, () -> service.startPreparation(9L, "SO001", 100L, null));
 
         verify(orderMapper, never()).update(isNull(), any());
         verify(actionMapper, never()).insert(any(OrderFulfillmentAction.class));

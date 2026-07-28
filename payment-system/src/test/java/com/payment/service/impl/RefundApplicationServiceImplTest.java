@@ -400,7 +400,8 @@ class RefundApplicationServiceImplTest {
                                                 AfterSaleActionMapper afterSaleActionMapper) {
         return new RefundApplicationServiceImpl(refundMapper, salesOrderMapper, itemMapper,
                 mock(UserNotificationService.class), deliveryService, refundService,
-                mock(com.payment.service.StoreInventoryService.class), afterSaleActionMapper);
+                mock(com.payment.service.StoreInventoryService.class), afterSaleActionMapper,
+                mock(MerchantStoreScopeService.class));
     }
 
     private List<String> captureUpdateStatuses(RefundApplicationMapper refundMapper) {

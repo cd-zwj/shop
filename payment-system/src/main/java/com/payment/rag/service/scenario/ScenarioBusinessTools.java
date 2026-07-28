@@ -17,6 +17,10 @@ import com.payment.service.SalesStatisticsService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.V1AdminService;
 import com.payment.service.WithdrawalService;
+import com.payment.service.MerchantStoreScope;
+import com.payment.service.impl.MerchantStoreScopeService;
+import com.payment.service.impl.V1MerchantSupportService;
+import com.payment.constant.MerchantPermission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -44,6 +48,8 @@ public class ScenarioBusinessTools {
     private final MerchantWalletService merchantWalletService;
     private final WithdrawalService withdrawalService;
     private final V1AdminService v1AdminService;
+    private final MerchantStoreScopeService merchantStoreScopeService;
+    private final V1MerchantSupportService merchantSupportService;
 
     public String currentActorContext() {
         Map<String, Object> context = new LinkedHashMap<>();
@@ -91,16 +97,23 @@ public class ScenarioBusinessTools {
                 "ai:merchant:finance", List.of("finance")
         ));
         Long tenantId = authContextService.getCurrentTenantId();
+        Long operatorId = authContextService.getCurrentPlatformUserId();
+        merchantSupportService.requireEmployee(tenantId, operatorId);
 
         Map<String, Object> data = base("merchant_data_context");
-        data.put("scope", "current_merchant_tenant_only");
+        data.put("scope", "current_merchant_store_scope");
         data.put("availableModules", modules);
 
         if (modules.stream().anyMatch(m -> List.of("orders", "refunds").contains(m))) {
-            fillMerchantSales(data, tenantId);
-            fillMerchantOrders(data, tenantId);
+            MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                    tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+            if (scope.allStores()) {
+                fillMerchantSales(data, tenantId);
+            }
+            fillMerchantOrders(data, tenantId, operatorId, scope.allStores());
         }
         if (modules.contains("finance")) {
+            merchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.FINANCE_VIEW);
             fillMerchantFinance(data, tenantId);
         }
 
@@ -218,13 +231,18 @@ public class ScenarioBusinessTools {
         }
     }
 
-    private void fillMerchantOrders(Map<String, Object> data, Long tenantId) {
+    private void fillMerchantOrders(Map<String, Object> data, Long tenantId, Long operatorId,
+                                    boolean allStores) {
         try {
-            var paidOrders = appOrderService.listMerchantOrders(tenantId, 1, 1, "PENDING_PREPARATION", null, null);
-            var pendingRefunds = refundApplicationService.listTenantRefunds(tenantId, "PENDING", 1, 1);
+            var paidOrders = appOrderService.listMerchantOrderViews(
+                    tenantId, operatorId, 1, 1, null,
+                    "PENDING_PREPARATION", null, null, null, null);
             Map<String, Object> orderOps = new LinkedHashMap<>();
             orderOps.put("pendingShipmentCount", paidOrders != null ? paidOrders.getTotal() : 0);
-            orderOps.put("pendingRefundReviewCount", pendingRefunds != null ? pendingRefunds.getTotal() : 0);
+            if (allStores) {
+                var pendingRefunds = refundApplicationService.listTenantRefunds(tenantId, "PENDING", 1, 1);
+                orderOps.put("pendingRefundReviewCount", pendingRefunds != null ? pendingRefunds.getTotal() : 0);
+            }
             data.put("orderOperations", orderOps);
         } catch (Exception e) {
             log.warn("AI 工具读取商家订单运营数据失败: tenantId={}, error={}", tenantId, e.getMessage());

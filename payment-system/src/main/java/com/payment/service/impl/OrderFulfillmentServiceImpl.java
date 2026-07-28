@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.entity.OrderFulfillmentAction;
 import com.payment.entity.SalesOrder;
 import com.payment.enums.OrderStatusEnum;
@@ -10,6 +11,7 @@ import com.payment.enums.PayStatusEnum;
 import com.payment.mapper.OrderFulfillmentActionMapper;
 import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.OrderFulfillmentService;
+import com.payment.service.MerchantStoreScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +25,7 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
 
     private final SalesOrderMapper salesOrderMapper;
     private final OrderFulfillmentActionMapper actionMapper;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -39,7 +42,11 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
     }
 
     @Override
-    public List<OrderFulfillmentAction> listActions(Long tenantId, String orderNo) {
+    public List<OrderFulfillmentAction> listActions(Long tenantId, String orderNo, Long operatorId) {
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        SalesOrder order = requireOrder(tenantId, orderNo);
+        requireOrderStoreAccess(scope, order);
         return actionMapper.selectList(new LambdaQueryWrapper<OrderFulfillmentAction>()
                 .eq(OrderFulfillmentAction::getTenantId, tenantId)
                 .eq(OrderFulfillmentAction::getOrderNo, orderNo)
@@ -51,13 +58,10 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         if (tenantId == null || tenantId <= 0 || operatorId == null || operatorId <= 0 || orderNo == null || orderNo.isBlank()) {
             throw new BusinessException("履约操作参数不合法");
         }
-        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
-                .eq(SalesOrder::getTenantId, tenantId)
-                .eq(SalesOrder::getOrderNo, orderNo)
-                .eq(SalesOrder::getDeleted, 0));
-        if (order == null) {
-            throw new BusinessException("订单不存在");
-        }
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        SalesOrder order = requireOrder(tenantId, orderNo);
+        requireOrderStoreAccess(scope, order);
         if (!"STORE_PICKUP".equals(order.getFulfillmentMode()) || order.getStoreId() == null) {
             throw new BusinessException("当前订单不是有效的到店自提订单");
         }
@@ -87,6 +91,27 @@ public class OrderFulfillmentServiceImpl implements OrderFulfillmentService {
         record.setOperatorId(operatorId);
         record.setRemark(trimToNull(remark));
         actionMapper.insert(record);
+    }
+
+    private SalesOrder requireOrder(Long tenantId, String orderNo) {
+        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getTenantId, tenantId)
+                .eq(SalesOrder::getOrderNo, orderNo)
+                .eq(SalesOrder::getDeleted, 0));
+        if (order == null) {
+            throw new BusinessException("订单不存在或无权访问");
+        }
+        return order;
+    }
+
+    private void requireOrderStoreAccess(MerchantStoreScope scope, SalesOrder order) {
+        if (order.getStoreId() == null) {
+            if (!scope.allStores()) {
+                throw new BusinessException("订单不存在或无权访问");
+            }
+            return;
+        }
+        merchantStoreScopeService.requireStoreAccess(scope, order.getStoreId());
     }
 
     private String trimToNull(String value) {

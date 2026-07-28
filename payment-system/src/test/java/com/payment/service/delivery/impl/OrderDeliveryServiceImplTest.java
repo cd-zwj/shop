@@ -1,6 +1,7 @@
 package com.payment.service.delivery.impl;
 
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.entity.OrderDeliveryRecord;
 import com.payment.entity.OrderFulfillmentAction;
 import com.payment.entity.SalesOrder;
@@ -11,6 +12,8 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.AuditLogService;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
+import com.payment.service.MerchantStoreScope;
+import com.payment.service.impl.MerchantStoreScopeService;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -88,6 +91,18 @@ class OrderDeliveryServiceImplTest {
     }
 
     @Test
+    void verifyPickupShouldRejectRecordWithoutStoreAssignment() {
+        Fixture fixture = new Fixture();
+        OrderDeliveryRecord record = record();
+        record.setStoreId(null);
+        when(fixture.deliveryRecordMapper.selectOne(any())).thenReturn(record);
+
+        assertThrows(BusinessException.class, () -> fixture.service.verifyPickup(9L, 7L, "12345678", 100L));
+
+        verify(fixture.deliveryRecordMapper, never()).update(any(), any());
+    }
+
+    @Test
     void verifyPickupShouldReturnLatestRecordWhenConcurrentlyConfirmed() {
         Fixture fixture = new Fixture();
         OrderDeliveryRecord record = record();
@@ -107,6 +122,20 @@ class OrderDeliveryServiceImplTest {
         verify(fixture.actionMapper, never()).insert(any(OrderFulfillmentAction.class));
     }
 
+    @Test
+    void verifyPickupShouldRejectUnauthorizedStoreBeforeLookingUpPickupCode() {
+        Fixture fixture = new Fixture(false);
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(8L));
+        when(fixture.scopeService.resolve(9L, 100L, MerchantPermission.ORDER_MANAGE)).thenReturn(scope);
+        org.mockito.Mockito.doThrow(new BusinessException("当前员工无权访问该门店"))
+                .when(fixture.scopeService).requireStoreAccess(scope, 7L);
+
+        assertThrows(BusinessException.class, () -> fixture.service.verifyPickup(9L, 7L, "12345678", 100L));
+
+        verify(fixture.deliveryRecordMapper, never()).selectOne(any());
+        verify(fixture.deliveryRecordMapper, never()).update(any(), any());
+    }
+
     private static OrderDeliveryRecord record() {
         OrderDeliveryRecord record = new OrderDeliveryRecord();
         record.setId(1L);
@@ -122,6 +151,8 @@ class OrderDeliveryServiceImplTest {
     private static SalesOrder order(String status) {
         SalesOrder order = new SalesOrder();
         order.setId(3L);
+        order.setTenantId(9L);
+        order.setStoreId(7L);
         order.setOrderStatus(status);
         return order;
     }
@@ -134,6 +165,7 @@ class OrderDeliveryServiceImplTest {
         private final OutboxPublisher outboxPublisher = mock(OutboxPublisher.class);
         private final UserNotificationService notificationService = mock(UserNotificationService.class);
         private final AuditLogService auditLogService = mock(AuditLogService.class);
+        private final MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
         private final OrderDeliveryServiceImpl service = new OrderDeliveryServiceImpl(
                 salesOrderMapper,
                 salesOrderItemMapper,
@@ -141,6 +173,18 @@ class OrderDeliveryServiceImplTest {
                 actionMapper,
                 outboxPublisher,
                 notificationService,
-                auditLogService);
+                auditLogService,
+                scopeService);
+
+        private Fixture() {
+            this(true);
+        }
+
+        private Fixture(boolean allowDefaultStore) {
+            if (allowDefaultStore) {
+                MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(7L));
+                when(scopeService.resolve(9L, 100L, MerchantPermission.ORDER_MANAGE)).thenReturn(scope);
+            }
+        }
     }
 }

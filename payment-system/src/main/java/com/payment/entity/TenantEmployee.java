@@ -35,6 +35,9 @@ public class TenantEmployee implements Serializable {
     /** 员工角色，如 OWNER-店主、MANAGER-店长、PICKUP_CLERK-自提店员 等 */
     private String employeeRole;
 
+    /** 门店数据范围：ALL-全部门店，ASSIGNED-仅已分配门店 */
+    private String storeScopeType;
+
     /** 员工状态：0-禁用，1-正常；禁用后该员工无法访问租户后台 */
     private Integer status;
 

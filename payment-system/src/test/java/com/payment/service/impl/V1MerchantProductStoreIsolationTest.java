@@ -13,6 +13,7 @@ import com.payment.mapper.StoreMapper;
 import com.payment.mapper.StoreProductMapper;
 import com.payment.mapper.StoreProductStockMapper;
 import com.payment.service.StoreInventoryService;
+import com.payment.service.MerchantStoreScope;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,9 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -47,8 +51,10 @@ class V1MerchantProductStoreIsolationTest {
         StoreProductMapper relationMapper = mock(StoreProductMapper.class);
         StoreProductStockMapper stockMapper = mock(StoreProductStockMapper.class);
         StoreInventoryService inventoryService = mock(StoreInventoryService.class);
-        V1MerchantSupportService supportService = mock(V1MerchantSupportService.class);
         ProductIndexMessagePublisher indexPublisher = mock(ProductIndexMessagePublisher.class);
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, true, java.util.List.of());
+        when(scopeService.resolve(9L, 101L, com.payment.constant.MerchantPermission.PRODUCT_MANAGE)).thenReturn(scope);
 
         Product product = new Product();
         product.setId(10L);
@@ -89,7 +95,7 @@ class V1MerchantProductStoreIsolationTest {
 
         V1MerchantProductServiceImpl service = new V1MerchantProductServiceImpl(
                 productMapper, changeLogMapper, storeMapper, relationMapper, stockMapper,
-                inventoryService, supportService, indexPublisher);
+                inventoryService, indexPublisher, scopeService);
 
         V1MerchantProductUpsertDTO dto = new V1MerchantProductUpsertDTO();
         dto.setProductCode("P001");
@@ -115,6 +121,33 @@ class V1MerchantProductStoreIsolationTest {
         verify(relationMapper).updateById(relationCaptor.capture());
         assertEquals(new BigDecimal("35.00"), relationCaptor.getValue().getPrice());
         assertEquals(0, relationCaptor.getValue().getStatus());
+        verifyNoInteractions(inventoryService);
+    }
+
+    @Test
+    void updatingProductShouldRejectStoreOutsideAssignedScopeBeforeMutation() {
+        ProductMapper productMapper = mock(ProductMapper.class);
+        ProductChangeLogMapper changeLogMapper = mock(ProductChangeLogMapper.class);
+        StoreMapper storeMapper = mock(StoreMapper.class);
+        StoreProductMapper relationMapper = mock(StoreProductMapper.class);
+        StoreProductStockMapper stockMapper = mock(StoreProductStockMapper.class);
+        StoreInventoryService inventoryService = mock(StoreInventoryService.class);
+        ProductIndexMessagePublisher indexPublisher = mock(ProductIndexMessagePublisher.class);
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        MerchantStoreScope scope = new MerchantStoreScope(9L, 3L, false, java.util.List.of(7L));
+        when(scopeService.resolve(9L, 101L, com.payment.constant.MerchantPermission.PRODUCT_MANAGE)).thenReturn(scope);
+        doThrow(new com.payment.common.BusinessException("当前员工无权访问该门店"))
+                .when(scopeService).requireStoreAccess(scope, 22L);
+        V1MerchantProductServiceImpl service = new V1MerchantProductServiceImpl(
+                productMapper, changeLogMapper, storeMapper, relationMapper, stockMapper,
+                inventoryService, indexPublisher, scopeService);
+        V1MerchantProductUpsertDTO dto = new V1MerchantProductUpsertDTO();
+        dto.setStoreId(22L);
+
+        assertThrows(com.payment.common.BusinessException.class,
+                () -> service.updateProduct(9L, 101L, 10L, dto));
+
+        verify(productMapper, never()).updateById(any(Product.class));
         verifyNoInteractions(inventoryService);
     }
 }

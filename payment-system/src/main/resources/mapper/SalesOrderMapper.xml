@@ -7,6 +7,18 @@
         FROM sales_order so
         WHERE so.tenant_id = #{tenantId}
           AND so.deleted = 0
+        <if test="storeId != null">
+          AND so.store_id = #{storeId}
+        </if>
+        <if test="storeId == null and storeIds != null and storeIds.size() > 0">
+          AND so.store_id IN
+          <foreach collection="storeIds" item="allowedStoreId" open="(" close=")" separator=",">
+            #{allowedStoreId}
+          </foreach>
+        </if>
+        <if test="storeId == null and storeIds != null and storeIds.size() == 0">
+          AND 1 = 0
+        </if>
         <if test="orderStatus != null and orderStatus != ''">
           AND so.order_status = #{orderStatus}
         </if>

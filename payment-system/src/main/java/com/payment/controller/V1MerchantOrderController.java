@@ -5,14 +5,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.annotation.RateLimit;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
-import com.payment.constant.MerchantPermission;
 import com.payment.dto.SalesOrderDetailVO;
 import com.payment.entity.OrderDeliveryRecord;
 import com.payment.entity.OrderFulfillmentAction;
 import com.payment.service.AppOrderService;
 import com.payment.service.OrderFulfillmentService;
 import com.payment.service.delivery.OrderDeliveryService;
-import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.PickupVerificationVO;
 import com.payment.vo.SalesOrderListVO;
@@ -33,7 +31,6 @@ import org.springframework.web.bind.annotation.*;
 public class V1MerchantOrderController {
 
     private final AppOrderService appOrderService;
-    private final V1MerchantSupportService v1MerchantSupportService;
     private final OrderDeliveryService orderDeliveryService;
     private final OrderFulfillmentService orderFulfillmentService;
 
@@ -55,16 +52,16 @@ public class V1MerchantOrderController {
     public Result<PageResult<SalesOrderListVO>> listOrders(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                       @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer current,
                                                       @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer size,
+                                                      @RequestParam(required = false) Long storeId,
                                                       @RequestParam(required = false) String orderStatus,
                                                       @RequestParam(required = false) String payStatus,
                                                       @RequestParam(required = false) String keyword,
                                                       @RequestParam(required = false) String fulfillmentStatus,
                                                       @RequestParam(required = false) String deliveryStatus) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
-
         Page<SalesOrderListVO> result = appOrderService.listMerchantOrderViews(
-                tenantId, current, size, orderStatus, payStatus, keyword, fulfillmentStatus, deliveryStatus);
+                tenantId, platformUserId, current, size, storeId,
+                orderStatus, payStatus, keyword, fulfillmentStatus, deliveryStatus);
         return Result.success(PageResult.from(result));
     }
 
@@ -79,7 +76,6 @@ public class V1MerchantOrderController {
     @GetMapping("/{orderNo}")
     public Result<SalesOrderDetailVO> getOrderDetail(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId, @PathVariable String orderNo) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
         return Result.success(appOrderService.getMerchantOrderDetail(tenantId, platformUserId, orderNo));
     }
 
@@ -94,7 +90,6 @@ public class V1MerchantOrderController {
     public Result<PickupVerificationVO> verifyPickup(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                 @RequestBody VerifyPickupRequest request) {
         Long operatorId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
         OrderDeliveryRecord record = orderDeliveryService.verifyPickup(tenantId, request.getStoreId(), request.getPickupCode(), operatorId);
         return Result.success(PickupVerificationVO.from(record, request.getStoreId()));
     }
@@ -105,7 +100,6 @@ public class V1MerchantOrderController {
                                          @PathVariable String orderNo,
                                          @RequestBody(required = false) FulfillmentRequest request) {
         Long operatorId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
         orderFulfillmentService.startPreparation(tenantId, orderNo, operatorId, request == null ? null : request.getRemark());
         return Result.success();
     }
@@ -116,7 +110,6 @@ public class V1MerchantOrderController {
                                             @PathVariable String orderNo,
                                             @RequestBody(required = false) FulfillmentRequest request) {
         Long operatorId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
         orderFulfillmentService.completePreparation(tenantId, orderNo, operatorId, request == null ? null : request.getRemark());
         return Result.success();
     }
@@ -127,8 +120,7 @@ public class V1MerchantOrderController {
             @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
             @PathVariable String orderNo) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
-        return Result.success(orderFulfillmentService.listActions(tenantId, orderNo));
+        return Result.success(orderFulfillmentService.listActions(tenantId, orderNo, platformUserId));
     }
 
     @Data

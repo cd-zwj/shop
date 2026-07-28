@@ -11,5 +11,5 @@ public interface OrderFulfillmentService {
 
     void completePreparation(Long tenantId, String orderNo, Long operatorId, String remark);
 
-    List<OrderFulfillmentAction> listActions(Long tenantId, String orderNo);
+    List<OrderFulfillmentAction> listActions(Long tenantId, String orderNo, Long operatorId);
 }

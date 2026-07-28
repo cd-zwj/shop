@@ -4,6 +4,7 @@ import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.config.RabbitMQConfig;
 import com.payment.entity.MessageOutbox;
 import com.payment.entity.OrderDeliveryRecord;
@@ -19,6 +20,8 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.service.AuditLogService;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
+import com.payment.service.MerchantStoreScope;
+import com.payment.service.impl.MerchantStoreScopeService;
 import com.payment.service.delivery.OrderDeliveryService;
 import com.payment.service.outbox.OutboxMessageCommand;
 import com.payment.util.JsonUtils;
@@ -52,6 +55,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
     private final OutboxPublisher outboxPublisher;
     private final UserNotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -152,14 +156,29 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         if (pickupCode == null || !pickupCode.trim().matches("\\d{8}")) throw new BusinessException("取货码必须为 8 位数字");
         if (operatorId == null || operatorId <= 0) throw new BusinessException("核销操作人不能为空");
 
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        try {
+            merchantStoreScopeService.requireStoreAccess(scope, storeId);
+        } catch (BusinessException exception) {
+            auditPickupFailure(tenantId, storeId, operatorId, "操作人无门店权限");
+            throw exception;
+        }
+
         String code = pickupCode.trim();
         // 按哈希走 uk_tenant_pickup_hash 唯一索引查询；门店归属一并强校验。
         OrderDeliveryRecord record = deliveryRecordMapper.selectOne(new LambdaQueryWrapper<OrderDeliveryRecord>()
                 .eq(OrderDeliveryRecord::getTenantId, tenantId)
                 .eq(OrderDeliveryRecord::getPickupCodeHash, DigestUtil.sha256Hex(code))
                 .eq(OrderDeliveryRecord::getDeleted, 0));
-        if (record == null || (record.getStoreId() != null && !record.getStoreId().equals(storeId))) {
+        if (record == null || !storeId.equals(record.getStoreId())) {
             auditPickupFailure(tenantId, storeId, operatorId, "取货码不存在或不属于当前门店");
+            throw new BusinessException("取货码不存在或不属于当前门店");
+        }
+
+        SalesOrder order = salesOrderMapper.selectById(record.getOrderId());
+        if (order == null || !tenantId.equals(order.getTenantId()) || !storeId.equals(order.getStoreId())) {
+            auditPickupFailure(tenantId, storeId, operatorId, "取货凭证与订单归属不一致");
             throw new BusinessException("取货码不存在或不属于当前门店");
         }
         if (DeliveryStatusEnum.CONFIRMED.name().equals(record.getStatus())) return record;
@@ -167,9 +186,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
             auditPickupFailure(tenantId, storeId, operatorId, "取货码状态不可核销: " + record.getStatus());
             throw new BusinessException("当前取货码不可核销");
         }
-
-        SalesOrder order = salesOrderMapper.selectById(record.getOrderId());
-        if (order == null || !OrderStatusEnum.COMPLETED.name().equals(order.getOrderStatus())) {
+        if (!OrderStatusEnum.COMPLETED.name().equals(order.getOrderStatus())) {
             auditPickupFailure(tenantId, storeId, operatorId, "订单未完成备货即尝试核销, orderNo=" + record.getOrderNo());
             throw new BusinessException("订单尚未确认备货完成，暂不能核销");
         }

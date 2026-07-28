@@ -18,6 +18,7 @@ import com.payment.mapper.StoreMapper;
 import com.payment.mapper.StoreProductMapper;
 import com.payment.mapper.StoreProductStockMapper;
 import com.payment.service.StoreInventoryService;
+import com.payment.service.MerchantStoreScope;
 import com.payment.service.V1MerchantProductService;
 import com.payment.util.BizNoGenerator;
 import lombok.RequiredArgsConstructor;
@@ -41,16 +42,21 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     private final StoreProductMapper storeProductMapper;
     private final StoreProductStockMapper storeProductStockMapper;
     private final StoreInventoryService storeInventoryService;
-    private final V1MerchantSupportService v1MerchantSupportService;
     private final ProductIndexMessagePublisher productIndexMessagePublisher;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     @Override
     public Page<V1MerchantProductVO> listProducts(Long tenantId, Long platformUserId, Integer current, Integer size,
                                                   String search, String category, String status) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        List<Long> accessibleProductIds = accessibleProductIds(tenantId, scope);
+        if (!scope.allStores() && accessibleProductIds.isEmpty()) {
+            return new Page<>(current, size, 0);
+        }
         Page<Product> page = productMapper.selectPage(new Page<>(current, size), new LambdaQueryWrapper<Product>()
                 .eq(Product::getTenantId, tenantId)
                 .eq(Product::getDeleted, 0)
+                .in(!scope.allStores(), Product::getId, accessibleProductIds)
                 // 商品状态筛选属于门店商品关系，不在租户级 Product 上过滤；
                 // 否则任一门店下架回写 Product.status 会污染所有门店。
                 .eq(category != null && !category.isBlank(), Product::getCategory, category)
@@ -58,7 +64,7 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
                         .or().like(Product::getProductCode, search))
                 .orderByDesc(Product::getCreateTime));
 
-        Map<Long, StoreProduct> relationMap = primaryRelations(tenantId, page.getRecords());
+        Map<Long, StoreProduct> relationMap = primaryRelations(tenantId, page.getRecords(), scope);
         List<V1MerchantProductVO> records = page.getRecords().stream()
                 .map(product -> toProductVO(product, relationMap.get(product.getId())))
                 .filter(vo -> status == null || status.isBlank() || status.equalsIgnoreCase(vo.getStatus()))
@@ -70,15 +76,21 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
 
     @Override
     public V1MerchantProductVO getProduct(Long tenantId, Long platformUserId, Long productId) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
         Product product = getTenantProduct(tenantId, productId);
-        return toProductVO(product, primaryRelation(tenantId, productId));
+        StoreProduct relation = primaryRelation(tenantId, productId, scope);
+        if (!scope.allStores() && relation == null) {
+            throw new BusinessException("商品不存在或无权访问");
+        }
+        return toProductVO(product, relation);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantProductVO createProduct(Long tenantId, Long platformUserId, V1MerchantProductUpsertDTO dto) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        requireAllStores(scope, "仅全门店管理员可创建租户商品");
+        merchantStoreScopeService.requireStoreAccess(scope, dto.getStoreId());
         validateActiveStore(tenantId, dto.getStoreId());
         validateFulfillmentMode(dto.getFulfillmentMode());
         String productCode = resolveProductCode(dto);
@@ -104,10 +116,14 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantProductVO updateProduct(Long tenantId, Long platformUserId, Long productId, V1MerchantProductUpsertDTO dto) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        merchantStoreScopeService.requireStoreAccess(scope, dto.getStoreId());
         validateActiveStore(tenantId, dto.getStoreId());
         validateFulfillmentMode(dto.getFulfillmentMode());
         Product product = getTenantProduct(tenantId, productId);
+        if (!scope.allStores()) {
+            ensureTenantMetadataUnchanged(product, dto);
+        }
         String productCode = resolveProductCode(dto);
         ensureProductCodeAvailable(tenantId, productCode, productId);
 
@@ -132,7 +148,8 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     public Page<V1MerchantProductChangeLogVO> listProductChangeLogs(Long tenantId, Long platformUserId, Long productId,
                                                                       Integer current, Integer size) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        requireAllStores(scope, "仅全门店管理员可查看商品变更流水");
         getTenantProduct(tenantId, productId);
         Page<ProductChangeLog> page = productChangeLogMapper.selectPage(new Page<>(current, size),
                 new LambdaQueryWrapper<ProductChangeLog>()
@@ -148,7 +165,8 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteProduct(Long tenantId, Long platformUserId, Long productId) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        requireAllStores(scope, "仅全门店管理员可删除租户商品");
         Product product = getTenantProduct(tenantId, productId);
         product.setDeleted(1);
         product.setStatus(0);
@@ -160,14 +178,16 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
         productIndexMessagePublisher.publishDelete(product);
     }
 
-    private Map<Long, StoreProduct> primaryRelations(Long tenantId, List<Product> products) {
+    private Map<Long, StoreProduct> primaryRelations(Long tenantId, List<Product> products,
+                                                     MerchantStoreScope scope) {
         List<Long> productIds = products.stream().map(Product::getId).toList();
         if (productIds.isEmpty()) {
-            return Map.of();
+                return Map.of();
         }
         return storeProductMapper.selectList(new LambdaQueryWrapper<StoreProduct>()
                         .eq(StoreProduct::getTenantId, tenantId)
                         .in(StoreProduct::getProductId, productIds)
+                        .in(!scope.allStores(), StoreProduct::getStoreId, scope.storeIds())
                         .orderByAsc(StoreProduct::getStoreId))
                 .stream()
                 .collect(Collectors.toMap(StoreProduct::getProductId, relation -> relation, (left, right) -> left));
@@ -180,12 +200,52 @@ public class V1MerchantProductServiceImpl implements V1MerchantProductService {
                 .eq(StoreProduct::getProductId, productId));
     }
 
-    private StoreProduct primaryRelation(Long tenantId, Long productId) {
+    private StoreProduct primaryRelation(Long tenantId, Long productId, MerchantStoreScope scope) {
         return storeProductMapper.selectOne(new LambdaQueryWrapper<StoreProduct>()
                 .eq(StoreProduct::getTenantId, tenantId)
                 .eq(StoreProduct::getProductId, productId)
+                .in(!scope.allStores(), StoreProduct::getStoreId, scope.storeIds())
                 .orderByAsc(StoreProduct::getStoreId)
                 .last("LIMIT 1"));
+    }
+
+    private List<Long> accessibleProductIds(Long tenantId, MerchantStoreScope scope) {
+        if (scope.allStores()) {
+            return List.of();
+        }
+        if (scope.storeIds().isEmpty()) {
+            return List.of();
+        }
+        return storeProductMapper.selectList(new LambdaQueryWrapper<StoreProduct>()
+                        .eq(StoreProduct::getTenantId, tenantId)
+                        .in(StoreProduct::getStoreId, scope.storeIds()))
+                .stream()
+                .map(StoreProduct::getProductId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private MerchantStoreScope resolveScope(Long tenantId, Long platformUserId) {
+        return merchantStoreScopeService.resolve(tenantId, platformUserId, MerchantPermission.PRODUCT_MANAGE);
+    }
+
+    private void requireAllStores(MerchantStoreScope scope, String message) {
+        if (!scope.allStores()) {
+            throw new BusinessException(message);
+        }
+    }
+
+    private void ensureTenantMetadataUnchanged(Product product, V1MerchantProductUpsertDTO dto) {
+        String requestedCode = dto.getProductCode() == null ? null : dto.getProductCode().trim();
+        if (!java.util.Objects.equals(product.getProductCode(), requestedCode)
+                || !java.util.Objects.equals(product.getName(), dto.getName())
+                || !java.util.Objects.equals(product.getUnit(), dto.getUnit())
+                || !java.util.Objects.equals(product.getCategory(), dto.getCategory())
+                || !java.util.Objects.equals(product.getDescription(), dto.getDescription())
+                || !java.util.Objects.equals(product.getImageUrl(), dto.getImageUrl())) {
+            throw new BusinessException("当前员工只能修改授权门店的价格、上下架状态和库存");
+        }
     }
 
     private StoreProduct createRelation(Long tenantId, Long storeId, Long productId, V1MerchantProductUpsertDTO dto) {

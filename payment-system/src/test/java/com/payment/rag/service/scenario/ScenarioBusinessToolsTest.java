@@ -10,6 +10,9 @@ import com.payment.service.SalesStatisticsService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.V1AdminService;
 import com.payment.service.WithdrawalService;
+import com.payment.service.impl.MerchantStoreScopeService;
+import com.payment.service.impl.V1MerchantSupportService;
+import com.payment.service.MerchantStoreScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -20,11 +23,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
 
 @DisplayName("AI 场景业务工具权限测试")
 class ScenarioBusinessToolsTest {
 
     private ScenarioBusinessTools createTools(AuthContextService authContextService) {
+        MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        when(scopeService.resolve(any(), any(), any()))
+                .thenReturn(new MerchantStoreScope(2001L, 3L, true, List.of()));
         return new ScenarioBusinessTools(
                 authContextService,
                 mock(UnifiedWalletService.class),
@@ -35,7 +42,9 @@ class ScenarioBusinessToolsTest {
                 mock(RefundApplicationService.class),
                 mock(MerchantWalletService.class),
                 mock(WithdrawalService.class),
-                mock(V1AdminService.class)
+                mock(V1AdminService.class),
+                scopeService,
+                mock(V1MerchantSupportService.class)
         );
     }
 

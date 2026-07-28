@@ -3,6 +3,7 @@ package com.payment.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
+import com.payment.constant.MerchantPermission;
 import com.payment.dto.StoreReviewCreateDTO;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.Store;
@@ -11,6 +12,7 @@ import com.payment.mapper.SalesOrderMapper;
 import com.payment.mapper.StoreMapper;
 import com.payment.mapper.StoreReviewMapper;
 import com.payment.service.StoreReviewService;
+import com.payment.service.MerchantStoreScope;
 import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -29,6 +31,7 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     private final StoreReviewMapper storeReviewMapper;
     private final SalesOrderMapper salesOrderMapper;
     private final StoreMapper storeMapper;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,10 +78,18 @@ public class StoreReviewServiceImpl implements StoreReviewService {
     }
 
     @Override
-    public Page<StoreReview> listTenantReviews(Long tenantId, Long storeId, Integer rating, int page, int size) {
+    public Page<StoreReview> listTenantReviews(Long tenantId, Long operatorId, Long storeId, Integer rating, int page, int size) {
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        if (storeId != null) {
+            merchantStoreScopeService.requireStoreAccess(scope, storeId);
+        } else if (!scope.allStores() && scope.storeIds().isEmpty()) {
+            return new Page<>(page, size, 0);
+        }
         return storeReviewMapper.selectPage(new Page<>(page, size), new LambdaQueryWrapper<StoreReview>()
                 .eq(StoreReview::getTenantId, tenantId)
                 .eq(storeId != null, StoreReview::getStoreId, storeId)
+                .in(storeId == null && !scope.allStores(), StoreReview::getStoreId, scope.storeIds())
                 .eq(rating != null, StoreReview::getRating, rating)
                 .orderByDesc(StoreReview::getCreateTime));
     }
@@ -99,6 +110,9 @@ public class StoreReviewServiceImpl implements StoreReviewService {
         if (!tenantId.equals(review.getTenantId())) {
             throw new BusinessException("评价不存在");
         }
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, operatorId, MerchantPermission.ORDER_MANAGE);
+        merchantStoreScopeService.requireStoreAccess(scope, review.getStoreId());
         review.setMerchantReply(content.trim());
         review.setMerchantReplyOperatorId(operatorId);
         review.setMerchantReplyTime(LocalDateTime.now());

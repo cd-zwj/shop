@@ -12,6 +12,8 @@ import com.payment.service.SalesStatisticsService;
 import com.payment.service.UnifiedWalletService;
 import com.payment.service.V1AdminService;
 import com.payment.service.WithdrawalService;
+import com.payment.service.impl.MerchantStoreScopeService;
+import com.payment.service.impl.V1MerchantSupportService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -68,7 +70,9 @@ class ScenarioToolExposureServiceTest {
                 mock(RefundApplicationService.class),
                 mock(MerchantWalletService.class),
                 mock(WithdrawalService.class),
-                mock(V1AdminService.class)
+                mock(V1AdminService.class),
+                mock(MerchantStoreScopeService.class),
+                mock(V1MerchantSupportService.class)
         );
         return new ScenarioToolExposureService(
                 authContextService,

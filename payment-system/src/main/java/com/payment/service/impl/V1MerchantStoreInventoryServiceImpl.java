@@ -16,6 +16,7 @@ import com.payment.mapper.StoreInventoryChangeLogMapper;
 import com.payment.mapper.StoreMapper;
 import com.payment.mapper.StoreProductStockMapper;
 import com.payment.service.StoreInventoryService;
+import com.payment.service.MerchantStoreScope;
 import com.payment.service.V1MerchantStoreInventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,17 +34,23 @@ public class V1MerchantStoreInventoryServiceImpl implements V1MerchantStoreInven
     private final StoreMapper storeMapper;
     private final ProductMapper productMapper;
     private final StoreInventoryService storeInventoryService;
-    private final V1MerchantSupportService v1MerchantSupportService;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     @Override
     public Page<V1MerchantStoreInventoryVO> listStocks(Long tenantId, Long platformUserId, Integer current, Integer size,
                                                        Long storeId, Long productId, Boolean lowStockOnly, Integer threshold) {
-        requireManagePermission(tenantId, platformUserId);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        if (storeId != null) {
+            merchantStoreScopeService.requireStoreAccess(scope, storeId);
+        } else if (!scope.allStores() && scope.storeIds().isEmpty()) {
+            return emptyPage(current, size);
+        }
         int safeThreshold = threshold == null ? 5 : Math.max(0, threshold);
         Page<StoreProductStock> page = storeProductStockMapper.selectPage(new Page<>(current, size),
                 new LambdaQueryWrapper<StoreProductStock>()
                         .eq(StoreProductStock::getTenantId, tenantId)
                         .eq(storeId != null, StoreProductStock::getStoreId, storeId)
+                        .in(storeId == null && !scope.allStores(), StoreProductStock::getStoreId, scope.storeIds())
                         .eq(productId != null, StoreProductStock::getProductId, productId)
                         .apply(Boolean.TRUE.equals(lowStockOnly), "quantity - locked_quantity <= {0}", safeThreshold)
                         .orderByAsc(StoreProductStock::getStoreId)
@@ -57,7 +64,8 @@ public class V1MerchantStoreInventoryServiceImpl implements V1MerchantStoreInven
     @Transactional(rollbackFor = Exception.class)
     public V1MerchantStoreInventoryVO adjustStock(Long tenantId, Long platformUserId,
                                                    V1MerchantStoreInventoryAdjustDTO dto) {
-        requireManagePermission(tenantId, platformUserId);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        merchantStoreScopeService.requireStoreAccess(scope, dto.getStoreId());
         if (dto.getDelta() == null || dto.getDelta() == 0) {
             throw new BusinessException("库存调整数量不能为 0");
         }
@@ -71,11 +79,17 @@ public class V1MerchantStoreInventoryServiceImpl implements V1MerchantStoreInven
     @Override
     public Page<V1MerchantStoreInventoryLogVO> listChangeLogs(Long tenantId, Long platformUserId, Integer current,
                                                                Integer size, Long storeId, Long productId) {
-        requireManagePermission(tenantId, platformUserId);
+        MerchantStoreScope scope = resolveScope(tenantId, platformUserId);
+        if (storeId != null) {
+            merchantStoreScopeService.requireStoreAccess(scope, storeId);
+        } else if (!scope.allStores() && scope.storeIds().isEmpty()) {
+            return emptyPage(current, size);
+        }
         Page<StoreInventoryChangeLog> page = inventoryChangeLogMapper.selectPage(new Page<>(current, size),
                 new LambdaQueryWrapper<StoreInventoryChangeLog>()
                         .eq(StoreInventoryChangeLog::getTenantId, tenantId)
                         .eq(storeId != null, StoreInventoryChangeLog::getStoreId, storeId)
+                        .in(storeId == null && !scope.allStores(), StoreInventoryChangeLog::getStoreId, scope.storeIds())
                         .eq(productId != null, StoreInventoryChangeLog::getProductId, productId)
                         .orderByDesc(StoreInventoryChangeLog::getCreateTime));
         Page<V1MerchantStoreInventoryLogVO> result = new Page<>(page.getCurrent(), page.getSize(), page.getTotal());
@@ -83,8 +97,12 @@ public class V1MerchantStoreInventoryServiceImpl implements V1MerchantStoreInven
         return result;
     }
 
-    private void requireManagePermission(Long tenantId, Long platformUserId) {
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.INVENTORY_MANAGE);
+    private MerchantStoreScope resolveScope(Long tenantId, Long platformUserId) {
+        return merchantStoreScopeService.resolve(tenantId, platformUserId, MerchantPermission.INVENTORY_MANAGE);
+    }
+
+    private <T> Page<T> emptyPage(Integer current, Integer size) {
+        return new Page<>(current, size, 0);
     }
 
     private void requireActiveStore(Long tenantId, Long storeId) {

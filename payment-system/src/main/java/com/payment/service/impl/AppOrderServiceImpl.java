@@ -19,7 +19,6 @@ import com.payment.entity.PointsRule;
 import com.payment.entity.Product;
 import com.payment.entity.SalesOrder;
 import com.payment.entity.SalesOrderItem;
-import com.payment.entity.TenantEmployee;
 import com.payment.entity.TenantMember;
 import com.payment.entity.UserShippingAddress;
 import com.payment.enums.OrderStatusEnum;
@@ -34,10 +33,11 @@ import com.payment.mapper.StoreProductMapper;
 import com.payment.mapper.OrderDiscountSnapshotMapper;
 import com.payment.mapper.SalesOrderItemMapper;
 import com.payment.mapper.SalesOrderMapper;
-import com.payment.mapper.TenantEmployeeMapper;
 import com.payment.mapper.TenantMemberMapper;
 import com.payment.mapper.UserShippingAddressMapper;
 import com.payment.service.AppOrderService;
+import com.payment.service.MerchantStoreScope;
+import com.payment.constant.MerchantPermission;
 import com.payment.service.CouponService;
 import com.payment.service.MemberPointsAccountService;
 import com.payment.service.MerchantWalletService;
@@ -92,7 +92,6 @@ public class AppOrderServiceImpl implements AppOrderService {
 
     private final SalesOrderMapper salesOrderMapper;
     private final SalesOrderItemMapper salesOrderItemMapper;
-    private final TenantEmployeeMapper tenantEmployeeMapper;
     private final TenantMemberMapper tenantMemberMapper;
     private final UnifiedWalletService unifiedWalletService;
     private final MerchantWalletService merchantWalletService;
@@ -110,6 +109,7 @@ public class AppOrderServiceImpl implements AppOrderService {
     private final UserShippingAddressMapper userShippingAddressMapper;
 
     private final StoreProductMapper storeProductMapper;
+    private final MerchantStoreScopeService merchantStoreScopeService;
 
     /**
      * 创建订单并发起支付。
@@ -293,21 +293,17 @@ public class AppOrderServiceImpl implements AppOrderService {
      */
     @Override
     public SalesOrderDetailVO getMerchantOrderDetail(Long tenantId, Long platformUserId, String orderNo) {
-        TenantEmployee tenantEmployee = tenantEmployeeMapper.selectOne(new LambdaQueryWrapper<TenantEmployee>()
-                .eq(TenantEmployee::getTenantId, tenantId)
-                .eq(TenantEmployee::getPlatformUserId, platformUserId)
-                .eq(TenantEmployee::getStatus, 1));
-        if (tenantEmployee == null) {
-            throw new BusinessException("当前用户无权查看该商户订单");
-        }
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
 
         SalesOrder salesOrder = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
                 .eq(SalesOrder::getOrderNo, orderNo)
                 .eq(SalesOrder::getTenantId, tenantId)
                 .eq(SalesOrder::getDeleted, 0));
         if (salesOrder == null) {
-            throw new BusinessException("订单不存在");
+            throw new BusinessException("订单不存在或无权访问");
         }
+        requireOrderStoreAccess(scope, salesOrder);
 
         return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
     }
@@ -346,20 +342,32 @@ public class AppOrderServiceImpl implements AppOrderService {
                 trimToNull(payStatus),
                 trimToNull(keyword),
                 normalizedFulfillmentStatus,
-                deliveryStatuses);
+                deliveryStatuses,
+                null,
+                null);
     }
 
     @Override
     public Page<SalesOrderListVO> listMerchantOrderViews(Long tenantId,
+                                                         Long platformUserId,
                                                          Integer current,
                                                          Integer size,
+                                                         Long storeId,
                                                          String orderStatus,
                                                          String payStatus,
                                                          String keyword,
                                                          String fulfillmentStatus,
                                                          String deliveryStatus) {
-        Page<SalesOrder> orderPage = listMerchantOrders(
-                tenantId, current, size, orderStatus, payStatus, keyword, fulfillmentStatus, deliveryStatus);
+        MerchantStoreScope scope = merchantStoreScopeService.resolve(
+                tenantId, platformUserId, MerchantPermission.ORDER_MANAGE);
+        if (storeId != null) {
+            merchantStoreScopeService.requireStoreAccess(scope, storeId);
+        } else if (!scope.allStores() && scope.storeIds().isEmpty()) {
+            return new Page<>(current, size, 0);
+        }
+        Page<SalesOrder> orderPage = listScopedMerchantOrders(
+                tenantId, current, size, storeId, scope, orderStatus, payStatus, keyword,
+                fulfillmentStatus, deliveryStatus);
         List<SalesOrder> orders = orderPage.getRecords() == null ? List.of() : orderPage.getRecords();
         Map<String, List<SalesOrderItem>> itemsByOrderNo = listItemsByOrderNo(orders);
         List<SalesOrderListVO> records = orders.stream()
@@ -369,6 +377,38 @@ public class AppOrderServiceImpl implements AppOrderService {
         Page<SalesOrderListVO> result = new Page<>(orderPage.getCurrent(), orderPage.getSize(), orderPage.getTotal());
         result.setRecords(records);
         return result;
+    }
+
+    private Page<SalesOrder> listScopedMerchantOrders(Long tenantId,
+                                                      Integer current,
+                                                      Integer size,
+                                                      Long storeId,
+                                                      MerchantStoreScope scope,
+                                                      String orderStatus,
+                                                      String payStatus,
+                                                      String keyword,
+                                                      String fulfillmentStatus,
+                                                      String deliveryStatus) {
+        return salesOrderMapper.selectMerchantOrders(
+                new Page<>(current, size),
+                tenantId,
+                trimToNull(orderStatus),
+                trimToNull(payStatus),
+                trimToNull(keyword),
+                normalizeFulfillmentStatus(fulfillmentStatus),
+                normalizeDeliveryStatuses(deliveryStatus),
+                storeId,
+                scope.allStores() ? null : scope.storeIds());
+    }
+
+    private void requireOrderStoreAccess(MerchantStoreScope scope, SalesOrder order) {
+        if (order.getStoreId() == null) {
+            if (!scope.allStores()) {
+                throw new BusinessException("订单不存在或无权访问");
+            }
+            return;
+        }
+        merchantStoreScopeService.requireStoreAccess(scope, order.getStoreId());
     }
 
     private Map<String, List<SalesOrderItem>> listItemsByOrderNo(List<SalesOrder> orders) {

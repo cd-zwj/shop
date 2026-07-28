@@ -121,8 +121,10 @@ public interface AppOrderService {
      * @return 订单列表视图分页结果
      */
     Page<SalesOrderListVO> listMerchantOrderViews(Long tenantId,
+                                                  Long platformUserId,
                                                   Integer current,
                                                   Integer size,
+                                                  Long storeId,
                                                   String orderStatus,
                                                   String payStatus,
                                                   String keyword,

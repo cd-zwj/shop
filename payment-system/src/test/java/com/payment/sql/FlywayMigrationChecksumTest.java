@@ -45,7 +45,9 @@ class FlywayMigrationChecksumTest {
             Map.entry("V25__pickup_code_hash.sql", -1470136308),
             Map.entry("V26__order_expire_scan_index.sql", -677144994),
             Map.entry("V27__payment_callback_failure_audit.sql", -1601699441),
-            Map.entry("V28__remove_legacy_virtual_product_and_pos_schema.sql", 595058280));
+            Map.entry("V28__remove_legacy_virtual_product_and_pos_schema.sql", 595058280),
+            Map.entry("V29__add_employee_store_scope.sql", 1949602222),
+            Map.entry("V30__harden_employee_store_scope_relations.sql", -1603515530));
 
     @Test
     void historicallyAppliedMigrationsShouldRemainByteCompatible() throws IOException {

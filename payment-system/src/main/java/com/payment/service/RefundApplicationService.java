@@ -70,6 +70,8 @@ public interface RefundApplicationService {
      */
     Page<RefundApplication> listTenantRefunds(Long tenantId, String status, int page, int size);
 
+    Page<RefundApplication> listMerchantRefunds(Long tenantId, Long operatorId, String status, int page, int size);
+
     /**
      * 商户端：审核退款申请。
      * <p>
@@ -83,6 +85,9 @@ public interface RefundApplicationService {
      * @param rejectReason 拒绝原因（approved 为 false 时必填）
      */
     void auditRefund(Long tenantId, Long refundId, Long adminId, boolean approved, String rejectReason);
+
+    void auditMerchantRefund(Long tenantId, Long refundId, Long operatorId,
+                             boolean approved, String rejectReason);
 
     /**
      * 退款完成回调。
@@ -99,4 +104,6 @@ public interface RefundApplicationService {
 
     /** 查询售后处理流水，供各方追溯。 */
     List<AfterSaleAction> listActions(Long tenantId, Long refundId);
+
+    List<AfterSaleAction> listMerchantActions(Long tenantId, Long refundId, Long operatorId);
 }

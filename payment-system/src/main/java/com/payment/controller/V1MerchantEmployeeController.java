@@ -5,6 +5,7 @@ import com.payment.common.Result;
 import com.payment.dto.V1MerchantEmployeeCreateDTO;
 import com.payment.dto.V1MerchantEmployeeRoleUpdateDTO;
 import com.payment.dto.V1MerchantEmployeeStatusUpdateDTO;
+import com.payment.dto.V1MerchantEmployeeStoreScopeUpdateDTO;
 import com.payment.dto.V1MerchantEmployeeVO;
 import com.payment.service.V1MerchantEmployeeService;
 import com.payment.util.PlatformSessionHelper;
@@ -64,5 +65,15 @@ public class V1MerchantEmployeeController {
             @Valid @RequestBody V1MerchantEmployeeStatusUpdateDTO dto) {
         return Result.success(employeeService.updateStatus(
                 tenantId, PlatformSessionHelper.getPlatformUserId(), employeeId, dto.getStatus()));
+    }
+
+    @SaCheckLogin(type = "merchant")
+    @PutMapping("/{employeeId}/store-scope")
+    public Result<V1MerchantEmployeeVO> updateStoreScope(
+            @PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
+            @PathVariable @Min(value = 1, message = "ID必须大于0") Long employeeId,
+            @Valid @RequestBody V1MerchantEmployeeStoreScopeUpdateDTO dto) {
+        return Result.success(employeeService.updateStoreScope(
+                tenantId, PlatformSessionHelper.getPlatformUserId(), employeeId, dto));
     }
 }

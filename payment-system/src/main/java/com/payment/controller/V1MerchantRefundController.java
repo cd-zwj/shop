@@ -4,11 +4,9 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.PageResult;
 import com.payment.common.Result;
-import com.payment.constant.MerchantPermission;
 import com.payment.entity.RefundApplication;
 import com.payment.vo.AfterSaleActionVO;
 import com.payment.service.RefundApplicationService;
-import com.payment.service.impl.V1MerchantSupportService;
 import com.payment.util.PlatformSessionHelper;
 import com.payment.vo.RefundApplicationVO;
 import jakarta.validation.Valid;
@@ -31,7 +29,6 @@ import java.util.List;
 public class V1MerchantRefundController {
 
     private final RefundApplicationService refundApplicationService;
-    private final V1MerchantSupportService v1MerchantSupportService;
 
     /**
      * 分页查询租户下的退款申请列表。
@@ -49,9 +46,8 @@ public class V1MerchantRefundController {
                                                                       @RequestParam(defaultValue = "1") @Min(value = 1, message = "页码必须大于0") Integer pageNum,
                                                                       @RequestParam(defaultValue = "10") @Min(value = 1, message = "每页条数必须大于0") Integer pageSize) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.REFUND_MANAGE);
-
-        Page<RefundApplication> page = refundApplicationService.listTenantRefunds(tenantId, status, pageNum, pageSize);
+        Page<RefundApplication> page = refundApplicationService.listMerchantRefunds(
+                tenantId, platformUserId, status, pageNum, pageSize);
         return Result.success(PageResult.from(page, RefundApplicationVO::from));
     }
 
@@ -69,9 +65,7 @@ public class V1MerchantRefundController {
                                      @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId,
                                      @Valid @RequestBody AuditRefundRequest request) {
         Long platformUserId = PlatformSessionHelper.getPlatformUserId();
-        v1MerchantSupportService.requirePermission(tenantId, platformUserId, MerchantPermission.REFUND_MANAGE);
-
-        refundApplicationService.auditRefund(tenantId, refundId, platformUserId,
+        refundApplicationService.auditMerchantRefund(tenantId, refundId, platformUserId,
                 request.isApproved(), request.getRejectReason());
         return Result.success();
     }
@@ -80,8 +74,8 @@ public class V1MerchantRefundController {
     @GetMapping("/{refundId}/actions")
     public Result<List<AfterSaleActionVO>> listActions(@PathVariable @Min(value = 1, message = "ID必须大于0") Long tenantId,
                                                         @PathVariable @Min(value = 1, message = "ID必须大于0") Long refundId) {
-        v1MerchantSupportService.requirePermission(tenantId, PlatformSessionHelper.getPlatformUserId(), MerchantPermission.REFUND_MANAGE);
-        return Result.success(refundApplicationService.listActions(tenantId, refundId).stream()
+        return Result.success(refundApplicationService.listMerchantActions(
+                        tenantId, refundId, PlatformSessionHelper.getPlatformUserId()).stream()
                 .map(AfterSaleActionVO::from).toList());
     }
 
