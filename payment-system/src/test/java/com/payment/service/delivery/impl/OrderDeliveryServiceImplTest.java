@@ -13,6 +13,7 @@ import com.payment.service.AuditLogService;
 import com.payment.service.OutboxPublisher;
 import com.payment.service.UserNotificationService;
 import com.payment.service.MerchantStoreScope;
+import com.payment.service.delivery.PickupCodePayloadService;
 import com.payment.service.impl.MerchantStoreScopeService;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class OrderDeliveryServiceImplTest {
 
@@ -136,6 +138,45 @@ class OrderDeliveryServiceImplTest {
         verify(fixture.deliveryRecordMapper, never()).update(any(), any());
     }
 
+    @Test
+    void deliverOrderShouldPersistEncryptedPickupPayload() {
+        Fixture fixture = new Fixture();
+        SalesOrder order = order("PAID");
+        order.setOrderNo("SO001");
+        order.setPlatformUserId(100L);
+        order.setFulfillmentMode("STORE_PICKUP");
+        com.payment.entity.SalesOrderItem item = new com.payment.entity.SalesOrderItem();
+        item.setId(11L);
+        item.setProductId(21L);
+        item.setProductName("测试商品");
+        when(fixture.salesOrderMapper.selectOne(any())).thenReturn(order);
+        when(fixture.salesOrderItemMapper.selectByOrderId(3L)).thenReturn(java.util.List.of(item));
+        when(fixture.payloadService.createEncryptedPayload(
+                eq(9L), eq("SO001"), eq(11L), eq(7L), any()))
+                .thenReturn("{\"pickupCodeCiphertext\":\"pc1.v1.cipher\",\"storeId\":7}");
+
+        fixture.service.deliverOrder("SO001");
+
+        ArgumentCaptor<OrderDeliveryRecord> captor = ArgumentCaptor.forClass(OrderDeliveryRecord.class);
+        verify(fixture.deliveryRecordMapper).insert(captor.capture());
+        assertThat(captor.getValue().getPayload()).doesNotContain("pickupCode\"");
+        assertThat(captor.getValue().getPickupCodeHash()).hasSize(64);
+    }
+
+    @Test
+    void getPickupCodesForUserShouldDecryptOnlyMatchingDeliveryRecords() {
+        Fixture fixture = new Fixture();
+        OrderDeliveryRecord record = record();
+        record.setPlatformUserId(100L);
+        record.setPayload("{\"pickupCodeCiphertext\":\"pc1.v1.cipher\"}");
+        when(fixture.deliveryRecordMapper.selectList(any())).thenReturn(java.util.List.of(record));
+        when(fixture.payloadService.readPickupCode(record)).thenReturn("12345678");
+
+        java.util.Map<Long, String> result = fixture.service.getPickupCodesForUser(9L, 100L, "SO001");
+
+        assertThat(result).containsExactly(java.util.Map.entry(11L, "12345678"));
+    }
+
     private static OrderDeliveryRecord record() {
         OrderDeliveryRecord record = new OrderDeliveryRecord();
         record.setId(1L);
@@ -166,6 +207,7 @@ class OrderDeliveryServiceImplTest {
         private final UserNotificationService notificationService = mock(UserNotificationService.class);
         private final AuditLogService auditLogService = mock(AuditLogService.class);
         private final MerchantStoreScopeService scopeService = mock(MerchantStoreScopeService.class);
+        private final PickupCodePayloadService payloadService = mock(PickupCodePayloadService.class);
         private final OrderDeliveryServiceImpl service = new OrderDeliveryServiceImpl(
                 salesOrderMapper,
                 salesOrderItemMapper,
@@ -174,7 +216,8 @@ class OrderDeliveryServiceImplTest {
                 outboxPublisher,
                 notificationService,
                 auditLogService,
-                scopeService);
+                scopeService,
+                payloadService);
 
         private Fixture() {
             this(true);

@@ -23,8 +23,8 @@ import com.payment.service.UserNotificationService;
 import com.payment.service.MerchantStoreScope;
 import com.payment.service.impl.MerchantStoreScopeService;
 import com.payment.service.delivery.OrderDeliveryService;
+import com.payment.service.delivery.PickupCodePayloadService;
 import com.payment.service.outbox.OutboxMessageCommand;
-import com.payment.util.JsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -56,6 +56,7 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
     private final UserNotificationService notificationService;
     private final AuditLogService auditLogService;
     private final MerchantStoreScopeService merchantStoreScopeService;
+    private final PickupCodePayloadService pickupCodePayloadService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -115,7 +116,8 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
         for (int attempt = 0; attempt < PICKUP_CODE_MAX_ATTEMPTS; attempt++) {
             String code = String.format("%08d", PICKUP_CODE_RANDOM.nextInt(100_000_000));
             record.setId(null);
-            record.setPayload(JsonUtils.toJson(Map.of("pickupCode", code, "storeId", order.getStoreId())));
+            record.setPayload(pickupCodePayloadService.createEncryptedPayload(
+                    order.getTenantId(), order.getOrderNo(), item.getId(), order.getStoreId(), code));
             record.setPickupCodeHash(DigestUtil.sha256Hex(code));
             try {
                 deliveryRecordMapper.insert(record);
@@ -138,6 +140,29 @@ public class OrderDeliveryServiceImpl implements OrderDeliveryService {
             return;
         }
         throw new BusinessException("取货码生成失败，请重试");
+    }
+
+    @Override
+    public Map<Long, String> getPickupCodesForUser(Long tenantId, Long platformUserId, String orderNo) {
+        if (tenantId == null || tenantId <= 0 || platformUserId == null || platformUserId <= 0
+                || orderNo == null || orderNo.isBlank()) {
+            throw new BusinessException("取货码查询参数不合法");
+        }
+        List<OrderDeliveryRecord> records = deliveryRecordMapper.selectList(
+                new LambdaQueryWrapper<OrderDeliveryRecord>()
+                        .eq(OrderDeliveryRecord::getTenantId, tenantId)
+                        .eq(OrderDeliveryRecord::getPlatformUserId, platformUserId)
+                        .eq(OrderDeliveryRecord::getOrderNo, orderNo)
+                        .in(OrderDeliveryRecord::getStatus,
+                                DeliveryStatusEnum.DELIVERED.name(), DeliveryStatusEnum.CONFIRMED.name())
+                        .eq(OrderDeliveryRecord::getDeleted, 0));
+        Map<Long, String> result = new java.util.LinkedHashMap<>();
+        for (OrderDeliveryRecord record : records) {
+            if (record.getOrderItemId() != null) {
+                result.put(record.getOrderItemId(), pickupCodePayloadService.readPickupCode(record));
+            }
+        }
+        return Map.copyOf(result);
     }
 
     private void notifyPickupCode(SalesOrder order, SalesOrderItem item) {

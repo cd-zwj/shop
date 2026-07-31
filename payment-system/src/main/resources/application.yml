@@ -239,6 +239,12 @@ app:
   # 需要 Elasticsearch 时显式设置 APP_SEARCH_ENABLED=true 并在 docker-compose 中提供 ES 服务。
   search:
     enabled: ${APP_SEARCH_ENABLED:false}
+  pickup-code:
+    crypto:
+      active-key-id: ${PICKUP_CODE_ACTIVE_KEY_ID:}
+      keys: ${PICKUP_CODE_ENCRYPTION_KEYS:}
+      rotate-on-startup: ${PICKUP_CODE_ROTATE_ON_STARTUP:false}
+      rotation-batch-size: ${PICKUP_CODE_ROTATION_BATCH_SIZE:200}
   auth:
     email:
       enabled: ${MAIL_ENABLED:false}

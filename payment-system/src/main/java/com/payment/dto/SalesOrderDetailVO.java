@@ -5,6 +5,7 @@ import com.payment.entity.SalesOrderItem;
 import lombok.Data;
 
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDateTime;
 
 /**
@@ -18,6 +19,9 @@ public class SalesOrderDetailVO {
 
     /** 订单商品项列表 */
     private List<SalesOrderItem> items;
+
+    /** 仅 C 端授权详情填充；key 为订单项 ID。 */
+    private Map<Long, String> pickupCodesByOrderItemId;
 
     /** 关联的支付账单编号 */
     private String paymentBillNo;

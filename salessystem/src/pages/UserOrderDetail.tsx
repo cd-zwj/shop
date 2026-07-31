@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CreditCard,
   HelpCircle,
+  KeyRound,
   MapPin,
   MessageCircle,
   Package,
@@ -356,6 +357,15 @@ export default function UserOrderDetail() {
                                 {fulfillment.actionLabel}
                               </button>
                             )}
+                          </div>
+                        )}
+                        {item?.pickupCode && (
+                          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                            <span className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                              <KeyRound className="h-4 w-4 text-primary" />
+                              取货码
+                            </span>
+                            <code className="text-base font-black text-slate-900">{item.pickupCode}</code>
                           </div>
                         )}
                       </div>

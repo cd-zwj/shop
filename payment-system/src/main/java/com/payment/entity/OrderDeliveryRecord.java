@@ -1,10 +1,13 @@
 package com.payment.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -12,7 +15,7 @@ import java.time.LocalDateTime;
 /**
  * 订单交付记录，对应数据库表 order_delivery_record。
  * <p>
- * payload 仅保存到店自提凭证，例如 {"pickupCode":"12345678","storeId":1}。
+ * payload 仅保存应用层加密后的到店自提凭证。
  */
 @Data
 @TableName("order_delivery_record")
@@ -48,9 +51,15 @@ public class OrderDeliveryRecord implements Serializable {
     private String status;
 
     /** JSON 到店自提凭证 */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private String payload;
 
     /** 取货码 SHA-256 哈希（hex），核销校验与同租户唯一性依据 */
+    @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private String pickupCodeHash;
 
     /** 自提门店 ID */

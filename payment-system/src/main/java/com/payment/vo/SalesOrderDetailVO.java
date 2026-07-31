@@ -73,6 +73,7 @@ public class SalesOrderDetailVO {
         private Long subtotal;
         private String deliveryStatus;
         private String deliveredTime;
+        private String pickupCode;
     }
 
     public static SalesOrderDetailVO from(com.payment.dto.SalesOrderDetailVO detailVO) {
@@ -128,13 +129,13 @@ public class SalesOrderDetailVO {
 
         if (detailVO.getItems() != null) {
             vo.setItems(detailVO.getItems().stream()
-                    .map(SalesOrderDetailVO::toItemVO)
+                    .map(item -> toItemVO(item, detailVO.getPickupCodesByOrderItemId()))
                     .collect(Collectors.toList()));
         }
         return vo;
     }
 
-    private static SalesOrderItemVO toItemVO(SalesOrderItem item) {
+    private static SalesOrderItemVO toItemVO(SalesOrderItem item, java.util.Map<Long, String> pickupCodes) {
         return SalesOrderItemVO.builder()
                 .id(item.getId())
                 .productId(item.getProductId())
@@ -144,6 +145,7 @@ public class SalesOrderDetailVO {
                 .subtotal(VoConverterUtil.toFen(item.getSubtotal()))
                 .deliveryStatus(item.getDeliveryStatus())
                 .deliveredTime(VoConverterUtil.formatTime(item.getDeliveredTime()))
+                .pickupCode(pickupCodes == null ? null : pickupCodes.get(item.getId()))
                 .build();
     }
 }

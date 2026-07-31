@@ -3,6 +3,7 @@ package com.payment.service.delivery;
 import com.payment.entity.OrderDeliveryRecord;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 订单交付服务。
@@ -25,6 +26,9 @@ public interface OrderDeliveryService {
 
     /** Consumer 入口：对订单所有 item 创建自提交付记录并更新 item.delivery_status。 */
     void deliverOrder(String orderNo);
+
+    /** C 端：仅按租户、订单和所属用户返回订单项取货码。 */
+    Map<Long, String> getPickupCodesForUser(Long tenantId, Long platformUserId, String orderNo);
 
     /** B 端：到店自提核销，校验指定门店的自提码并写入领取留痕；不改变订单完成状态。 */
     OrderDeliveryRecord verifyPickup(Long tenantId, Long storeId, String pickupCode, Long operatorId);

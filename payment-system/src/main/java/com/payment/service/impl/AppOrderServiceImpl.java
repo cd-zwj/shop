@@ -277,7 +277,11 @@ public class AppOrderServiceImpl implements AppOrderService {
     @Override
     public SalesOrderDetailVO getOrderDetail(Long platformUserId, String orderNo) {
         SalesOrder salesOrder = getByOrderNo(platformUserId, orderNo);
-        return buildOrderDetailVO(salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
+        SalesOrderDetailVO detail = buildOrderDetailVO(
+                salesOrder, salesOrderItemMapper.selectByOrderId(salesOrder.getId()));
+        detail.setPickupCodesByOrderItemId(orderDeliveryService.getPickupCodesForUser(
+                salesOrder.getTenantId(), platformUserId, salesOrder.getOrderNo()));
+        return detail;
     }
 
     /**

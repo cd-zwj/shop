@@ -107,6 +107,7 @@ export interface SalesOrderItem {
   /** PENDING / DELIVERING / DELIVERED / CONFIRMED / FAILED / REVOKED */
   deliveryStatus?: string | null;
   deliveredTime?: string | null;
+  pickupCode?: string | null;
   createTime?: string | null;
 }
 

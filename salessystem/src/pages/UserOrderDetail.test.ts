@@ -75,6 +75,33 @@ async function renderUserOrderDetail() {
 }
 
 describe('UserOrderDetail', () => {
+  it('shows the decrypted pickup code for its order item', async () => {
+    mockedOrderService.getOrder.mockResolvedValue({
+      ...buildOrderDetail(buildOrder()),
+      items: [{
+        id: 11,
+        orderId: 1,
+        orderNo: 'SO202607080001',
+        tenantId: 9,
+        productId: 21,
+        productName: '门店商品',
+        price: 9900,
+        quantity: 1,
+        subtotal: 9900,
+        deliveryStatus: 'DELIVERED',
+        pickupCode: '12345678',
+      }],
+    });
+    mockedRefundService.listRefunds.mockResolvedValue({
+      records: [], total: 0, page: 1, current: 1, size: 100, pages: 0,
+    });
+
+    const element = await renderUserOrderDetail();
+
+    expect(element.textContent).toContain('取货码');
+    expect(element.textContent).toContain('12345678');
+  });
+
   it('lets users retry a failed detail load and then shows payment failure actions', async () => {
     mockedOrderService.getOrder
       .mockRejectedValueOnce(new Error('订单详情接口暂不可用'))

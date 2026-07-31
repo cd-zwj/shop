@@ -14,6 +14,7 @@ import com.payment.vo.SalesOrderDetailVO;
 import com.payment.vo.SalesOrderListVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -77,7 +78,8 @@ public class V1AppOrderController {
      */
     @SaCheckLogin(type = "platform")
     @GetMapping("/{orderNo}")
-    public Result<SalesOrderDetailVO> getOrder(@PathVariable String orderNo) {
+    public Result<SalesOrderDetailVO> getOrder(@PathVariable String orderNo, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
         com.payment.dto.SalesOrderDetailVO detailVO = appOrderService.getOrderDetail(PlatformSessionHelper.getPlatformUserId(), orderNo);
         return Result.success(SalesOrderDetailVO.from(detailVO));
     }
