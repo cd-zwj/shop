@@ -86,6 +86,40 @@ async function mockPickupApis(page: Page, submittedPayloads: unknown[]) {
   })));
 }
 
+async function mockDeliveredPickupOrder(page: Page) {
+  await page.route('**/api/v1/app/refunds?**', (route) => json(route, ok({
+    records: [], total: 0, page: 1, current: 1, size: 100, pages: 0,
+  })));
+  await page.route('**/api/v1/app/orders/SO-PICKUP-DELIVERED', (route) => json(route, ok({
+    id: 201,
+    orderNo: 'SO-PICKUP-DELIVERED',
+    tenantId: 9,
+    platformUserId: 99,
+    orderStatus: 'PAID',
+    payStatus: 'SUCCESS',
+    totalAmount: 2990,
+    payableAmount: 2990,
+    externalPayAmount: 2990,
+    subject: '门店自提订单',
+    storeId: 11,
+    fulfillmentMode: 'STORE_PICKUP',
+    paymentBillStatus: 'SUCCESS',
+    items: [{
+      id: 501,
+      orderId: 201,
+      orderNo: 'SO-PICKUP-DELIVERED',
+      tenantId: 9,
+      productId: 101,
+      productName: '门店一号商品',
+      price: 2990,
+      quantity: 1,
+      subtotal: 2990,
+      deliveryStatus: 'DELIVERED',
+      pickupCode: '12345678',
+    }],
+  })));
+}
+
 test('购物车仅保留一个自提门店，并以自提载荷创建订单', async ({ page }) => {
   const submittedPayloads: unknown[] = [];
   await seedUserSession(page);
@@ -114,4 +148,16 @@ test('购物车仅保留一个自提门店，并以自提载荷创建订单', as
     items: [{ productId: 101, quantity: 1, price: 29.9 }],
   });
   expect(submittedPayloads[0]).not.toHaveProperty('addressId');
+});
+
+test('已交付订单按订单项展示取货码', async ({ page }) => {
+  await seedUserSession(page);
+  await mockPickupApis(page, []);
+  await mockDeliveredPickupOrder(page);
+
+  await page.goto('/order/SO-PICKUP-DELIVERED');
+
+  await expect(page.getByText('门店一号商品')).toBeVisible();
+  await expect(page.getByText('取货码', { exact: true })).toBeVisible();
+  await expect(page.getByText('12345678', { exact: true })).toBeVisible();
 });
