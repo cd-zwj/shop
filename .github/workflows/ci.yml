@@ -10,18 +10,6 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: payment_db_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
       redis:
         image: redis:7-alpine
         ports:
@@ -37,6 +25,58 @@ jobs:
         run: mvn test -B
       - working-directory: payment-system
         run: mvn package -DskipTests -B
+
+  mysql-migrations:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [fresh, historical]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci-${{ github.run_id }}-${{ matrix.scenario }}
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+      - name: Import V12 manual snapshot
+        working-directory: payment-system/sql
+        env:
+          MYSQL_PWD: ci-${{ github.run_id }}-${{ matrix.scenario }}
+        run: mysql --protocol=TCP --host=127.0.0.1 --port=3307 --user=root < import_all.sql
+      - name: Mark disposable migration database
+        env:
+          MYSQL_PWD: ci-${{ github.run_id }}-${{ matrix.scenario }}
+          MYSQL_MIGRATION_IT_GUARD_TOKEN: migration-it-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.scenario }}
+        run: >-
+          mysql --protocol=TCP --host=127.0.0.1 --port=3307 --user=root
+          --execute="CREATE TABLE payment_db.__mysql_migration_it_guard
+          (guard_token VARCHAR(128) NOT NULL PRIMARY KEY);
+          INSERT INTO payment_db.__mysql_migration_it_guard (guard_token)
+          VALUES ('$MYSQL_MIGRATION_IT_GUARD_TOKEN');"
+      - name: Verify ${{ matrix.scenario }} migration path
+        working-directory: payment-system
+        env:
+          MYSQL_MIGRATION_IT_ENABLED: 'true'
+          MYSQL_MIGRATION_IT_DISPOSABLE: 'true'
+          MYSQL_MIGRATION_IT_SCENARIO: ${{ matrix.scenario }}
+          MYSQL_MIGRATION_IT_URL: jdbc:mysql://127.0.0.1:3307/payment_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+          MYSQL_MIGRATION_IT_USER: root
+          MYSQL_MIGRATION_IT_PASSWORD: ci-${{ github.run_id }}-${{ matrix.scenario }}
+          MYSQL_MIGRATION_IT_GUARD_TOKEN: migration-it-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.scenario }}
+        run: mvn -B -Dtest=MySqlFlywayMigrationIntegrationTest test
 
   frontend:
     runs-on: ubuntu-latest
