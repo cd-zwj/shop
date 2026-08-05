@@ -4,6 +4,7 @@ import com.payment.common.BusinessException;
 import com.payment.config.MyBatisPlusConfig;
 import com.payment.dto.RefundCreateDTO;
 import com.payment.mapper.SalesOrderMapper;
+import com.payment.mapper.RefundApplicationMapper;
 import com.payment.service.RefundApplicationService;
 import com.payment.service.RefundService;
 import com.payment.service.MessageIdempotentService;
@@ -75,6 +76,9 @@ class MySqlConcurrencyIntegrationTest {
 
     @Autowired
     private RefundApplicationService refundApplicationService;
+
+    @Autowired
+    private RefundApplicationMapper refundApplicationMapper;
 
     @Autowired
     private MessageIdempotentService messageIdempotentService;
@@ -275,6 +279,101 @@ class MySqlConcurrencyIntegrationTest {
     }
 
     @Test
+    void concurrentAfterSaleDecisionsShouldHaveExactlyOneCasWinner() throws Exception {
+        insertOrder("SO-MYSQL-DECISION", "COMPLETED", "SUCCESS");
+        jdbcTemplate.update("""
+                INSERT INTO refund_application
+                    (refund_no, order_no, platform_user_id, tenant_id, refund_type,
+                     refund_status, refund_amount, reason)
+                VALUES ('RA-MYSQL-DECISION', 'SO-MYSQL-DECISION', ?, ?,
+                        'REFUND_ONLY', 'PENDING', 20.00, 'concurrent decision')
+                """, USER_ID, TENANT_ID);
+        Long refundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM refund_application WHERE refund_no = 'RA-MYSQL-DECISION'", Long.class);
+
+        List<Integer> changed = runConcurrently(List.of(
+                () -> refundApplicationMapper.claimDecision(
+                        refundId, TENANT_ID, "PENDING", "REJECTED", 950001L, "merchant rejection"),
+                () -> refundApplicationMapper.claimDecision(
+                        refundId, TENANT_ID, "PENDING", "REJECTED", 950002L, "platform rejection")));
+
+        assertThat(changed).containsExactlyInAnyOrder(1, 0);
+        assertThat(jdbcTemplate.queryForMap("""
+                        SELECT refund_status, admin_id, reject_reason
+                        FROM refund_application WHERE id = ?
+                        """, refundId))
+                .containsEntry("refund_status", "REJECTED");
+    }
+
+    @Test
+    void concurrentRefundCancellationAndDecisionShouldHaveExactlyOneCasWinner() throws Exception {
+        insertOrder("SO-MYSQL-CANCEL-DECISION", "COMPLETED", "SUCCESS");
+        jdbcTemplate.update("""
+                INSERT INTO refund_application
+                    (refund_no, order_no, platform_user_id, tenant_id, refund_type,
+                     refund_status, refund_amount, reason)
+                VALUES ('RA-MYSQL-CANCEL-DECISION', 'SO-MYSQL-CANCEL-DECISION', ?, ?,
+                        'REFUND_ONLY', 'PENDING', 20.00, 'concurrent cancellation and decision')
+                """, USER_ID, TENANT_ID);
+        Long refundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM refund_application WHERE refund_no = 'RA-MYSQL-CANCEL-DECISION'", Long.class);
+
+        List<Integer> changed = runConcurrently(List.of(
+                () -> refundApplicationMapper.cancelPending(refundId, TENANT_ID, USER_ID),
+                () -> refundApplicationMapper.claimDecision(
+                        refundId, TENANT_ID, "PENDING", "REJECTED", 950001L, "merchant rejection")));
+
+        assertThat(changed).containsExactlyInAnyOrder(1, 0);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT refund_status FROM refund_application WHERE id = ?", String.class, refundId))
+                .isIn("CANCELLED", "REJECTED");
+    }
+
+    @Test
+    void rejectedWholeRefundApprovalShouldNotRaceWithNewItemRefund() throws Exception {
+        long orderId = insertOrder("SO-MYSQL-RECONSIDER", "COMPLETED", "SUCCESS");
+        jdbcTemplate.update("""
+                INSERT INTO sales_order_item
+                    (order_id, order_no, tenant_id, product_id, product_name,
+                     price, quantity, subtotal, delivery_status)
+                VALUES (?, 'SO-MYSQL-RECONSIDER', ?, ?, 'concurrency item',
+                        20.00, 1, 20.00, 'PENDING')
+                """, orderId, TENANT_ID, PRODUCT_ID);
+        Long orderItemId = jdbcTemplate.queryForObject(
+                "SELECT id FROM sales_order_item WHERE order_no = 'SO-MYSQL-RECONSIDER'", Long.class);
+        jdbcTemplate.update("""
+                INSERT INTO refund_application
+                    (refund_no, order_no, platform_user_id, tenant_id, refund_type,
+                     refund_status, refund_amount, reason, reject_reason)
+                VALUES ('RA-MYSQL-RECONSIDER', 'SO-MYSQL-RECONSIDER', ?, ?,
+                        'REFUND_ONLY', 'REJECTED', 20.00, 'whole order', 'merchant rejection')
+                """, USER_ID, TENANT_ID);
+        Long rejectedRefundId = jdbcTemplate.queryForObject(
+                "SELECT id FROM refund_application WHERE refund_no = 'RA-MYSQL-RECONSIDER'", Long.class);
+
+        RefundCreateDTO itemRefund = new RefundCreateDTO();
+        itemRefund.setOrderNo("SO-MYSQL-RECONSIDER");
+        itemRefund.setOrderItemId(orderItemId);
+        itemRefund.setRefundType("REFUND_ONLY");
+        itemRefund.setRefundAmount(new BigDecimal("20.00"));
+        itemRefund.setReason("new item refund");
+
+        List<Throwable> failures = runConcurrentlyCapturingFailures(List.of(
+                () -> refundApplicationService.intervene(
+                        TENANT_ID, rejectedRefundId, 950002L, "REJECTED", true, "platform approval"),
+                () -> refundApplicationService.createRefund(USER_ID, TENANT_ID, itemRefund)));
+
+        assertThat(failures).hasSize(1);
+        assertThat(failures.getFirst()).isInstanceOf(BusinessException.class);
+        assertThat(jdbcTemplate.queryForObject("""
+                        SELECT COUNT(*) FROM refund_application
+                        WHERE tenant_id = ? AND order_no = ?
+                          AND refund_status IN ('PENDING', 'APPROVED', 'PROCESSING')
+                        """, Integer.class, TENANT_ID, "SO-MYSQL-RECONSIDER"))
+                .isEqualTo(1);
+    }
+
+    @Test
     void concurrentDuplicateMessageShouldExecuteBusinessOnlyOnce() throws Exception {
         String messageId = "payment.v1.order.paid:SO-MYSQL-MQ";
         String queueName = "payment.v1.order.paid";
@@ -401,8 +500,14 @@ class MySqlConcurrencyIntegrationTest {
 
     private List<Throwable> runConcurrentlyCapturingFailures(int taskCount, ThrowingRunnable action)
             throws Exception {
-        List<Callable<Throwable>> tasks = java.util.stream.IntStream.range(0, taskCount)
-                .mapToObj(index -> (Callable<Throwable>) () -> {
+        return runConcurrentlyCapturingFailures(
+                java.util.Collections.nCopies(taskCount, action));
+    }
+
+    private List<Throwable> runConcurrentlyCapturingFailures(List<ThrowingRunnable> actions)
+            throws Exception {
+        List<Callable<Throwable>> tasks = actions.stream()
+                .map(action -> (Callable<Throwable>) () -> {
                     try {
                         action.run();
                         return null;

@@ -1,6 +1,6 @@
 import React from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RoleGuard from './RoleGuard';
 
@@ -14,10 +14,12 @@ function renderGuard({
   initialPath = '/admin',
   allowedRoles = ['admin'],
   merchantPermission,
+  adminPermission,
 }: {
   initialPath?: string;
   allowedRoles?: Array<'user' | 'merchant' | 'admin'>;
   merchantPermission?: import('../../utils/merchantPermissions').MerchantPermission;
+  adminPermission?: string;
 } = {}) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -27,15 +29,24 @@ function renderGuard({
     React.createElement(
       MemoryRouter,
       { initialEntries: [initialPath] },
-      React.createElement(RoleGuard, {
-        allowedRoles,
-        merchantPermission,
-        children: React.createElement('div', null, 'protected content'),
-      }),
+      React.createElement(React.Fragment, null,
+        React.createElement(RoleGuard, {
+          allowedRoles,
+          merchantPermission,
+          adminPermission,
+          children: React.createElement('div', null, 'protected content'),
+        }),
+        React.createElement(LocationProbe),
+      ),
     ),
   );
 
   return { container, root };
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return React.createElement('span', { 'data-testid': 'location' }, location.pathname);
 }
 
 function cleanup(root: Root, container: HTMLDivElement) {
@@ -138,6 +149,34 @@ describe('RoleGuard', () => {
     });
 
     await vi.waitFor(() => {
+      expect(container.textContent).not.toContain('protected content');
+    });
+
+    cleanup(root, container);
+  });
+
+  it('没有平台售后查询权限的管理员会被路由守卫拦截', async () => {
+    mockUseAuth.mockReturnValue({
+      currentRole: 'admin',
+      currentUser: null,
+      merchantSession: null,
+      adminSession: {
+        userId: 1,
+        username: 'readonly-admin',
+        role: 'admin',
+        scope: 'all',
+        permissions: ['admin:after-sale:manage'],
+        roles: ['admin'],
+      },
+    });
+
+    const { root, container } = renderGuard({
+      initialPath: '/admin/after-sales',
+      adminPermission: 'admin:after-sale:list',
+    });
+
+    await vi.waitFor(() => {
+      expect(container.querySelector('[data-testid="location"]')?.textContent).toBe('/admin');
       expect(container.textContent).not.toContain('protected content');
     });
 

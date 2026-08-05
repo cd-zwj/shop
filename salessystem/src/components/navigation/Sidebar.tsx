@@ -27,12 +27,13 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../lib/utils';
+import { filterAdminPermissionItems } from '../../utils/adminPermissions';
 import { filterMerchantPermissionItems, type MerchantPermission } from '../../utils/merchantPermissions';
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, merchantSession } = useAuth();
+  const { logout, merchantSession, adminSession } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const isAdmin = location.pathname.startsWith('/admin');
   const isMerchant = location.pathname.startsWith('/merchant');
@@ -47,6 +48,7 @@ export function Sidebar() {
     { icon: Wallet, label: '充值监管', path: '/admin/recharges' },
     { icon: ShieldCheck, label: '用户安全治理', path: '/admin/users' },
     { icon: ArrowUpRight, label: '提现审批中心', path: '/admin/withdrawals' },
+    { icon: HeartHandshake, label: '售后运营', path: '/admin/after-sales', permission: 'admin:after-sale:list' },
     { icon: Sparkles, label: '平台营销运营', path: '/admin/marketing' },
     { icon: Database, label: '知识库管理', path: '/admin/documents' },
     { icon: Bot, label: 'AI 治理助手', path: '/admin/ai' },
@@ -78,7 +80,7 @@ export function Sidebar() {
   if (!isAdmin && !isMerchant) return null;
 
   const currentMenu = isAdmin
-    ? adminMenu
+    ? filterAdminPermissionItems(adminSession?.permissions, adminMenu)
     : filterMerchantPermissionItems(merchantSession?.employeeRole, merchantMenu);
   const title = isAdmin ? '管理控制台' : '商户中心';
   const subtitle = isAdmin ? '全局治理' : '店铺管理';

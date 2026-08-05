@@ -5,6 +5,7 @@ import com.payment.entity.RefundApplication;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.util.List;
@@ -44,4 +45,56 @@ public interface RefundApplicationMapper extends BaseMapper<RefundApplication> {
                                                @Param("tenantId") Long tenantId,
                                                @Param("status") String status,
                                                @Param("storeIds") List<Long> storeIds);
+
+    @Select("""
+            <script>
+            SELECT ra.*
+            FROM refund_application ra
+            WHERE 1 = 1
+            <if test="tenantId != null">
+              AND ra.tenant_id = #{tenantId}
+            </if>
+            <if test="status != null and status != ''">
+              AND ra.refund_status = #{status}
+            </if>
+            <if test="keyword != null and keyword != ''">
+              AND (ra.refund_no LIKE CONCAT('%', #{keyword}, '%')
+                   OR ra.order_no LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            ORDER BY ra.create_time DESC, ra.id DESC
+            </script>
+            """)
+    Page<RefundApplication> selectAdminPage(Page<RefundApplication> page,
+                                            @Param("tenantId") Long tenantId,
+                                            @Param("status") String status,
+                                            @Param("keyword") String keyword);
+
+    @Update("""
+            UPDATE refund_application
+            SET refund_status = #{targetStatus},
+                admin_id = #{adminId},
+                audit_time = NOW(),
+                reject_reason = #{rejectReason}
+            WHERE id = #{refundId}
+              AND tenant_id = #{tenantId}
+              AND refund_status = #{expectedStatus}
+            """)
+    int claimDecision(@Param("refundId") Long refundId,
+                      @Param("tenantId") Long tenantId,
+                      @Param("expectedStatus") String expectedStatus,
+                      @Param("targetStatus") String targetStatus,
+                      @Param("adminId") Long adminId,
+                      @Param("rejectReason") String rejectReason);
+
+    @Update("""
+            UPDATE refund_application
+            SET refund_status = 'CANCELLED'
+            WHERE id = #{refundId}
+              AND tenant_id = #{tenantId}
+              AND platform_user_id = #{platformUserId}
+              AND refund_status = 'PENDING'
+            """)
+    int cancelPending(@Param("refundId") Long refundId,
+                      @Param("tenantId") Long tenantId,
+                      @Param("platformUserId") Long platformUserId);
 }

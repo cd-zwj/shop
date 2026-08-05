@@ -72,6 +72,13 @@ public interface RefundApplicationService {
 
     Page<RefundApplication> listMerchantRefunds(Long tenantId, Long operatorId, String status, int page, int size);
 
+    /** Platform operations: query after-sale requests across tenants. */
+    Page<RefundApplication> listAdminRefunds(
+            Long tenantId, String status, String keyword, int page, int size);
+
+    /** Platform operations: fetch one request with explicit tenant ownership. */
+    RefundApplication getAdminRefund(Long tenantId, Long refundId);
+
     /**
      * 商户端：审核退款申请。
      * <p>
@@ -100,7 +107,8 @@ public interface RefundApplicationService {
     void completeRefund(Long tenantId, Long refundId);
 
     /** 平台介入待审核售后并作出退款或驳回决定。 */
-    void intervene(Long tenantId, Long refundId, Long adminId, boolean approved, String remark);
+    void intervene(Long tenantId, Long refundId, Long adminId, String expectedStatus,
+                   boolean approved, String remark);
 
     /** 查询售后处理流水，供各方追溯。 */
     List<AfterSaleAction> listActions(Long tenantId, Long refundId);

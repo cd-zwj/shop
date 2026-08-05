@@ -234,8 +234,10 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())) {
             throw new BusinessException("只有待审核状态的退款申请才能取消");
         }
-        app.setRefundStatus(RefundApplicationStatus.CANCELLED.name());
-        refundApplicationMapper.updateById(app);
+        int cancelled = refundApplicationMapper.cancelPending(refundId, tenantId, platformUserId);
+        if (cancelled != 1) {
+            throw new BusinessException("退款状态已变更，请刷新后重试");
+        }
         recordAction(app, "USER_CANCEL", "USER", platformUserId, null, null);
         log.info("退款申请已取消: refundNo={}", app.getRefundNo());
     }
@@ -273,6 +275,27 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         return result;
     }
 
+    @Override
+    public Page<RefundApplication> listAdminRefunds(
+            Long tenantId, String status, String keyword, int page, int size) {
+        validateAdminListRequest(status, page, size);
+        String normalizedKeyword = keyword == null || keyword.isBlank() ? null : keyword.trim();
+        Page<RefundApplication> result = refundApplicationMapper.selectAdminPage(
+                new Page<>(page, size), tenantId, normalizeRefundStatus(status), normalizedKeyword);
+        // Queue rows use persisted fields only; derived delivery/refundable snapshots are loaded on detail.
+        return result;
+    }
+
+    @Override
+    public RefundApplication getAdminRefund(Long tenantId, Long refundId) {
+        RefundApplication application = refundApplicationMapper.selectById(refundId);
+        if (application == null || !tenantId.equals(application.getTenantId())) {
+            throw new BusinessException("退款申请不存在");
+        }
+        enrichRefundApplication(application);
+        return application;
+    }
+
     /**
      * 审核退款申请。
      * <p>
@@ -296,7 +319,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())) {
             throw new BusinessException("只有待审核状态的退款申请才能审核");
         }
-        processDecision(app, adminId, approved, rejectReason, "MERCHANT",
+        processDecision(app, adminId, RefundApplicationStatus.PENDING.name(), approved, rejectReason, "MERCHANT",
                 approved ? "MERCHANT_APPROVE" : "MERCHANT_REJECT");
     }
 
@@ -314,7 +337,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         if (!RefundApplicationStatus.PENDING.name().equals(app.getRefundStatus())) {
             throw new BusinessException("只有待审核状态的退款申请才能审核");
         }
-        processDecision(app, operatorId, approved, rejectReason, "MERCHANT",
+        processDecision(app, operatorId, RefundApplicationStatus.PENDING.name(), approved, rejectReason, "MERCHANT",
                 approved ? "MERCHANT_APPROVE" : "MERCHANT_REJECT");
     }
 
@@ -344,17 +367,31 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         merchantStoreScopeService.requireStoreAccess(scope, order.getStoreId());
     }
 
-    private void processDecision(RefundApplication app, Long operatorId, boolean approved, String rejectionReason,
+    private void processDecision(RefundApplication app, Long operatorId, String expectedStatus,
+                                 boolean approved, String rejectionReason,
                                  String operatorRole, String action) {
         String normalizedReason = rejectionReason == null ? null : rejectionReason.trim();
 
+        if (!approved && (normalizedReason == null || normalizedReason.isBlank())) {
+            throw new BusinessException("拒绝退款时必须填写拒绝原因");
+        }
+
+        String targetStatus = approved
+                ? RefundApplicationStatus.APPROVED.name()
+                : RefundApplicationStatus.REJECTED.name();
+        String storedRejectReason = approved ? null : normalizedReason;
+        int claimed = refundApplicationMapper.claimDecision(
+                app.getId(), app.getTenantId(), expectedStatus, targetStatus, operatorId, storedRejectReason);
+        if (claimed != 1) {
+            throw new BusinessException("售后状态已变更，请刷新后重试");
+        }
+
         app.setAdminId(operatorId);
         app.setAuditTime(LocalDateTime.now());
+        app.setRefundStatus(targetStatus);
+        app.setRejectReason(storedRejectReason);
 
         if (approved) {
-            app.setRefundStatus(RefundApplicationStatus.APPROVED.name());
-            app.setRejectReason(null);
-            refundApplicationMapper.updateById(app);
             log.info("退款申请已通过: refundNo={}, operatorId={}, role={}", app.getRefundNo(), operatorId, operatorRole);
 
             DeliverySnapshot deliverySnapshot = resolveDeliverySnapshot(app);
@@ -374,15 +411,12 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
             app.setRefundStatus(RefundApplicationStatus.PROCESSING.name());
             applySnapshot(app, deliverySnapshot);
         } else {
-            if (normalizedReason == null || normalizedReason.isBlank()) {
-                throw new BusinessException("拒绝退款时必须填写拒绝原因");
-            }
-            app.setRefundStatus(RefundApplicationStatus.REJECTED.name());
-            app.setRejectReason(normalizedReason);
             log.info("退款申请已拒绝: refundNo={}, reason={}", app.getRefundNo(), normalizedReason);
         }
 
-        refundApplicationMapper.updateById(app);
+        if (approved) {
+            refundApplicationMapper.updateById(app);
+        }
         String actionRemark = "ADMIN".equals(operatorRole) ? normalizedReason : (approved ? null : normalizedReason);
         recordAction(app, action, operatorRole, operatorId, actionRemark, null);
     }
@@ -483,6 +517,15 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
     }
 
     private void ensureNoActiveRefund(String orderNo, Long orderItemId, Long tenantId) {
+        Long activeCount = refundApplicationMapper.selectCount(
+                activeRefundQuery(orderNo, orderItemId, tenantId));
+        if (activeCount != null && activeCount > 0) {
+            throw new BusinessException("该订单已有进行中的退款申请");
+        }
+    }
+
+    private LambdaQueryWrapper<RefundApplication> activeRefundQuery(
+            String orderNo, Long orderItemId, Long tenantId) {
         LambdaQueryWrapper<RefundApplication> wrapper = new LambdaQueryWrapper<RefundApplication>()
                 .eq(RefundApplication::getOrderNo, orderNo)
                 .eq(RefundApplication::getTenantId, tenantId)
@@ -495,11 +538,7 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
                     .or()
                     .eq(RefundApplication::getOrderItemId, orderItemId));
         }
-
-        Long activeCount = refundApplicationMapper.selectCount(wrapper);
-        if (activeCount != null && activeCount > 0) {
-            throw new BusinessException("该订单已有进行中的退款申请");
-        }
+        return wrapper;
     }
 
     private BigDecimal calculateRefundableAmount(SalesOrder salesOrder) {
@@ -619,9 +658,18 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void intervene(Long tenantId, Long refundId, Long adminId, boolean approved, String remark) {
-        if (remark == null || remark.isBlank()) {
+    public void intervene(Long tenantId, Long refundId, Long adminId, String expectedStatus,
+                          boolean approved, String remark) {
+        String normalizedRemark = remark == null ? null : remark.trim();
+        if (normalizedRemark == null || normalizedRemark.isBlank()) {
             throw new BusinessException("平台处理说明不能为空");
+        }
+        if (normalizedRemark.length() > 1000) {
+            throw new BusinessException("平台处理说明不能超过1000个字符");
+        }
+        if (!RefundApplicationStatus.PENDING.name().equals(expectedStatus)
+                && !RefundApplicationStatus.REJECTED.name().equals(expectedStatus)) {
+            throw new BusinessException("售后当前状态仅支持PENDING或REJECTED");
         }
         RefundApplication app = refundApplicationMapper.selectById(refundId);
         if (app == null || !tenantId.equals(app.getTenantId())) {
@@ -631,12 +679,39 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
                 && !RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
             throw new BusinessException("当前售后状态不允许平台介入处理");
         }
-        if (approved && RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
-            // A rejected request can be reconsidered only when the user has not opened a replacement request.
-            ensureNoActiveRefund(app.getOrderNo(), app.getOrderItemId(), tenantId);
+        if (!expectedStatus.equals(app.getRefundStatus())) {
+            throw new BusinessException("售后状态已变更，请刷新后重试");
         }
-        processDecision(app, adminId, approved, remark, "ADMIN",
+        if (!approved && RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
+            throw new BusinessException("已驳回售后仅支持平台重新批准");
+        }
+        if (approved && RefundApplicationStatus.REJECTED.name().equals(app.getRefundStatus())) {
+            lockRefundOrder(tenantId, app.getOrderNo());
+            // Serialize reconsideration with new applications before checking overlapping active refunds.
+            ensureNoActiveRefundForUpdate(app.getOrderNo(), app.getOrderItemId(), tenantId);
+        }
+        processDecision(app, adminId, expectedStatus, approved, normalizedRemark, "ADMIN",
                 approved ? "PLATFORM_APPROVE" : "PLATFORM_REJECT");
+    }
+
+    private void lockRefundOrder(Long tenantId, String orderNo) {
+        SalesOrder order = salesOrderMapper.selectOne(new LambdaQueryWrapper<SalesOrder>()
+                .eq(SalesOrder::getTenantId, tenantId)
+                .eq(SalesOrder::getOrderNo, orderNo)
+                .eq(SalesOrder::getDeleted, 0)
+                .last(" FOR UPDATE"));
+        if (order == null) {
+            throw new BusinessException("退款申请不存在");
+        }
+    }
+
+    private void ensureNoActiveRefundForUpdate(String orderNo, Long orderItemId, Long tenantId) {
+        LambdaQueryWrapper<RefundApplication> wrapper = activeRefundQuery(orderNo, orderItemId, tenantId)
+                .last(" FOR UPDATE");
+        List<RefundApplication> activeRefunds = refundApplicationMapper.selectList(wrapper);
+        if (activeRefunds != null && !activeRefunds.isEmpty()) {
+            throw new BusinessException("该订单已有进行中的退款申请");
+        }
     }
 
     @Override
@@ -663,6 +738,24 @@ public class RefundApplicationServiceImpl implements RefundApplicationService {
         record.setRemark(remark);
         record.setEvidenceUrlsJson(evidenceUrlsJson);
         afterSaleActionMapper.insert(record);
+    }
+
+    private void validateAdminListRequest(String status, int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw new BusinessException("分页参数不合法");
+        }
+        normalizeRefundStatus(status);
+    }
+
+    private String normalizeRefundStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+        try {
+            return RefundApplicationStatus.valueOf(status.trim().toUpperCase()).name();
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException("退款状态不合法");
+        }
     }
 
     private record DeliverySnapshot(String deliveryStatus,

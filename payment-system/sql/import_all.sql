@@ -40,6 +40,7 @@ SOURCE 32_product_delivery_framework.sql;
 SOURCE 34_ai_tool_permissions.sql;
 SOURCE 36_order_shipping_snapshot.sql;
 SOURCE 37_order_delivery_product_name.sql;
+SOURCE 38_admin_after_sale_permissions.sql;
 SOURCE 99_init_data.sql;
 
 SELECT 'Database initialization completed successfully!' AS message;

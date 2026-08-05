@@ -50,6 +50,7 @@ const AdminPermissions = lazy(() => import('../pages/AdminPermissions'));
 const AdminOrderDetail = lazy(() => import('../pages/AdminOrderDetail'));
 const AdminMarketing = lazy(() => import('../pages/AdminMarketing'));
 const AdminDocuments = lazy(() => import('../pages/AdminDocuments'));
+const AdminAfterSales = lazy(() => import('../pages/AdminAfterSales'));
 
 const MerchantDashboard = lazy(() => import('../pages/merchant/MerchantDashboard'));
 const MerchantOrders = lazy(() => import('../pages/merchant/MerchantOrders'));
@@ -140,6 +141,7 @@ export function AppRoutes() {
         <Route path="/admin/withdrawals" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminWithdrawals /></RoleGuard></AuthGuard>} />
         <Route path="/admin/marketing" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminMarketing /></RoleGuard></AuthGuard>} />
         <Route path="/admin/documents" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AdminDocuments /></RoleGuard></AuthGuard>} />
+        <Route path="/admin/after-sales" element={<AuthGuard><RoleGuard allowedRoles={['admin']} adminPermission="admin:after-sale:list"><AdminAfterSales /></RoleGuard></AuthGuard>} />
         <Route path="/admin/ai" element={<AuthGuard><RoleGuard allowedRoles={['admin']}><AIAssistant /></RoleGuard></AuthGuard>} />
 
         <Route path="/merchant" element={merchantRoute(<MerchantDashboard />, 'dashboard:view')} />

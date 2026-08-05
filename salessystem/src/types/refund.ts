@@ -41,3 +41,13 @@ export interface AfterSaleAction {
   evidenceUrls: string[];
   createTime: string | null;
 }
+
+export interface AdminAfterSale extends Refund {
+  tenantId: number;
+  statusLabel: string | null;
+  statusDescription: string | null;
+  nextStep: string | null;
+  failureReason: string | null;
+  availableActions: string[];
+  updateTime: string;
+}

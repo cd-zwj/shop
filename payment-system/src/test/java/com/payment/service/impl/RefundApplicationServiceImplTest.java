@@ -1,6 +1,7 @@
 package com.payment.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.payment.common.BusinessException;
 import com.payment.dto.RefundCreateDTO;
 import com.payment.entity.OrderDeliveryRecord;
@@ -32,11 +33,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class RefundApplicationServiceImplTest {
@@ -207,9 +210,9 @@ class RefundApplicationServiceImplTest {
         service.auditRefund(TENANT_ID, 1L, 10L, true, null);
 
         ArgumentCaptor<RefundApplication> captor = ArgumentCaptor.forClass(RefundApplication.class);
-        verify(refundMapper, org.mockito.Mockito.times(2)).updateById(captor.capture());
-        assertEquals(List.of(RefundApplicationStatus.APPROVED.name(), RefundApplicationStatus.PROCESSING.name()), statuses);
-        RefundApplication finalUpdate = captor.getAllValues().get(1);
+        verify(refundMapper).updateById(captor.capture());
+        assertEquals(List.of(RefundApplicationStatus.PROCESSING.name()), statuses);
+        RefundApplication finalUpdate = captor.getValue();
         assertEquals(RefundApplicationStatus.PROCESSING.name(), finalUpdate.getRefundStatus());
         assertEquals(DeliveryStatusEnum.PENDING.name(), finalUpdate.getDeliveryStatus());
         assertEquals(Boolean.TRUE, finalUpdate.getQuickRefundSuggested());
@@ -242,30 +245,36 @@ class RefundApplicationServiceImplTest {
         inOrder.verify(refundService).prepareMerchantApprovedRefund(app);
 
         ArgumentCaptor<RefundApplication> captor = ArgumentCaptor.forClass(RefundApplication.class);
-        verify(refundMapper, org.mockito.Mockito.times(2)).updateById(captor.capture());
-        assertEquals(List.of(RefundApplicationStatus.APPROVED.name(), RefundApplicationStatus.PROCESSING.name()), statuses);
-        assertEquals(RefundApplicationStatus.PROCESSING.name(), captor.getAllValues().get(1).getRefundStatus());
-        assertEquals(Boolean.FALSE, captor.getAllValues().get(1).getQuickRefundSuggested());
+        verify(refundMapper).updateById(captor.capture());
+        assertEquals(List.of(RefundApplicationStatus.PROCESSING.name()), statuses);
+        assertEquals(RefundApplicationStatus.PROCESSING.name(), captor.getValue().getRefundStatus());
+        assertEquals(Boolean.FALSE, captor.getValue().getQuickRefundSuggested());
     }
 
     @Test
     void testIntervene_商家驳回后平台可同意且仅记录平台操作() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
         SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
         OrderDeliveryService deliveryService = mock(OrderDeliveryService.class);
         RefundService refundService = mock(RefundService.class);
         AfterSaleActionMapper actionMapper = mock(AfterSaleActionMapper.class);
-        RefundApplicationServiceImpl service = service(refundMapper, mock(SalesOrderMapper.class), itemMapper,
+        RefundApplicationServiceImpl service = service(refundMapper, salesOrderMapper, itemMapper,
                 deliveryService, refundService, actionMapper);
 
         RefundApplication app = pendingRefund();
         app.setRefundStatus(RefundApplicationStatus.REJECTED.name());
         app.setRejectReason("商家不同意");
         when(refundMapper.selectById(1L)).thenReturn(app);
-        when(refundMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
+        when(salesOrderMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(paidOrder());
+        when(refundMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(List.of());
         when(itemMapper.selectByOrderNo(ORDER_NO)).thenReturn(List.of(orderItem(DeliveryStatusEnum.PENDING.name())));
 
-        service.intervene(TENANT_ID, 1L, 99L, true, "核实凭证后支持退款");
+        when(refundMapper.claimDecision(eq(1L), eq(TENANT_ID), eq(RefundApplicationStatus.REJECTED.name()),
+                eq(RefundApplicationStatus.APPROVED.name()), eq(99L), isNull())).thenReturn(1);
+
+        service.intervene(TENANT_ID, 1L, 99L, RefundApplicationStatus.REJECTED.name(),
+                true, "核实凭证后支持退款");
 
         verify(refundService).prepareMerchantApprovedRefund(app);
         ArgumentCaptor<com.payment.entity.AfterSaleAction> actionCaptor =
@@ -275,6 +284,95 @@ class RefundApplicationServiceImplTest {
         assertEquals("ADMIN", actionCaptor.getValue().getOperatorRole());
         assertEquals("核实凭证后支持退款", actionCaptor.getValue().getRemark());
         assertEquals(RefundApplicationStatus.PROCESSING.name(), app.getRefundStatus());
+        InOrder lockOrder = inOrder(salesOrderMapper, refundMapper);
+        lockOrder.verify(salesOrderMapper).selectOne(any(LambdaQueryWrapper.class));
+        lockOrder.verify(refundMapper).selectList(any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    void testIntervene_已驳回申请不允许重复驳回覆盖原决定() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class));
+        RefundApplication app = pendingRefund();
+        app.setRefundStatus(RefundApplicationStatus.REJECTED.name());
+        when(refundMapper.selectById(1L)).thenReturn(app);
+
+        assertThrows(BusinessException.class, () -> service.intervene(
+                TENANT_ID, 1L, 99L, RefundApplicationStatus.REJECTED.name(), false, "再次驳回"));
+
+        verify(refundMapper, never()).claimDecision(anyLong(), anyLong(), any(), any(), anyLong(), any());
+    }
+
+    @Test
+    void testListAdminRefunds_跨租户筛选交给专用分页查询() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        SalesOrderMapper salesOrderMapper = mock(SalesOrderMapper.class);
+        SalesOrderItemMapper itemMapper = mock(SalesOrderItemMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, salesOrderMapper, itemMapper);
+        Page<RefundApplication> expected = new Page<>(2, 20);
+        expected.setRecords(List.of(pendingRefund()));
+        expected.setTotal(1);
+        when(refundMapper.selectAdminPage(any(Page.class), eq(TENANT_ID),
+                eq(RefundApplicationStatus.PENDING.name()), eq("RA-100"))).thenReturn(expected);
+
+        Page<RefundApplication> result = service.listAdminRefunds(
+                TENANT_ID, RefundApplicationStatus.PENDING.name(), " RA-100 ", 2, 20);
+
+        assertEquals(expected, result);
+        verify(refundMapper).selectAdminPage(any(Page.class), eq(TENANT_ID),
+                eq(RefundApplicationStatus.PENDING.name()), eq("RA-100"));
+        verifyNoInteractions(salesOrderMapper, itemMapper);
+    }
+
+    @Test
+    void testListAdminRefunds_非法状态被拒绝() {
+        RefundApplicationServiceImpl service = service(
+                mock(RefundApplicationMapper.class), mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class));
+
+        assertThrows(BusinessException.class,
+                () -> service.listAdminRefunds(null, "UNKNOWN", null, 1, 20));
+    }
+
+    @Test
+    void testGetAdminRefund_租户与退款单不匹配时不返回数据() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class));
+        when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
+
+        assertThrows(BusinessException.class, () -> service.getAdminRefund(99L, 1L));
+    }
+
+    @Test
+    void testIntervene_旧状态提交在CAS失败后不得触发退款或流水() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        RefundService refundService = mock(RefundService.class);
+        AfterSaleActionMapper actionMapper = mock(AfterSaleActionMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class),
+                mock(OrderDeliveryService.class), refundService, actionMapper);
+        when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
+        when(refundMapper.claimDecision(eq(1L), eq(TENANT_ID), eq(RefundApplicationStatus.PENDING.name()),
+                eq(RefundApplicationStatus.APPROVED.name()), eq(99L), isNull())).thenReturn(0);
+
+        assertThrows(BusinessException.class, () -> service.intervene(
+                TENANT_ID, 1L, 99L, RefundApplicationStatus.PENDING.name(), true, "同意退款"));
+
+        verify(refundService, never()).prepareMerchantApprovedRefund(any());
+        verify(actionMapper, never()).insert(any(com.payment.entity.AfterSaleAction.class));
+    }
+
+    @Test
+    void testIntervene_说明超长在读库前被拒绝() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class));
+
+        assertThrows(BusinessException.class, () -> service.intervene(
+                TENANT_ID, 1L, 99L, RefundApplicationStatus.PENDING.name(), true, "a".repeat(1001)));
+        verify(refundMapper, never()).selectById(anyLong());
     }
 
     @Test
@@ -296,9 +394,9 @@ class RefundApplicationServiceImplTest {
         service.auditRefund(TENANT_ID, 1L, 10L, true, null);
 
         ArgumentCaptor<RefundApplication> captor = ArgumentCaptor.forClass(RefundApplication.class);
-        verify(refundMapper, org.mockito.Mockito.times(2)).updateById(captor.capture());
-        assertEquals(List.of(RefundApplicationStatus.APPROVED.name(), RefundApplicationStatus.FAILED.name()), statuses);
-        RefundApplication finalUpdate = captor.getAllValues().get(1);
+        verify(refundMapper).updateById(captor.capture());
+        assertEquals(List.of(RefundApplicationStatus.FAILED.name()), statuses);
+        RefundApplication finalUpdate = captor.getValue();
         assertEquals(RefundApplicationStatus.FAILED.name(), finalUpdate.getRefundStatus());
         assertEquals("交付撤销失败，请人工处理后再退款", finalUpdate.getRejectReason());
         verify(refundService, never()).prepareMerchantApprovedRefund(any());
@@ -318,10 +416,9 @@ class RefundApplicationServiceImplTest {
 
         service.auditRefund(TENANT_ID, 1L, 10L, false, "商品不符合退款条件");
 
-        ArgumentCaptor<RefundApplication> captor = ArgumentCaptor.forClass(RefundApplication.class);
-        verify(refundMapper).updateById(captor.capture());
-        assertEquals(RefundApplicationStatus.REJECTED.name(), captor.getValue().getRefundStatus());
-        assertEquals("商品不符合退款条件", captor.getValue().getRejectReason());
+        verify(refundMapper).claimDecision(1L, TENANT_ID, RefundApplicationStatus.PENDING.name(),
+                RefundApplicationStatus.REJECTED.name(), 10L, "商品不符合退款条件");
+        verify(refundMapper, never()).updateById(any(RefundApplication.class));
     }
 
     @Test
@@ -340,15 +437,22 @@ class RefundApplicationServiceImplTest {
     @Test
     void testCancelRefund_仅PENDING可取消() {
         RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
-        RefundApplicationServiceImpl service = service(refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class));
+        AfterSaleActionMapper actionMapper = mock(AfterSaleActionMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class),
+                mock(OrderDeliveryService.class), mock(RefundService.class), actionMapper);
 
         when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
+        when(refundMapper.cancelPending(1L, TENANT_ID, USER_ID)).thenReturn(1);
 
         service.cancelRefund(USER_ID, TENANT_ID, 1L);
 
-        ArgumentCaptor<RefundApplication> captor = ArgumentCaptor.forClass(RefundApplication.class);
-        verify(refundMapper).updateById(captor.capture());
-        assertEquals(RefundApplicationStatus.CANCELLED.name(), captor.getValue().getRefundStatus());
+        verify(refundMapper).cancelPending(1L, TENANT_ID, USER_ID);
+        verify(refundMapper, never()).updateById(any(RefundApplication.class));
+        ArgumentCaptor<com.payment.entity.AfterSaleAction> actionCaptor =
+                ArgumentCaptor.forClass(com.payment.entity.AfterSaleAction.class);
+        verify(actionMapper).insert(actionCaptor.capture());
+        assertEquals("USER_CANCEL", actionCaptor.getValue().getAction());
 
         RefundApplication approved = pendingRefund();
         approved.setRefundStatus(RefundApplicationStatus.APPROVED.name());
@@ -356,6 +460,41 @@ class RefundApplicationServiceImplTest {
 
         assertThrows(BusinessException.class,
                 () -> service.cancelRefund(USER_ID, TENANT_ID, 2L));
+    }
+
+    @Test
+    void testCancelRefund_CAS失败不得写取消流水() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        AfterSaleActionMapper actionMapper = mock(AfterSaleActionMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class),
+                mock(OrderDeliveryService.class), mock(RefundService.class), actionMapper);
+        when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
+        when(refundMapper.cancelPending(1L, TENANT_ID, USER_ID)).thenReturn(0);
+
+        assertThrows(BusinessException.class,
+                () -> service.cancelRefund(USER_ID, TENANT_ID, 1L));
+
+        verify(actionMapper, never()).insert(any(com.payment.entity.AfterSaleAction.class));
+        verify(refundMapper, never()).updateById(any(RefundApplication.class));
+    }
+
+    @Test
+    void testCancelRefund_非本人或非本租户不得触发CAS() {
+        RefundApplicationMapper refundMapper = mock(RefundApplicationMapper.class);
+        AfterSaleActionMapper actionMapper = mock(AfterSaleActionMapper.class);
+        RefundApplicationServiceImpl service = service(
+                refundMapper, mock(SalesOrderMapper.class), mock(SalesOrderItemMapper.class),
+                mock(OrderDeliveryService.class), mock(RefundService.class), actionMapper);
+        when(refundMapper.selectById(1L)).thenReturn(pendingRefund());
+
+        assertThrows(BusinessException.class,
+                () -> service.cancelRefund(OTHER_USER_ID, TENANT_ID, 1L));
+        assertThrows(BusinessException.class,
+                () -> service.cancelRefund(USER_ID, 99L, 1L));
+
+        verify(refundMapper, never()).cancelPending(anyLong(), anyLong(), anyLong());
+        verify(actionMapper, never()).insert(any(com.payment.entity.AfterSaleAction.class));
     }
 
     @Test
@@ -398,6 +537,9 @@ class RefundApplicationServiceImplTest {
                                                 OrderDeliveryService deliveryService,
                                                 RefundService refundService,
                                                 AfterSaleActionMapper afterSaleActionMapper) {
+        org.mockito.Mockito.lenient().when(refundMapper.claimDecision(
+                        anyLong(), anyLong(), any(), any(), anyLong(), any()))
+                .thenReturn(1);
         return new RefundApplicationServiceImpl(refundMapper, salesOrderMapper, itemMapper,
                 mock(UserNotificationService.class), deliveryService, refundService,
                 mock(com.payment.service.StoreInventoryService.class), afterSaleActionMapper,

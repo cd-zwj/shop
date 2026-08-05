@@ -107,13 +107,36 @@ class MySqlFlywayMigrationIntegrationTest {
     }
 
     private void assertFinalSchema(JdbcTemplate jdbcTemplate, Flyway flyway) {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("30");
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("31");
         assertThat(tableExists(jdbcTemplate, "tenant_employee_store")).isTrue();
         assertThat(columnExists(jdbcTemplate, "tenant_employee", "store_scope_type")).isTrue();
         assertThat(columnExists(jdbcTemplate, "order_delivery_record", "pickup_code_hash")).isTrue();
+        assertThat(characterMaximumLength(jdbcTemplate, "refund_application", "reject_reason"))
+                .isEqualTo(1000L);
         assertThat(columnExists(jdbcTemplate, "sales_order", "cashier_id")).isFalse();
         assertThat(columnExists(jdbcTemplate, "product", "virtual_product_type")).isFalse();
         assertThat(tableExists(jdbcTemplate, "product_stock")).isFalse();
+        assertThat(jdbcTemplate.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM sys_permission
+                        WHERE permission_code IN ('admin:after-sale:list', 'admin:after-sale:manage')
+                        """, Long.class))
+                .isEqualTo(2L);
+        assertThat(jdbcTemplate.queryForObject("""
+                        SELECT COUNT(*)
+                        FROM sys_role_permission role_permission
+                        JOIN sys_role role_record ON role_record.id = role_permission.role_id
+                        JOIN sys_permission permission_record ON permission_record.id = role_permission.permission_id
+                        WHERE role_record.role_code = 'admin'
+                          AND permission_record.permission_code IN (
+                              'admin:after-sale:list', 'admin:after-sale:manage'
+                          )
+                        """, Long.class))
+                .isEqualTo(2L);
+        assertThat(indexColumns(jdbcTemplate, "refund_application", "idx_refund_application_admin_time"))
+                .containsExactly("create_time", "id");
+        assertThat(indexColumns(jdbcTemplate, "refund_application", "idx_refund_application_admin_status_time"))
+                .containsExactly("refund_status", "create_time", "id");
     }
 
     private void assertHistoricalInventoryMigrated(JdbcTemplate jdbcTemplate) {
@@ -162,6 +185,15 @@ class MySqlFlywayMigrationIntegrationTest {
                 WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?
                 ORDER BY seq_in_index
                 """, String.class, tableName, indexName);
+    }
+
+    private Long characterMaximumLength(
+            JdbcTemplate jdbcTemplate, String tableName, String columnName) {
+        return jdbcTemplate.queryForObject("""
+                SELECT character_maximum_length
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?
+                """, Long.class, tableName, columnName);
     }
 
     private record MigrationEnvironment(
